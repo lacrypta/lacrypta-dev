@@ -39,7 +39,6 @@ export const metadata: Metadata = {
     "Argentina",
     "LaWallet",
     "Hackatón",
-    "Taller",
     "Blossom",
   ],
   authors: [{ name: "La Crypta Labs" }],

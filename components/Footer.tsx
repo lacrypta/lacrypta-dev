@@ -16,7 +16,6 @@ const COLS = [
     title: "Comunidad",
     links: [
       { href: "/hackathons", label: "Hackatones" },
-      { href: "/workshops", label: "Talleres" },
       {
         href: "https://lacrypta.ar",
         label: "La Crypta",

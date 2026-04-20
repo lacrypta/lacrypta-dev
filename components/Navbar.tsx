@@ -17,7 +17,6 @@ const NAV_LINKS = [
   { href: "/infrastructure", label: "Infraestructura" },
   { href: "/projects", label: "Proyectos" },
   { href: "/hackathons", label: "Hackatones" },
-  { href: "/workshops", label: "Talleres" },
 ];
 
 export default function Navbar() {
