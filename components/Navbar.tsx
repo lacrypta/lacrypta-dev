@@ -4,7 +4,15 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Menu, X, LogIn, Zap, LayoutDashboard, LogOut } from "lucide-react";
+import {
+  Menu,
+  X,
+  LogIn,
+  Zap,
+  LayoutDashboard,
+  LogOut,
+  ExternalLink,
+} from "lucide-react";
 import Logo from "./Logo";
 import LoginModal from "./LoginModal";
 import { cn } from "@/lib/cn";
@@ -12,11 +20,21 @@ import { useAuth, clearAuth } from "@/lib/auth";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { useNostrProfile } from "@/lib/nostrProfile";
 
-const NAV_LINKS = [
+type NavLink = {
+  href: string;
+  label: string;
+  external?: boolean;
+};
+
+const NAV_LINKS: NavLink[] = [
   { href: "/", label: "Inicio" },
   { href: "/infrastructure", label: "Infraestructura" },
   { href: "/projects", label: "Proyectos" },
-  { href: "/hackathons", label: "Hackatones" },
+  {
+    href: "https://hackaton.lacrypta.ar/",
+    label: "Hackatones",
+    external: true,
+  },
 ];
 
 export default function Navbar() {
@@ -68,20 +86,19 @@ export default function Navbar() {
           <div className="hidden lg:flex items-center gap-1">
             {NAV_LINKS.map((link) => {
               const active =
-                link.href === "/"
-                  ? pathname === "/"
-                  : pathname.startsWith(link.href);
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={cn(
-                    "relative px-4 py-2 text-sm font-medium rounded-lg transition-colors",
-                    active
-                      ? "text-foreground"
-                      : "text-foreground-muted hover:text-foreground",
-                  )}
-                >
+                link.external
+                  ? false
+                  : link.href === "/"
+                    ? pathname === "/"
+                    : pathname.startsWith(link.href);
+              const className = cn(
+                "relative px-4 py-2 text-sm font-medium rounded-lg transition-colors",
+                active
+                  ? "text-foreground"
+                  : "text-foreground-muted hover:text-foreground",
+              );
+              const content = (
+                <>
                   {active && (
                     <motion.div
                       layoutId="nav-pill"
@@ -89,7 +106,27 @@ export default function Navbar() {
                       transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
                     />
                   )}
-                  <span className="relative">{link.label}</span>
+                  <span className="relative inline-flex items-center gap-1">
+                    {link.label}
+                    {link.external && (
+                      <ExternalLink className="h-3 w-3 opacity-60" />
+                    )}
+                  </span>
+                </>
+              );
+              return link.external ? (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={className}
+                >
+                  {content}
+                </a>
+              ) : (
+                <Link key={link.href} href={link.href} className={className}>
+                  {content}
                 </Link>
               );
             })}
@@ -194,9 +231,25 @@ export default function Navbar() {
               <div className="flex flex-col gap-1 mb-8">
                 {NAV_LINKS.map((link, i) => {
                   const active =
-                    link.href === "/"
-                      ? pathname === "/"
-                      : pathname.startsWith(link.href);
+                    link.external
+                      ? false
+                      : link.href === "/"
+                        ? pathname === "/"
+                        : pathname.startsWith(link.href);
+                  const itemClass = cn(
+                    "flex items-center justify-between gap-2 px-4 py-3 rounded-lg text-base font-medium transition-colors",
+                    active
+                      ? "bg-bitcoin/10 text-bitcoin border border-bitcoin/20"
+                      : "text-foreground-muted hover:text-foreground hover:bg-white/5",
+                  );
+                  const inner = (
+                    <>
+                      <span>{link.label}</span>
+                      {link.external && (
+                        <ExternalLink className="h-4 w-4 opacity-60" />
+                      )}
+                    </>
+                  );
                   return (
                     <motion.div
                       key={link.href}
@@ -204,18 +257,25 @@ export default function Navbar() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.05 * i + 0.1 }}
                     >
-                      <Link
-                        href={link.href}
-                        onClick={() => setMobileOpen(false)}
-                        className={cn(
-                          "block px-4 py-3 rounded-lg text-base font-medium transition-colors",
-                          active
-                            ? "bg-bitcoin/10 text-bitcoin border border-bitcoin/20"
-                            : "text-foreground-muted hover:text-foreground hover:bg-white/5",
-                        )}
-                      >
-                        {link.label}
-                      </Link>
+                      {link.external ? (
+                        <a
+                          href={link.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setMobileOpen(false)}
+                          className={itemClass}
+                        >
+                          {inner}
+                        </a>
+                      ) : (
+                        <Link
+                          href={link.href}
+                          onClick={() => setMobileOpen(false)}
+                          className={itemClass}
+                        >
+                          {inner}
+                        </Link>
+                      )}
                     </motion.div>
                   );
                 })}
