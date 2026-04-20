@@ -24,15 +24,17 @@ import { useAuth } from "@/lib/auth";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { getSigner } from "@/lib/nostrSigner";
 import {
-  DEFAULT_PROJECT_RELAYS,
+  DEFAULT_USER_RELAYS,
+  deleteUserProject,
   fetchUserProjects,
-  getCachedProjects,
-  publishUserProjects,
+  getCachedUserProjects,
+  publishUserProject,
   type ProjectsDoc,
   type UserProject,
-  type RelayResult,
-  type PublishPhase,
 } from "@/lib/userProjects";
+
+type RelayResult = { relay: string; ok: boolean; error?: string };
+type Phase = "signing" | "publishing" | "done";
 import { cn } from "@/lib/cn";
 
 type FormState = {
@@ -64,14 +66,14 @@ export default function UserProjectsClient() {
   const [error, setError] = useState<string | null>(null);
   const [errorRelays, setErrorRelays] = useState<RelayResult[]>([]);
   const [publishing, setPublishing] = useState(false);
-  const [phase, setPhase] = useState<PublishPhase | null>(null);
+  const [phase, setPhase] = useState<Phase | null>(null);
   const [phaseDetail, setPhaseDetail] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const relays = useMemo(() => {
-    const out = new Set<string>(DEFAULT_PROJECT_RELAYS);
+    const out = new Set<string>(DEFAULT_USER_RELAYS);
     auth?.bunker?.relays?.forEach((r) => out.add(r));
     return [...out];
   }, [auth]);
@@ -87,7 +89,7 @@ export default function UserProjectsClient() {
     if (!auth) return;
 
     // Hydrate from cache synchronously — no flicker, no loading state.
-    const cached = getCachedProjects(auth.pubkey);
+    const cached = getCachedUserProjects(auth.pubkey);
     if (cached) {
       setDoc(cached);
       setLoading(false);
@@ -104,11 +106,27 @@ export default function UserProjectsClient() {
         if (cancelled) return;
         setDoc((prev) => {
           if (!prev) return fresh;
-          const prevAt = prev.eventCreatedAt ?? 0;
-          const freshAt = fresh.eventCreatedAt ?? 0;
-          // Keep current state unless a strictly newer event came in.
-          if (freshAt > prevAt) return fresh;
-          return prev;
+          // Merge: if relays have a newer per-project event, take it;
+          // otherwise keep the local one (which may be the freshly edited one).
+          const byId = new Map<string, UserProject>(
+            prev.projects.map((p) => [p.id, p]),
+          );
+          for (const f of fresh.projects) {
+            const local = byId.get(f.id);
+            if (!local || f.updatedAt > local.updatedAt) {
+              byId.set(f.id, f);
+            }
+          }
+          // Drop local-only projects that don't appear in relays — unless they
+          // were created very recently (in the last 60s) and might not have
+          // propagated yet.
+          const threshold = Math.floor(Date.now() / 1000) - 60;
+          const merged = [...byId.values()].filter((p) => {
+            const inFresh = fresh.projects.some((f) => f.id === p.id);
+            return inFresh || p.updatedAt > threshold;
+          });
+          merged.sort((a, b) => b.updatedAt - a.updatedAt);
+          return { projects: merged };
         });
       })
       .catch((e) => {
@@ -138,13 +156,20 @@ export default function UserProjectsClient() {
     };
   }, [auth, relays]);
 
-  async function persist(next: UserProject[]) {
-    if (!auth) return;
+  async function runSignerOp<T>(
+    successTitle: string,
+    errorTitle: string,
+    op: (signer: Awaited<ReturnType<typeof getSigner>>) => Promise<T & {
+      relays: RelayResult[];
+    }>,
+  ): Promise<T> {
+    if (!auth) throw new Error("No auth");
     setPublishing(true);
     setError(null);
     setErrorRelays([]);
-    setPhase(null);
+    setPhase("signing");
     setPhaseDetail(null);
+
     let signer: Awaited<ReturnType<typeof getSigner>> | null = null;
     try {
       signer = await getSigner(auth, {
@@ -162,47 +187,62 @@ export default function UserProjectsClient() {
           }
         },
       });
-      const result = await publishUserProjects(signer, next, relays, {
-        onPhase: (p, detail) => {
-          setPhase(p);
-          setPhaseDetail(detail ?? null);
-        },
-      });
-      setDoc({
-        projects: next,
-        eventCreatedAt: result.signed.created_at,
-      });
+      setPhase("publishing");
+      setPhaseDetail(`${relays.length} relays`);
+      const result = await op(signer);
       const okCount = result.relays.filter((r) => r.ok).length;
+      setPhase("done");
+      setPhaseDetail(`${okCount}/${result.relays.length} relays`);
       pushToast({
         kind: "success",
-        title: "Proyecto guardado",
+        title: successTitle,
         description: `Publicado en ${okCount}/${result.relays.length} relays.`,
       });
+      return result;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
       const rr = (e as Error & { relayResults?: RelayResult[] })?.relayResults;
       if (Array.isArray(rr)) setErrorRelays(rr);
-      console.error("[labs] persist failed", e);
-      const desc = Array.isArray(rr) && rr.length
-        ? rr
-            .map((r) => `${r.ok ? "✓" : "✗"} ${r.relay.replace("wss://", "")}${r.error ? `: ${r.error}` : ""}`)
-            .join("\n")
-        : msg;
+      console.error("[labs] signer op failed", e);
+      const desc =
+        Array.isArray(rr) && rr.length
+          ? rr
+              .map(
+                (r) =>
+                  `${r.ok ? "✓" : "✗"} ${r.relay.replace("wss://", "")}${r.error ? `: ${r.error}` : ""}`,
+              )
+              .join("\n")
+          : msg;
       pushToast({
         kind: "error",
-        title: "No se pudo guardar el proyecto",
+        title: errorTitle,
         description: desc,
         duration: 12000,
       });
       throw e;
     } finally {
-      // Don't block the UI on close
       signer?.close?.().catch(() => {});
       setPublishing(false);
       setPhase(null);
       setPhaseDetail(null);
     }
+  }
+
+  async function persistProject(project: UserProject) {
+    return runSignerOp(
+      "Proyecto guardado",
+      "No se pudo guardar el proyecto",
+      (signer) => publishUserProject(signer, project, relays),
+    );
+  }
+
+  async function removeProject(id: string) {
+    return runSignerOp(
+      "Proyecto eliminado",
+      "No se pudo eliminar el proyecto",
+      (signer) => deleteUserProject(signer, id, relays),
+    );
   }
 
   function openCreate() {
@@ -249,24 +289,31 @@ export default function UserProjectsClient() {
       return;
     }
 
-    const next = form.id
-      ? doc.projects.map((p) => (p.id === form.id ? base : p))
-      : [base, ...doc.projects];
-
     try {
-      await persist(next);
+      await persistProject(base);
+      // Replace the project in-place (or prepend if new) — only after the
+      // relay accepted the event, so the UI reflects published state.
+      setDoc((prev) => {
+        const list = prev?.projects ?? [];
+        const next = form.id
+          ? list.map((p) => (p.id === form.id ? base : p))
+          : [base, ...list];
+        return { projects: next };
+      });
       setFormOpen(false);
       setForm(EMPTY_FORM);
     } catch {
-      /* persist already set the error */
+      /* persistProject already surfaced the error */
     }
   }
 
   async function handleDelete(id: string) {
     if (!doc) return;
-    const next = doc.projects.filter((p) => p.id !== id);
     try {
-      await persist(next);
+      await removeProject(id);
+      setDoc((prev) => ({
+        projects: (prev?.projects ?? []).filter((p) => p.id !== id),
+      }));
       setDeleteId(null);
     } catch {
       /* noop */
@@ -398,10 +445,12 @@ export default function UserProjectsClient() {
           </div>
         )}
 
-        {doc?.eventCreatedAt && (
+        {doc && doc.projects.length > 0 && (
           <p className="mt-8 text-[11px] font-mono text-foreground-subtle text-center">
             última actualización ·{" "}
-            {new Date(doc.eventCreatedAt * 1000).toLocaleString("es-AR", {
+            {new Date(
+              Math.max(...doc.projects.map((p) => p.updatedAt)) * 1000,
+            ).toLocaleString("es-AR", {
               day: "2-digit",
               month: "short",
               year: "numeric",
@@ -589,7 +638,7 @@ function ProjectFormModal({
   onSave: () => void;
   onClose: () => void;
   publishing: boolean;
-  phase: PublishPhase | null;
+  phase: Phase | null;
   phaseDetail: string | null;
 }) {
   const phaseLabel =
