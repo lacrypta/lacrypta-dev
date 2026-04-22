@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { SignedEvent, UserSigner } from "./nostrSigner";
 
 /* NIP-58 Badges
  *   kind 30009  Badge Definition (parameterized replaceable)
  *   kind 8      Badge Award
+ *   kind 30008  Profile Badges (user-curated display list)
  *
- * Fetches every award (kind 8) targeting the user (#p:[pubkey]) and
- * resolves each award's referenced badge definition (an `a` tag shaped
- * like `30009:<issuer>:<d>`).
+ * Flow used here: fetch every award (kind 8) targeting the user
+ * (#p:[pubkey]), resolve each award's referenced badge definition
+ * (an `a` tag like `30009:<issuer>:<d>`) and surface them all.
  */
 
 export type BadgeDefinition = {
@@ -28,6 +30,17 @@ export type AwardedBadge = {
   awardedAt: number;
   definition?: BadgeDefinition;
 };
+
+export type ProfileBadges = {
+  aTags: string[];
+  /** event id -> aTag (optional pairing for `e` tags when publishing) */
+  eventIdByATag: Record<string, string>;
+  eventId?: string;
+  eventCreatedAt?: number;
+};
+
+const PROFILE_BADGES_CACHE = "labs:profile-badges:";
+const PROFILE_BADGES_D = "profile_badges";
 
 const CACHE_PREFIX = "labs:badges:";
 const TTL_MS = 6 * 60 * 60 * 1000;
@@ -211,6 +224,238 @@ export async function fetchUserBadges(
 
   setCache(pubkey, result);
   return result;
+}
+
+/* ────────────────────── profile_badges (kind 30008) ───────────────────── */
+
+function parseProfileBadgesEvent(ev: IncomingEvent): ProfileBadges | null {
+  if (ev.kind !== 30008) return null;
+  const d = ev.tags.find((t) => t[0] === "d")?.[1];
+  if (d !== PROFILE_BADGES_D) return null;
+
+  const aTags: string[] = [];
+  const eventIdByATag: Record<string, string> = {};
+
+  // NIP-58 profile_badges tags come as ordered (a, e) pairs.
+  for (let i = 0; i < ev.tags.length; i++) {
+    const tag = ev.tags[i];
+    if (tag[0] !== "a") continue;
+    const aVal = tag[1];
+    if (!aVal) continue;
+    aTags.push(aVal);
+    // Look ahead for matching `e` tag
+    const next = ev.tags[i + 1];
+    if (next && next[0] === "e" && next[1]) {
+      eventIdByATag[aVal] = next[1];
+    }
+  }
+
+  return {
+    aTags,
+    eventIdByATag,
+    eventId: ev.id,
+    eventCreatedAt: ev.created_at,
+  };
+}
+
+export function getCachedProfileBadges(pubkey: string): ProfileBadges | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PROFILE_BADGES_CACHE + pubkey);
+    if (!raw) return null;
+    return JSON.parse(raw) as ProfileBadges;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedProfileBadges(pubkey: string, pb: ProfileBadges) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      PROFILE_BADGES_CACHE + pubkey,
+      JSON.stringify(pb),
+    );
+  } catch {
+    /* quota */
+  }
+}
+
+export async function fetchProfileBadges(
+  pubkey: string,
+  relays: string[] = DEFAULT_BADGE_RELAYS,
+  timeoutMs = 4000,
+): Promise<ProfileBadges> {
+  const { SimplePool } = await import("nostr-tools/pool");
+  const pool = new SimplePool();
+  const events: IncomingEvent[] = [];
+  const closer = pool.subscribe(
+    relays,
+    { kinds: [30008], authors: [pubkey], "#d": [PROFILE_BADGES_D] },
+    {
+      onevent(ev: IncomingEvent) {
+        events.push(ev);
+      },
+      oneose() {
+        closer.close();
+      },
+    },
+  );
+  await new Promise((r) => setTimeout(r, timeoutMs));
+  closer.close();
+  try {
+    pool.close(relays);
+  } catch {
+    /* noop */
+  }
+
+  events.sort((a, b) => b.created_at - a.created_at);
+  const latest = events[0];
+  if (!latest) {
+    // Fall back to cache so we don't flash an empty state on hiccups.
+    return (
+      getCachedProfileBadges(pubkey) ?? {
+        aTags: [],
+        eventIdByATag: {},
+      }
+    );
+  }
+  const parsed = parseProfileBadgesEvent(latest) ?? {
+    aTags: [],
+    eventIdByATag: {},
+    eventId: latest.id,
+    eventCreatedAt: latest.created_at,
+  };
+  setCachedProfileBadges(pubkey, parsed);
+  return parsed;
+}
+
+/** Publishes a kind 30008 event wearing the given badges, in the given order. */
+export async function publishProfileBadges(
+  signer: UserSigner,
+  worn: AwardedBadge[],
+  relays: string[] = DEFAULT_BADGE_RELAYS,
+  opts?: { signTimeoutMs?: number; publishTimeoutMs?: number },
+): Promise<{
+  signed: SignedEvent;
+  relays: { relay: string; ok: boolean; error?: string }[];
+}> {
+  const { signTimeoutMs = 30_000, publishTimeoutMs = 8_000 } = opts ?? {};
+  const tags: string[][] = [["d", PROFILE_BADGES_D]];
+  for (const b of worn) {
+    tags.push(["a", b.aTag]);
+    tags.push(["e", b.awardId]);
+  }
+
+  const unsigned = {
+    kind: 30008,
+    pubkey: signer.pubkey,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: "",
+  };
+
+  const signed = (await Promise.race([
+    signer.signEvent(unsigned),
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`Timeout: esperando firma (${signTimeoutMs}ms)`)),
+        signTimeoutMs,
+      ),
+    ),
+  ])) as SignedEvent;
+
+  const { SimplePool } = await import("nostr-tools/pool");
+  const pool = new SimplePool();
+  const promises = pool.publish(relays, signed);
+  const results = await Promise.all(
+    promises.map(async (p, i) => {
+      const relay = relays[i];
+      try {
+        await Promise.race([
+          p,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error(`Timeout: ${relay} (${publishTimeoutMs}ms)`)),
+              publishTimeoutMs,
+            ),
+          ),
+        ]);
+        return { relay, ok: true };
+      } catch (e) {
+        return {
+          relay,
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    }),
+  );
+  try {
+    pool.close(relays);
+  } catch {
+    /* noop */
+  }
+  const ok = results.some((r) => r.ok);
+  if (!ok) {
+    throw new Error(
+      `Ningún relay aceptó el evento.\n${results
+        .map((r) => `${r.relay}: ${r.error ?? "sin respuesta"}`)
+        .join("\n")}`,
+    );
+  }
+
+  // Update cache so the UI reflects the new state immediately.
+  const pb: ProfileBadges = {
+    aTags: worn.map((b) => b.aTag),
+    eventIdByATag: Object.fromEntries(worn.map((b) => [b.aTag, b.awardId])),
+    eventId: signed.id,
+    eventCreatedAt: signed.created_at,
+  };
+  setCachedProfileBadges(signer.pubkey, pb);
+
+  return { signed, relays: results };
+}
+
+export function useProfileBadges(
+  pubkey: string | null | undefined,
+  relays?: string[],
+) {
+  const [data, setData] = useState<ProfileBadges | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!pubkey) {
+      setData(null);
+      return;
+    }
+    const cached = getCachedProfileBadges(pubkey);
+    if (cached) setData(cached);
+    let cancelled = false;
+    setLoading(true);
+    fetchProfileBadges(pubkey, relays)
+      .then((fresh) => {
+        if (cancelled) return;
+        setData(fresh);
+      })
+      .catch(() => {
+        /* background */
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pubkey, relays?.join(",")]);
+
+  function override(pb: ProfileBadges) {
+    if (pubkey) setCachedProfileBadges(pubkey, pb);
+    setData(pb);
+  }
+
+  return { profileBadges: data, loading, override };
 }
 
 export function useUserBadges(

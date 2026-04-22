@@ -28,8 +28,14 @@ import {
   DEFAULT_PROFILE_RELAYS,
   type NostrProfile as BaseNostrProfile,
 } from "@/lib/nostrProfile";
-import { useUserBadges, type AwardedBadge } from "@/lib/nostrBadges";
+import {
+  useUserBadges,
+  useProfileBadges,
+  type AwardedBadge,
+  type ProfileBadges,
+} from "@/lib/nostrBadges";
 import { cn } from "@/lib/cn";
+import BadgesModal from "./BadgesModal";
 
 type DashboardProfile = BaseNostrProfile & {
   pubkey: string;
@@ -57,6 +63,29 @@ export default function DashboardClient() {
   } = useNostrProfile(auth?.pubkey, relays);
 
   const { badges, loading: badgesLoading } = useUserBadges(auth?.pubkey);
+  const { profileBadges, override: setProfileBadges } = useProfileBadges(
+    auth?.pubkey,
+  );
+  const [badgesModalOpen, setBadgesModalOpen] = useState(false);
+
+  // Badges the user has chosen to wear — intersect profile_badges with actually
+  // resolved awards so we never render a broken tile.
+  const wornBadges = useMemo<AwardedBadge[]>(() => {
+    if (!profileBadges) return [];
+    const byATag = new Map(badges.map((b) => [b.aTag, b]));
+    return profileBadges.aTags
+      .map((a) => byATag.get(a))
+      .filter((b): b is AwardedBadge => Boolean(b));
+  }, [profileBadges, badges]);
+
+  const wornATags = useMemo(
+    () => new Set(wornBadges.map((b) => b.aTag)),
+    [wornBadges],
+  );
+  const unwornBadges = useMemo(
+    () => badges.filter((b) => !wornATags.has(b.aTag)),
+    [badges, wornATags],
+  );
 
   const profile: DashboardProfile | null = useMemo(() => {
     if (!auth) return null;
@@ -116,6 +145,9 @@ export default function DashboardClient() {
           profile={profile}
           loading={loading}
           onLogout={logout}
+          wornBadges={wornBadges}
+          onOpenBadges={() => setBadgesModalOpen(true)}
+          hasAnyBadge={badges.length > 0}
         />
 
         {error && (
@@ -134,7 +166,13 @@ export default function DashboardClient() {
               </Card>
             )}
 
-            <BadgesCard badges={badges} loading={badgesLoading} />
+            <BadgesCard
+              badges={unwornBadges}
+              loading={badgesLoading}
+              onManage={() => setBadgesModalOpen(true)}
+              totalCount={badges.length}
+              wornCount={wornBadges.length}
+            />
 
             <Link
               href="/dashboard/projects"
@@ -283,6 +321,16 @@ export default function DashboardClient() {
           </div>
         </div>
       </div>
+
+      <BadgesModal
+        open={badgesModalOpen}
+        onClose={() => setBadgesModalOpen(false)}
+        auth={auth}
+        badges={badges}
+        loading={badgesLoading}
+        profileBadges={profileBadges}
+        onProfileBadgesUpdated={(pb) => setProfileBadges(pb)}
+      />
     </div>
   );
 }
@@ -313,11 +361,17 @@ function ProfileHeader({
   profile,
   loading,
   onLogout,
+  wornBadges,
+  onOpenBadges,
+  hasAnyBadge,
 }: {
   auth: Auth;
   profile: DashboardProfile | null;
   loading: boolean;
   onLogout: () => void;
+  wornBadges: AwardedBadge[];
+  onOpenBadges: () => void;
+  hasAnyBadge: boolean;
 }) {
   const displayName =
     profile?.display_name || profile?.name || shorten(auth.pubkey);
@@ -330,8 +384,13 @@ function ProfileHeader({
       transition={{ duration: 0.5 }}
       className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6"
     >
-      <div className="relative shrink-0">
-        <div className="h-32 w-32 sm:h-40 sm:w-40 rounded-2xl overflow-hidden border-4 border-background bg-background-card ring-1 ring-border-strong">
+      <button
+        type="button"
+        onClick={onOpenBadges}
+        className="relative shrink-0 group rounded-2xl"
+        aria-label="Ver mis badges"
+      >
+        <div className="h-32 w-32 sm:h-40 sm:w-40 rounded-2xl overflow-hidden border-4 border-background bg-background-card ring-1 ring-border-strong group-hover:ring-2 group-hover:ring-nostr/50 transition-all">
           {profile?.picture ? (
             <img
               src={profile.picture}
@@ -350,7 +409,13 @@ function ProfileHeader({
             </div>
           )}
         </div>
-      </div>
+        {hasAnyBadge && (
+          <div className="absolute -bottom-2 -right-2 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-nostr text-white text-[10px] font-mono font-bold tracking-wider shadow-lg shadow-nostr/40 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Award className="h-3 w-3" />
+            BADGES
+          </div>
+        )}
+      </button>
 
       <div className="flex-1 min-w-0 sm:pb-2">
         <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -387,6 +452,17 @@ function ProfileHeader({
             </span>
           )}
         </div>
+
+        {/* Badges worn in profile */}
+        {(wornBadges.length > 0 || hasAnyBadge) && (
+          <div className="mt-3">
+            <WornBadgesRow
+              badges={wornBadges}
+              onOpen={onOpenBadges}
+              empty={wornBadges.length === 0}
+            />
+          </div>
+        )}
       </div>
 
       <div className="hidden sm:block">
@@ -506,41 +582,58 @@ function shorten(pubkey: string) {
 function BadgesCard({
   badges,
   loading,
+  onManage,
+  totalCount,
+  wornCount,
 }: {
   badges: AwardedBadge[];
   loading: boolean;
+  onManage: () => void;
+  totalCount: number;
+  wornCount: number;
 }) {
-  if (!loading && badges.length === 0) return null;
+  if (!loading && totalCount === 0) return null;
 
   return (
     <div className="rounded-2xl border border-border bg-background-card p-5">
       <div className="flex items-center justify-between gap-2 mb-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <span className="text-foreground-muted">
             <Award className="h-4 w-4" />
           </span>
           <h2 className="font-display font-bold text-sm uppercase tracking-widest text-foreground-muted">
-            Badges
+            Otros badges
           </h2>
-          {badges.length > 0 && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-nostr/10 border border-nostr/30 text-[10px] font-mono tracking-wider text-nostr">
-              NIP-58 · {badges.length}
+          {totalCount > 0 && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-nostr/10 border border-nostr/30 text-[10px] font-mono tracking-wider text-nostr whitespace-nowrap">
+              NIP-58 · {totalCount}
+              {wornCount > 0 && <> · {wornCount} en perfil</>}
             </span>
           )}
         </div>
-        {loading && (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-foreground-muted" />
-        )}
+        <div className="flex items-center gap-2">
+          {loading && (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-foreground-muted" />
+          )}
+          <button
+            onClick={onManage}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold transition-colors"
+          >
+            Administrar
+          </button>
+        </div>
       </div>
 
       {badges.length === 0 ? (
         <div className="py-6 text-center text-xs text-foreground-subtle">
-          Buscando badges en relays…
+          {totalCount > 0
+            ? "Todos tus badges están en el perfil."
+            : "Buscando badges en relays…"}
         </div>
       ) : (
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
           {badges.map((b) => (
-            <BadgeTile key={b.awardId} badge={b} />
+            <BadgeTile key={b.awardId} badge={b} onClick={onManage} />
           ))}
         </div>
       )}
@@ -548,14 +641,95 @@ function BadgesCard({
   );
 }
 
-function BadgeTile({ badge }: { badge: AwardedBadge }) {
+function WornBadgesRow({
+  badges,
+  onOpen,
+  empty,
+}: {
+  badges: AwardedBadge[];
+  onOpen: () => void;
+  empty: boolean;
+}) {
+  const visible = badges.slice(0, 6);
+  const extra = badges.length - visible.length;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group inline-flex items-center gap-2 rounded-full border border-nostr/30 bg-nostr/5 px-2 py-1.5 hover:bg-nostr/10 hover:border-nostr/50 transition-colors"
+      aria-label="Administrar badges"
+    >
+      {empty ? (
+        <span className="inline-flex items-center gap-1.5 px-1.5 text-[11px] font-semibold text-nostr">
+          <Award className="h-3.5 w-3.5" />
+          Usar badges en perfil
+        </span>
+      ) : (
+        <>
+          <div className="flex -space-x-1.5">
+            {visible.map((b) => (
+              <ProfileBadgeChip key={b.awardId} badge={b} />
+            ))}
+          </div>
+          {extra > 0 && (
+            <span className="text-[10px] font-mono text-foreground-muted">
+              +{extra}
+            </span>
+          )}
+          <span className="hidden sm:inline text-[11px] font-semibold text-foreground-muted group-hover:text-foreground transition-colors pr-1">
+            administrar
+          </span>
+        </>
+      )}
+    </button>
+  );
+}
+
+function ProfileBadgeChip({ badge }: { badge: AwardedBadge }) {
+  const [imgOk, setImgOk] = useState(true);
+  const def = badge.definition;
+  const image = imgOk ? (def?.thumb ?? def?.image) : null;
+  const name = def?.name || def?.d || "Badge";
+  return (
+    <span
+      className="relative h-6 w-6 rounded-full overflow-hidden border border-background-card bg-gradient-to-br from-nostr/20 to-bitcoin/10 ring-1 ring-nostr/30"
+      title={name}
+    >
+      {image ? (
+        <img
+          src={image}
+          alt={name}
+          className="absolute inset-0 w-full h-full object-cover"
+          referrerPolicy="no-referrer"
+          loading="lazy"
+          onError={() => setImgOk(false)}
+        />
+      ) : (
+        <span className="absolute inset-0 flex items-center justify-center text-nostr">
+          <Award className="h-3 w-3" />
+        </span>
+      )}
+    </span>
+  );
+}
+
+function BadgeTile({
+  badge,
+  onClick,
+}: {
+  badge: AwardedBadge;
+  onClick?: () => void;
+}) {
   const def = badge.definition;
   const [imgOk, setImgOk] = useState(true);
   const image = imgOk ? (def?.thumb ?? def?.image) : null;
   const name = def?.name || def?.d || "Badge";
 
+  const Tag: React.ElementType = onClick ? "button" : "div";
   return (
-    <div
+    <Tag
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
       className="group relative flex flex-col items-center gap-1.5 text-center"
       title={
         def?.description ||
@@ -588,6 +762,6 @@ function BadgeTile({ badge }: { badge: AwardedBadge }) {
           year: "numeric",
         })}
       </div>
-    </div>
+    </Tag>
   );
 }
