@@ -109,7 +109,7 @@ export function AvatarUploader({
       type="button"
       onClick={onPick}
       disabled={disabled}
-      className="relative h-24 w-24 rounded-2xl overflow-hidden border-4 border-background bg-background-card ring-1 ring-border-strong hover:ring-2 hover:ring-bitcoin/60 transition-all disabled:opacity-70 disabled:cursor-progress group shrink-0"
+      className="relative h-24 w-24 rounded-2xl overflow-hidden border-4 border-background bg-background-card ring-1 ring-border-strong hover:ring-2 hover:ring-bitcoin/60 transition-all disabled:cursor-progress group shrink-0"
       aria-label="Cambiar avatar"
     >
       {src ? (
