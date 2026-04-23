@@ -1,0 +1,201 @@
+{
+  "program": {
+    "name": "Lightning Hackathons 2026",
+    "organization": "La Crypta",
+    "youtube": "https://www.youtube.com/@LaCryptaOk",
+    "totalPrize": 8000000,
+    "prizePerHackathon": 1000000,
+    "prizeDistribution": [
+      { "position": 1, "sats": 400000 },
+      { "position": 2, "sats": 250000 },
+      { "position": 3, "sats": 150000 },
+      { "position": 4, "sats": 100000 },
+      { "position": 5, "sats": 60000 },
+      { "position": 6, "sats": 40000 }
+    ],
+    "maxTeamSize": 4,
+    "judges": [
+      { "name": "Claudio", "emoji": "⚡", "model": "Claude Opus 4.6" },
+      { "name": "Gorilatron", "emoji": "🤖", "model": "OpenAI Codex 5.4" },
+      { "name": "Gorilator", "emoji": "🦍", "model": "Claude Opus 4.6" }
+    ],
+    "rules": [
+      "Hasta {maxTeamSize} personas por equipo.",
+      "Inscripción abierta al primer sábado, cierre al tercero.",
+      "Open source recomendado — sumá puntos por licencia.",
+      "Evaluación por jurado AI: {judges}."
+    ]
+  },
+  "hackathons": [
+    {
+      "id": "foundations",
+      "number": 1,
+      "name": "FOUNDATIONS",
+      "focus": "Lightning Payments Basics",
+      "description": "Invoices, pagos, wallets. El ABC de Lightning Network.",
+      "difficulty": "Beginner",
+      "stars": 1,
+      "month": "Marzo",
+      "monthShort": "MAR",
+      "year": 2026,
+      "icon": "⚡",
+      "tags": ["Lightning"],
+      "topics": ["Invoices & Payments", "Wallets & Keys", "APIs & SDKs", "Dev Tools"],
+      "dates": [
+        { "date": "2026-03-03", "day": 3, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas).", "youtube": "https://www.youtube.com/watch?v=RKUlQi-Uja8" },
+        { "date": "2026-03-10", "day": 10, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores.", "youtube": "https://www.youtube.com/watch?v=3sXD0EWWEdo" },
+        { "date": "2026-03-17", "day": 17, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo.", "youtube": "https://www.youtube.com/watch?v=XNOSG2ngm0c" },
+        { "date": "2026-03-24", "day": 24, "type": "pitch-final", "title": "Community Call — Pitch Final", "description": "Últimos pitches antes de la entrega. Feedback final de mentores.", "youtube": "https://www.youtube.com/watch?v=W9Fw72-jFX0" },
+        { "date": "2026-03-31", "day": 31, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo.", "youtube": "https://www.youtube.com/watch?v=kt_p61qPFcA" }
+      ]
+    },
+    {
+      "id": "identity",
+      "number": 2,
+      "name": "IDENTITY",
+      "focus": "Nostr Identity & Social",
+      "description": "Perfiles, keys, relays. Identidad descentralizada.",
+      "difficulty": "Beginner",
+      "stars": 1,
+      "month": "Abril",
+      "monthShort": "ABR",
+      "year": 2026,
+      "icon": "🔐",
+      "tags": ["Nostr"],
+      "topics": ["Keys & Signing", "Profiles & Metadata", "Relays", "NIP-01 Basics"],
+      "dates": [
+        { "date": "2026-04-07", "day": 7, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas).", "youtube": "https://www.youtube.com/watch?v=-v0UEpVOsXs" },
+        { "date": "2026-04-21", "day": 21, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores.", "youtube": "https://www.youtube.com/watch?v=H2HBZhx4H-Q" },
+        { "date": "2026-04-28", "day": 28, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
+      ]
+    },
+    {
+      "id": "zaps",
+      "number": 3,
+      "name": "ZAPS",
+      "focus": "Lightning + Nostr Integration",
+      "description": "NIP-57. Value-for-value. Social payments.",
+      "difficulty": "Intermediate",
+      "stars": 2,
+      "month": "Mayo",
+      "monthShort": "MAY",
+      "year": 2026,
+      "icon": "💜",
+      "tags": ["Lightning", "Nostr"],
+      "topics": ["NIP-57 Zaps", "LNURL", "Value4Value", "Social Payments"],
+      "dates": [
+        { "date": "2026-05-05", "day": 5, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
+        { "date": "2026-05-12", "day": 12, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
+        { "date": "2026-05-19", "day": 19, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
+        { "date": "2026-05-26", "day": 26, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
+      ]
+    },
+    {
+      "id": "commerce",
+      "number": 4,
+      "name": "COMMERCE",
+      "focus": "Lightning Stores & Checkout",
+      "description": "Tiendas, productos, pagos recurrentes.",
+      "difficulty": "Intermediate",
+      "stars": 2,
+      "month": "Junio",
+      "monthShort": "JUN",
+      "year": 2026,
+      "icon": "🛒",
+      "tags": ["E-commerce", "Lightning"],
+      "topics": ["BTCPay Server", "Point of Sale", "Subscriptions", "Checkout Flows"],
+      "dates": [
+        { "date": "2026-06-02", "day": 2, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
+        { "date": "2026-06-09", "day": 9, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
+        { "date": "2026-06-16", "day": 16, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
+        { "date": "2026-06-23", "day": 23, "type": "pitch-final", "title": "Community Call — Pitch Final", "description": "Últimos pitches antes de la entrega. Feedback final de mentores." },
+        { "date": "2026-06-30", "day": 30, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
+      ]
+    },
+    {
+      "id": "media",
+      "number": 5,
+      "name": "MEDIA",
+      "focus": "Decentralized Storage",
+      "description": "Blossom, CDN descentralizado, media + Lightning.",
+      "difficulty": "Advanced",
+      "stars": 3,
+      "month": "Julio",
+      "monthShort": "JUL",
+      "year": 2026,
+      "icon": "📸",
+      "tags": ["Blossom", "CDN", "Media"],
+      "topics": ["Blossom Protocol", "Media Hosting", "CDN Decentralizado", "Monetización"],
+      "dates": [
+        { "date": "2026-07-07", "day": 7, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
+        { "date": "2026-07-14", "day": 14, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
+        { "date": "2026-07-21", "day": 21, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
+        { "date": "2026-07-28", "day": 28, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
+      ]
+    },
+    {
+      "id": "ai-agents",
+      "number": 6,
+      "name": "AI AGENTS",
+      "focus": "Bots & Automation",
+      "description": "Agentes autónomos, workflows, AI + Bitcoin.",
+      "difficulty": "Advanced",
+      "stars": 3,
+      "month": "Agosto",
+      "monthShort": "AGO",
+      "year": 2026,
+      "icon": "🤖",
+      "tags": ["AI", "Automation", "Bitcoin"],
+      "topics": ["Agentes Autónomos", "LLM + Lightning", "Workflows", "NWC"],
+      "dates": [
+        { "date": "2026-08-04", "day": 4, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
+        { "date": "2026-08-11", "day": 11, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
+        { "date": "2026-08-18", "day": 18, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
+        { "date": "2026-08-25", "day": 25, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
+      ]
+    },
+    {
+      "id": "infrastructure",
+      "number": 7,
+      "name": "INFRASTRUCTURE",
+      "focus": "Nodes, Routing, Liquidity",
+      "description": "Nodos, channels, liquidity management.",
+      "difficulty": "Expert",
+      "stars": 4,
+      "month": "Septiembre",
+      "monthShort": "SEP",
+      "year": 2026,
+      "icon": "🏗️",
+      "tags": ["Nodes", "Routing", "Infrastructure"],
+      "topics": ["LND / CLN", "Channel Management", "Liquidity", "Routing Fees"],
+      "dates": [
+        { "date": "2026-09-01", "day": 1, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
+        { "date": "2026-09-08", "day": 8, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
+        { "date": "2026-09-15", "day": 15, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
+        { "date": "2026-09-22", "day": 22, "type": "pitch-final", "title": "Community Call — Pitch Final", "description": "Últimos pitches antes de la entrega. Feedback final de mentores." },
+        { "date": "2026-09-29", "day": 29, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
+      ]
+    },
+    {
+      "id": "integration",
+      "number": 8,
+      "name": "INTEGRATION",
+      "focus": "Full-Stack Production Apps",
+      "description": "Proyecto final. Todo integrado. Ready to launch.",
+      "difficulty": "Expert",
+      "stars": 4,
+      "month": "Octubre",
+      "monthShort": "OCT",
+      "year": 2026,
+      "icon": "🌐",
+      "tags": ["Full-Stack", "Production", "Final"],
+      "topics": ["Integración Completa", "Deploy Production", "Testing E2E", "Launch"],
+      "dates": [
+        { "date": "2026-10-06", "day": 6, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
+        { "date": "2026-10-13", "day": 13, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
+        { "date": "2026-10-20", "day": 20, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
+        { "date": "2026-10-27", "day": 27, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo. Cierre del programa 2026." }
+      ]
+    }
+  ]
+}

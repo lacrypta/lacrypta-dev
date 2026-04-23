@@ -1,0 +1,1614 @@
+{
+  "foundations": {
+    "1-sat-to": {
+      "title": "1 SAT a...",
+      "position": 4,
+      "finalScore": 7,
+      "team": [
+        "unllamas",
+        "Jona"
+      ],
+      "stack": [
+        "Vite",
+        "Lightning Address",
+        "WebLN",
+        "Exchange Rates API"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 7.15,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 7
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 8
+            },
+            {
+              "name": "Implementación",
+              "score": 5
+            },
+            {
+              "name": "Originalidad",
+              "score": 8
+            },
+            {
+              "name": "Feedback Global",
+              "score": 8
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 5.4,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 7.5
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 6.4
+            },
+            {
+              "name": "Testing",
+              "score": 0
+            },
+            {
+              "name": "Consistencia",
+              "score": 6
+            },
+            {
+              "name": "Seguridad",
+              "score": 5.6
+            },
+            {
+              "name": "Innovación",
+              "score": 5.8
+            }
+          ],
+          "summary": "El proyecto está realmente construido y deployado: build de producción OK, live site online y una base funcional clara. Técnicamente es un frontend útil y entendible, pero no pasa de proof-of-product pulido porque no tiene tests, el lint está roto y el build omite type-checking. Su mayor riesgo no es una falla crítica de seguridad sino la falta de rigor de ingeniería; su mayor mérito es aterrizar"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 8.45,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 8
+            },
+            {
+              "name": "UI/UX",
+              "score": 9
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 9
+            },
+            {
+              "name": "Completitud",
+              "score": 8
+            },
+            {
+              "name": "Experiencia General",
+              "score": 8
+            }
+          ],
+          "summary": "Proyecto sólido y pulido. Muestra el valor de 1 SAT en monedas LATAM con gráficos históricos, calculadora y donaciones Lightning. Diseño profesional dark-mode, responsive, con flujo de pago end-to-end que funciona impecable (QR legible, invoice válido, detección en 2.4s). 5/5 features del README implementadas. Se siente como un producto terminado, no un prototipo."
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "SatsParty": {
+      "title": "SatsParty",
+      "position": 13,
+      "finalScore": 5.42,
+      "team": [
+        "Cyberpunk"
+      ],
+      "stack": [
+        "Vanilla JS",
+        "Lightning Invoice",
+        "QR",
+        "Party Mode"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 5.7,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 6
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 7
+            },
+            {
+              "name": "Implementación",
+              "score": 4
+            },
+            {
+              "name": "Originalidad",
+              "score": 7
+            },
+            {
+              "name": "Feedback Global",
+              "score": 4
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 5.7,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 7.5
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 6.8
+            },
+            {
+              "name": "Testing",
+              "score": 0
+            },
+            {
+              "name": "Consistencia",
+              "score": 6
+            },
+            {
+              "name": "Seguridad",
+              "score": 4.5
+            },
+            {
+              "name": "Innovación",
+              "score": 8.2
+            }
+          ],
+          "summary": "SatsParty está bastante más construido que un mock: compila, tiene deploy real y una arquitectura Lightning con intención seria. La base técnica es razonable, pero todavía mezcla demo mode con producción y deja huecos importantes en auth, secretos por defecto y ausencia total de tests. Lo mejor del proyecto es la innovación aplicada al onboarding presencial; lo que más lo frena es la falta de endu"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 4.85,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 5
+            },
+            {
+              "name": "UI/UX",
+              "score": 5
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 4
+            },
+            {
+              "name": "Completitud",
+              "score": 5
+            },
+            {
+              "name": "Experiencia General",
+              "score": 5
+            }
+          ],
+          "summary": "SatsParty: plataforma de onboarding para eventos con wallets Lightning. Backend responde pero el frontend solo muestra 'CARGANDO' en web fetch. Browser test timed out sin screenshots. Evaluación incompleta — score conservador basado en evidencia disponible."
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "Streamsats": {
+      "title": "Streamsats",
+      "position": 10,
+      "finalScore": 6.17,
+      "team": [
+        "Federico"
+      ],
+      "stack": [
+        "React",
+        "WebLN",
+        "Lightning Address",
+        "Streaming Payments"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 6,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 6
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 7
+            },
+            {
+              "name": "Implementación",
+              "score": 4
+            },
+            {
+              "name": "Originalidad",
+              "score": 7
+            },
+            {
+              "name": "Feedback Global",
+              "score": 6
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 4.7,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 4.5
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 6.4
+            },
+            {
+              "name": "Testing",
+              "score": 0
+            },
+            {
+              "name": "Consistencia",
+              "score": 4.6
+            },
+            {
+              "name": "Seguridad",
+              "score": 3.6
+            },
+            {
+              "name": "Innovación",
+              "score": 7.4
+            }
+          ],
+          "summary": "StreamSats está realmente construido y no es puro humo: el frontend compila, el backend levanta y la idea Lightning-native del prize pool competitivo es buena. El problema es que la base de ingeniería quedó a medio cerrar: documentación equivocada, cero tests, configuración inconsistente y controles de seguridad/anti-cheat demasiado débiles para un juego con pagos. Lo que lo hace destacar es la me"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 7.8,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 8
+            },
+            {
+              "name": "UI/UX",
+              "score": 7
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 9
+            },
+            {
+              "name": "Completitud",
+              "score": 7
+            },
+            {
+              "name": "Experiencia General",
+              "score": 8
+            }
+          ],
+          "summary": "Arcade pay-to-play competitivo. 30 sats gastados en 3 pagos, detección 2s. Multiplayer real con WebSocket."
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "anirayo": {
+      "title": "AniRayo",
+      "position": 12,
+      "finalScore": 5.85,
+      "team": [
+        "CapitanDelEscabio"
+      ],
+      "stack": [
+        "Web NFC",
+        "NWC (NIP-47)",
+        "Lightning Payments",
+        "Vite"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 5.35,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 5
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 6
+            },
+            {
+              "name": "Implementación",
+              "score": 4
+            },
+            {
+              "name": "Originalidad",
+              "score": 8
+            },
+            {
+              "name": "Feedback Global",
+              "score": 4
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 6.5,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 7.8
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 6.6
+            },
+            {
+              "name": "Testing",
+              "score": 6.2
+            },
+            {
+              "name": "Consistencia",
+              "score": 5.4
+            },
+            {
+              "name": "Seguridad",
+              "score": 4.7
+            },
+            {
+              "name": "Innovación",
+              "score": 7.9
+            }
+          ],
+          "summary": "Es un MVP real, no solo una idea: compila, tiene tests y la propuesta técnica de usar Web NFC con NWC para pagos Lightning es genuinamente interesante. La base de código es entendible y suficiente para hackathon, pero todavía le falta criterio de producto y de seguridad para confiarla en contexto real. El principal problema no es que esté roto, sino que la entrega está desalineada y algo descuidad"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 5.7,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 5
+            },
+            {
+              "name": "UI/UX",
+              "score": 7
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 6
+            },
+            {
+              "name": "Completitud",
+              "score": 5
+            },
+            {
+              "name": "Experiencia General",
+              "score": 5
+            }
+          ],
+          "summary": "TapSats es un concepto innovador de POS Lightning con NFC ring — la idea de 'tap to pay' con sats es poderosa y diferenciadora. La UI es pulida con dark theme coherente y buena responsividad. Genera invoices BOLT11 válidos y los QR se decodifican correctamente. Sin embargo, la URL submitida (anirayo.vercel.app) devuelve 404, el flujo principal (NFC) solo funciona en Chrome Android con hardware esp"
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "bitbybit-habits": {
+      "title": "BitByBit",
+      "position": 5,
+      "finalScore": 6.98,
+      "team": [
+        "Anix",
+        "Llopo",
+        "Wander",
+        "Leon"
+      ],
+      "stack": [
+        "TypeScript",
+        "NWC (NIP-47)",
+        "Vitest (208 tests)",
+        "SQLite"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 8.15,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 8
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 8
+            },
+            {
+              "name": "Implementación",
+              "score": 8
+            },
+            {
+              "name": "Originalidad",
+              "score": 9
+            },
+            {
+              "name": "Feedback Global",
+              "score": 8
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 8.1,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 8.8
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 8
+            },
+            {
+              "name": "Testing",
+              "score": 9
+            },
+            {
+              "name": "Consistencia",
+              "score": 8
+            },
+            {
+              "name": "Seguridad",
+              "score": 6.5
+            },
+            {
+              "name": "Innovación",
+              "score": 7.8
+            }
+          ],
+          "summary": "BitByBit está realmente construido, no es humo: compila, buildea y trae una suite de tests inusualmente fuerte para hackathon. La base técnica es sólida, especialmente en el flujo Lightning end-to-end y en la prolijidad general del repo. El principal riesgo está en la capa de seguridad/validación, que es razonable pero todavía liviana para una app con pagos. Destaca por ejecución consistente y por"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 4.7,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 5
+            },
+            {
+              "name": "UI/UX",
+              "score": 8
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 1
+            },
+            {
+              "name": "Completitud",
+              "score": 4
+            },
+            {
+              "name": "Experiencia General",
+              "score": 5
+            }
+          ],
+          "summary": "BitByBit presents a polished UI with excellent branding and a compelling value proposition ('Mesada 2.0' — kids earn real Bitcoin by completing habits). The landing page is professional, the demo flows are well-designed, and the onboarding works smoothly through family creation. CRITICAL FLAW: Despite being submitted to a Lightning Hackathon themed 'Lightning Payments Basics', the app has ZERO fun"
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "digital-card": {
+      "title": "Digital card",
+      "position": 6,
+      "finalScore": 6.83,
+      "team": [
+        "negr0"
+      ],
+      "stack": [
+        "Vanilla JS",
+        "Lightning Address",
+        "LNURL",
+        "Vite"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 6.25,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 6
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 7
+            },
+            {
+              "name": "Implementación",
+              "score": 6
+            },
+            {
+              "name": "Originalidad",
+              "score": 6
+            },
+            {
+              "name": "Feedback Global",
+              "score": 6
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 6.1,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 7.5
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 6.8
+            },
+            {
+              "name": "Testing",
+              "score": 3
+            },
+            {
+              "name": "Consistencia",
+              "score": 6.5
+            },
+            {
+              "name": "Seguridad",
+              "score": 4.5
+            },
+            {
+              "name": "Innovación",
+              "score": 7.2
+            }
+          ],
+          "summary": "Es un proyecto real, con build reproducible, demo pública y una integración bastante ambiciosa entre identidad Nostr y cobros Lightning. La base técnica tiene valor, pero queda castigada por una arquitectura demasiado monolítica y por tests que no pasan. El principal riesgo técnico es seguridad de persistencia: el esquema de Supabase propuesto permite modificaciones públicas de datos. Destaca por"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 8.15,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 8
+            },
+            {
+              "name": "UI/UX",
+              "score": 9
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 8
+            },
+            {
+              "name": "Completitud",
+              "score": 7
+            },
+            {
+              "name": "Experiencia General",
+              "score": 8
+            }
+          ],
+          "summary": "Tarjeta digital Bitcoin con flujo completo end-to-end. Pago 21 sats detectado en 2s. UI profesional, múltiples métodos de pago."
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "hash21-shop": {
+      "title": "Hash21 Shop",
+      "position": 3,
+      "finalScore": 7.07,
+      "team": [
+        "Abstract Lai",
+        "Ragnar"
+      ],
+      "stack": [
+        "HTML/CSS/JS",
+        "LNURL-pay",
+        "NIP-57 Zaps",
+        "Lightning Address"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 7.4,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 8
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 8
+            },
+            {
+              "name": "Implementación",
+              "score": 5
+            },
+            {
+              "name": "Originalidad",
+              "score": 8
+            },
+            {
+              "name": "Feedback Global",
+              "score": 8
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 4.9,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 8.5
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 5
+            },
+            {
+              "name": "Testing",
+              "score": 0
+            },
+            {
+              "name": "Consistencia",
+              "score": 6
+            },
+            {
+              "name": "Seguridad",
+              "score": 2
+            },
+            {
+              "name": "Innovación",
+              "score": 7
+            }
+          ],
+          "summary": "Hash21 está realmente construido: el sitio corre fácil y muestra una integración Lightning visible, con shop, zaps y verificación de certificados. La base técnica alcanza para una demo funcional, pero no para considerarla confiable en producción porque el flujo de pagos y datos sensibles está resuelto con criterio de seguridad débil. Lo mejor del proyecto es la integración de primitives Bitcoin/Li"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 8.9,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 9
+            },
+            {
+              "name": "UI/UX",
+              "score": 9
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 9
+            },
+            {
+              "name": "Completitud",
+              "score": 8
+            },
+            {
+              "name": "Experiencia General",
+              "score": 9
+            }
+          ],
+          "summary": "E-commerce de joyería Bitcoin real. Diseño premium, pagos NIP-57 en 2s, 42 sats gastados. Mejor experiencia visual de la hackathon."
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "life-action-plan": {
+      "title": "Life Action Plan",
+      "position": 15,
+      "finalScore": 4.83,
+      "team": [
+        "naranja"
+      ],
+      "stack": [
+        "Vanilla JS",
+        "Lightning Address",
+        "Habit Tracker"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 4.55,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 5
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 3
+            },
+            {
+              "name": "Implementación",
+              "score": 6
+            },
+            {
+              "name": "Originalidad",
+              "score": 5
+            },
+            {
+              "name": "Feedback Global",
+              "score": 4
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 5.9,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 6.5
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 6.5
+            },
+            {
+              "name": "Testing",
+              "score": 6
+            },
+            {
+              "name": "Consistencia",
+              "score": 5.5
+            },
+            {
+              "name": "Seguridad",
+              "score": 5
+            },
+            {
+              "name": "Innovación",
+              "score": 5
+            }
+          ],
+          "summary": "Es un proyecto real, no humo: instala, builda y trae bastante código funcional con buena cobertura en backend. La base técnica es razonablemente seria, pero todavía no está cerrada como implementación confiable porque lint, typecheck y una parte relevante de la suite de tests fallan. El principal riesgo está en seguridad/autorización por el uso de un usuario por defecto compartido y en secretos ci"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 4.05,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 5
+            },
+            {
+              "name": "UI/UX",
+              "score": 4
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 3
+            },
+            {
+              "name": "Completitud",
+              "score": 5
+            },
+            {
+              "name": "Experiencia General",
+              "score": 3
+            }
+          ],
+          "summary": "Sin live URL. Codebase sustancial con 228 tests. No verificable como usuario. Score bajo por falta de deployment."
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "nosteach": {
+      "title": "NosTeach",
+      "position": 14,
+      "finalScore": 5,
+      "team": [
+        "Fred",
+        "Langostero"
+      ],
+      "stack": [
+        "Vite",
+        "nostr-tools",
+        "Alby SDK",
+        "Playwright"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 5.45,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 5
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 7
+            },
+            {
+              "name": "Implementación",
+              "score": 4
+            },
+            {
+              "name": "Originalidad",
+              "score": 7
+            },
+            {
+              "name": "Feedback Global",
+              "score": 4
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 5.4,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 7
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 5.8
+            },
+            {
+              "name": "Testing",
+              "score": 2.5
+            },
+            {
+              "name": "Consistencia",
+              "score": 5.5
+            },
+            {
+              "name": "Seguridad",
+              "score": 3
+            },
+            {
+              "name": "Innovación",
+              "score": 7.5
+            }
+          ],
+          "summary": "NosTeach es un MVP real y no solo humo: builda, levanta y muestra una integración bastante ambiciosa de Nostr + Lightning para educación descentralizada. La base técnica, sin embargo, todavía es frágil: testing poco reproducible, arquitectura frontend bastante acoplada y decisiones de seguridad flojas para un proyecto que maneja identidad y pagos. Lo que más destaca es la ambición técnica del domi"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 4.15,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 5
+            },
+            {
+              "name": "UI/UX",
+              "score": 4
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 4
+            },
+            {
+              "name": "Completitud",
+              "score": 4
+            },
+            {
+              "name": "Experiencia General",
+              "score": 3
+            }
+          ],
+          "summary": "Sin live URL. Gorilatron confirma que compila y corre en localhost. Integración Nostr + Lightning real pero no verificable sin deployment. Score bajo por falta de accesibilidad."
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "proof-of-attendance-hdmp": {
+      "title": "Proof of Attendance (HDMP)",
+      "position": 1,
+      "finalScore": 7.49,
+      "team": [
+        "Looker"
+      ],
+      "stack": [
+        "Vanilla JS + Vite",
+        "NWC (NIP-47)",
+        "LNURL",
+        "Nostr Zaps (NIP-57)",
+        "HMAC-SHA256"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 7.1,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 7
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 8
+            },
+            {
+              "name": "Implementación",
+              "score": 6
+            },
+            {
+              "name": "Originalidad",
+              "score": 7
+            },
+            {
+              "name": "Feedback Global",
+              "score": 7
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 6.4,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 8.5
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 5.4
+            },
+            {
+              "name": "Testing",
+              "score": 6.4
+            },
+            {
+              "name": "Consistencia",
+              "score": 6.1
+            },
+            {
+              "name": "Seguridad",
+              "score": 4.1
+            },
+            {
+              "name": "Innovación",
+              "score": 8.2
+            }
+          ]
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 8.98,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 9.5
+            },
+            {
+              "name": "UI/UX",
+              "score": 7.5
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 10
+            },
+            {
+              "name": "Completitud",
+              "score": 8.5
+            },
+            {
+              "name": "Experiencia General",
+              "score": 9
+            }
+          ]
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "relam-pago": {
+      "title": "RelámPago",
+      "position": 11,
+      "finalScore": 5.92,
+      "team": [
+        "Burgos"
+      ],
+      "stack": [
+        "Vanilla JS",
+        "Lightning Invoice",
+        "QR",
+        "Vite"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 6,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 7
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 7
+            },
+            {
+              "name": "Implementación",
+              "score": 5
+            },
+            {
+              "name": "Originalidad",
+              "score": 5
+            },
+            {
+              "name": "Feedback Global",
+              "score": 5
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 5.9,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 6.5
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 5.8
+            },
+            {
+              "name": "Testing",
+              "score": 3
+            },
+            {
+              "name": "Consistencia",
+              "score": 7
+            },
+            {
+              "name": "Seguridad",
+              "score": 5.5
+            },
+            {
+              "name": "Innovación",
+              "score": 7.5
+            }
+          ],
+          "summary": "RelámPago está realmente construido y resuelve un caso concreto de adopción: cobrar por Lightning sin jerga técnica. La base técnica alcanza para demo funcional y el deploy está vivo, pero la reproducibilidad local no es limpia por el lockfile fuera de sync y la arquitectura monolítica en un solo archivo limita mantenibilidad. El riesgo principal no es un secret expuesto sino la confiabilidad oper"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 5.85,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 6
+            },
+            {
+              "name": "UI/UX",
+              "score": 6
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 6
+            },
+            {
+              "name": "Completitud",
+              "score": 5
+            },
+            {
+              "name": "Experiencia General",
+              "score": 6
+            }
+          ],
+          "summary": "POS Lightning para comerciantes LATAM. Concepto simple y pragmático: imprimí el QR, el cliente escanea, pago en segundos. Timer de 10 min, detección automática con fallback manual. No se pudo completar el test de pago."
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "sat-lotto-v2": {
+      "title": "SatLotto V2",
+      "position": 8,
+      "finalScore": 6.37,
+      "team": [
+        "Fierillo"
+      ],
+      "stack": [
+        "Node.js",
+        "NWC",
+        "Lightning Invoice",
+        "Random Draw"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 5.8,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 5
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 7
+            },
+            {
+              "name": "Implementación",
+              "score": 5
+            },
+            {
+              "name": "Originalidad",
+              "score": 7
+            },
+            {
+              "name": "Feedback Global",
+              "score": 5
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 6.2,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 7
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 6.5
+            },
+            {
+              "name": "Testing",
+              "score": 5.5
+            },
+            {
+              "name": "Consistencia",
+              "score": 6.5
+            },
+            {
+              "name": "Seguridad",
+              "score": 4.5
+            },
+            {
+              "name": "Innovación",
+              "score": 7
+            }
+          ],
+          "summary": "SatLotto V2 está realmente construido: instala, compila y muestra una base funcional clara. El proyecto gana puntos por integrar Nostr + NWC + lógica ligada a bloques de Bitcoin, pero pierde bastante por pruebas no completamente reproducibles y por decisiones de seguridad que fallan abierto cuando la infraestructura no responde. No es humo; tampoco es una base confiable todavía para tocar dinero s"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 7.1,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 7
+            },
+            {
+              "name": "UI/UX",
+              "score": 8
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 6
+            },
+            {
+              "name": "Completitud",
+              "score": 7
+            },
+            {
+              "name": "Experiencia General",
+              "score": 7
+            }
+          ],
+          "summary": "SatLotto is a visually striking Bitcoin lottery with excellent thematic design and solid NWC wallet integration. The roulette wheel UI is unique and memorable. Betting cutoff logic works correctly, but prevented full payment flow testing. Core functionality (wallet connection, number selection, real-time block tracking, active bets display) all work. Missing: QR/invoice generation verification, pa"
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "stacktris": {
+      "title": "Stacktris",
+      "position": 1,
+      "finalScore": 7.49,
+      "team": [
+        "—"
+      ],
+      "stack": [
+        "TypeScript",
+        "Monorepo",
+        "WebSocket",
+        "HODL Invoices",
+        "Vite"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 7.5,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 7
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 8
+            },
+            {
+              "name": "Implementación",
+              "score": 6
+            },
+            {
+              "name": "Originalidad",
+              "score": 9
+            },
+            {
+              "name": "Feedback Global",
+              "score": 8
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 6.1,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 5
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 7.3
+            },
+            {
+              "name": "Testing",
+              "score": 5.2
+            },
+            {
+              "name": "Consistencia",
+              "score": 5
+            },
+            {
+              "name": "Seguridad",
+              "score": 5
+            },
+            {
+              "name": "Innovación",
+              "score": 8.5
+            }
+          ],
+          "summary": "Stacktris está realmente construido y tiene una base técnica bastante más seria que una demo superficial: el núcleo multiplayer y el modelo de apuestas Lightning existen en código real y muestran criterio. La arquitectura general es buena, pero hoy la reproducibilidad local y la confianza de la suite quedan lastimadas por inconsistencias entre README, scripts y runtime. El principal riesgo es oper"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 8.88,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 9.5
+            },
+            {
+              "name": "UI/UX",
+              "score": 8
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 10
+            },
+            {
+              "name": "Completitud",
+              "score": 7.5
+            },
+            {
+              "name": "Experiencia General",
+              "score": 9
+            }
+          ],
+          "summary": "Stacktris es un Tetris multijugador competitivo con apuestas en sats reales que funciona impecablemente. Hold invoices para escrow no-custodial, payout automático al ganador, anti-cheat server-authoritative, y UI pulida con estética cyberpunk. El core está completo y es production-grade. Leaderboard y perfil están pendientes pero no rompen la experiencia. Mobile tiene issues de accesibilidad en co"
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "sweet-shots": {
+      "title": "Sweet Shots",
+      "position": 7,
+      "finalScore": 6.58,
+      "team": [
+        "Lalo"
+      ],
+      "stack": [
+        "Vanilla JS + Vite",
+        "Supabase",
+        "NDK",
+        "WebLN"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 6.45,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 7
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 7
+            },
+            {
+              "name": "Implementación",
+              "score": 5
+            },
+            {
+              "name": "Originalidad",
+              "score": 6
+            },
+            {
+              "name": "Feedback Global",
+              "score": 7
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 4.8,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 5
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 6.5
+            },
+            {
+              "name": "Testing",
+              "score": 0
+            },
+            {
+              "name": "Consistencia",
+              "score": 6
+            },
+            {
+              "name": "Seguridad",
+              "score": 4
+            },
+            {
+              "name": "Innovación",
+              "score": 6.5
+            }
+          ],
+          "summary": "Sweet Shots está más cerca de un MVP funcional que de humo: el frontend compila y la idea de e-commerce pastelero con Lightning está implementada con bastante trabajo real. La base técnica, sin embargo, queda en zona media por falta total de tests, documentación incompleta para reproducir el stack serverless y una seguridad admin/endpoints bastante liviana para un flujo que toca pedidos y pagos. L"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 8.5,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 9
+            },
+            {
+              "name": "UI/UX",
+              "score": 8
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 9
+            },
+            {
+              "name": "Completitud",
+              "score": 8
+            },
+            {
+              "name": "Experiencia General",
+              "score": 8
+            }
+          ],
+          "summary": "Sweet Shots es un e-commerce de pastelería artesanal con integración Lightning impecable. Flujo completo funciona end-to-end: catálogo → carrito → checkout → invoice Lightning → pago real → confirmación en 4s con puntos de fidelidad. UI pulida con paleta coherente, responsive funcional, y experiencia de compra intuitiva. De los proyectos más completos y listos para producción de la hackathon."
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "wapu-cli": {
+      "title": "Wapu CLI",
+      "position": 9,
+      "finalScore": 6.28,
+      "team": [
+        "AndyCreed"
+      ],
+      "stack": [
+        "Node.js CLI",
+        "NWC",
+        "Lightning Payments",
+        "npm package"
+      ],
+      "judges": [
+        {
+          "name": "Claudio",
+          "model": "Claude Opus 4.6",
+          "score": 6.7,
+          "categories": [
+            {
+              "name": "Viabilidad",
+              "score": 7
+            },
+            {
+              "name": "Impacto Bitcoin",
+              "score": 7
+            },
+            {
+              "name": "Implementación",
+              "score": 7
+            },
+            {
+              "name": "Originalidad",
+              "score": 6
+            },
+            {
+              "name": "Feedback Global",
+              "score": 6
+            }
+          ]
+        },
+        {
+          "name": "Gorilatron",
+          "model": "OpenAI Codex 5.4",
+          "score": 7,
+          "categories": [
+            {
+              "name": "Compilación",
+              "score": 8.2
+            },
+            {
+              "name": "Calidad de Código",
+              "score": 7.4
+            },
+            {
+              "name": "Testing",
+              "score": 8.1
+            },
+            {
+              "name": "Consistencia",
+              "score": 7
+            },
+            {
+              "name": "Seguridad",
+              "score": 5.8
+            },
+            {
+              "name": "Innovación",
+              "score": 5.6
+            }
+          ],
+          "summary": "Wapu CLI está realmente construido: instala, empaqueta, expone comandos útiles y viene con una suite de tests sorprendentemente sólida para el tamaño del proyecto. La base técnica es prolija y mantenible, pero sigue siendo una capa delgada sobre el backend y todavía muestra criterios débiles en puntos sensibles para software de dinero, especialmente precisión numérica y hardening de inputs/auth. D"
+        },
+        {
+          "name": "Gorilator",
+          "model": "Claude Opus 4.6",
+          "score": 5.15,
+          "categories": [
+            {
+              "name": "Funcionalidad",
+              "score": 6
+            },
+            {
+              "name": "UI/UX",
+              "score": 4
+            },
+            {
+              "name": "QR & Lightning",
+              "score": 5
+            },
+            {
+              "name": "Completitud",
+              "score": 6
+            },
+            {
+              "name": "Experiencia General",
+              "score": 5
+            }
+          ],
+          "summary": "CLI para off-ramp BTC/USDT a ARS sin KYC. Funcional, 70 tests, bien documentado. No es webapp — Gorilator no puede evaluar UX ni pagos visuales. Score conservador por naturaleza del proyecto."
+        }
+      ],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    }
+  }
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { UnsignedEvent, UserSigner } from "./nostrSigner";
 
 export type NostrProfile = {
   name?: string;
@@ -116,6 +117,130 @@ export async function fetchNostrProfile(
   } catch {
     return null;
   }
+}
+
+/* ─────────────────────────── publish (kind:0) ─────────────────────────── */
+
+export type PublishProfileRelayResult = {
+  relay: string;
+  ok: boolean;
+  error?: string;
+};
+
+export type PublishProfileResult = {
+  relays: PublishProfileRelayResult[];
+  /** Unix seconds — `created_at` of the published event. */
+  eventCreatedAt: number;
+};
+
+function withPublishTimeout<T>(
+  p: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout ${ms}ms — ${label}`)), ms),
+    ),
+  ]);
+}
+
+function cleanProfileContent(profile: NostrProfile): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(profile)) {
+    if (typeof v !== "string") continue;
+    const trimmed = v.trim();
+    if (trimmed.length === 0) continue;
+    out[k] = trimmed;
+  }
+  return out;
+}
+
+/**
+ * Publishes a kind:0 metadata event (the Nostr profile). Clients that
+ * follow NIP-01 replace the previous profile with the freshest one by
+ * `created_at`, so publishing is an update.
+ *
+ * Updates the local cache on success so `useNostrProfile` reflects the
+ * change instantly without waiting for the relay round-trip.
+ */
+export async function publishNostrProfile(
+  signer: UserSigner,
+  profile: NostrProfile,
+  relays: string[] = DEFAULT_PROFILE_RELAYS,
+  opts?: { signTimeoutMs?: number; publishTimeoutMs?: number },
+): Promise<PublishProfileResult> {
+  const { signTimeoutMs = 30_000, publishTimeoutMs = 8_000 } = opts ?? {};
+  const content = cleanProfileContent(profile);
+  const now = Math.floor(Date.now() / 1000);
+
+  const unsigned: UnsignedEvent = {
+    kind: 0,
+    pubkey: signer.pubkey,
+    created_at: now,
+    tags: [["client", "La Crypta Labs"]],
+    content: JSON.stringify(content),
+  };
+
+  const signed = await withPublishTimeout(
+    signer.signEvent(unsigned),
+    signTimeoutMs,
+    "esperando firma",
+  );
+  if (signed.pubkey !== signer.pubkey) {
+    throw new Error(
+      `El firmante devolvió otra pubkey (esperada ${signer.pubkey.slice(0, 10)}…, recibida ${signed.pubkey.slice(0, 10)}…).`,
+    );
+  }
+
+  const { SimplePool } = await import("nostr-tools/pool");
+  const pool = new SimplePool();
+  const results: PublishProfileRelayResult[] = await Promise.all(
+    pool.publish(relays, signed).map(async (p, i) => {
+      const relay = relays[i];
+      try {
+        await withPublishTimeout(p, publishTimeoutMs, relay);
+        return { relay, ok: true };
+      } catch (e) {
+        return {
+          relay,
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    }),
+  );
+  try {
+    pool.close(relays);
+  } catch {
+    /* noop */
+  }
+
+  const okCount = results.filter((r) => r.ok).length;
+  if (okCount === 0) {
+    const err = new Error(
+      `Ningún relay aceptó el perfil.\n${results
+        .map((r) => `${r.relay}: ${r.error ?? "sin respuesta"}`)
+        .join("\n")}`,
+    );
+    (err as Error & { relayResults: PublishProfileRelayResult[] }).relayResults =
+      results;
+    throw err;
+  }
+
+  // Snapshot the new profile into the local cache so listeners update
+  // immediately (the background scan would pick it up eventually, but the
+  // cache write short-circuits that for a snappier UX).
+  setCachedProfile({
+    pubkey: signer.pubkey,
+    profile: content as NostrProfile,
+    fetchedAt: Date.now(),
+    eventCreatedAt: signed.created_at,
+    relaysUsed: relays,
+  });
+
+  return { relays: results, eventCreatedAt: signed.created_at };
 }
 
 export function useNostrProfile(

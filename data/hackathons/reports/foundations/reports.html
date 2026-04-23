@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reportes — FOUNDATIONS | La Crypta</title>
+<meta name="description" content="Reportes individuales de la Lightning Hackathon FOUNDATIONS 2026 — La Crypta">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+<link rel="stylesheet" href="../../css/styles.css">
+<link rel="stylesheet" href="../../css/hackathon-detail.css">
+<style>
+  /* ─── REPORTS GRID ─── */
+  .reports-hero {
+    padding: 120px 0 60px;
+    background: linear-gradient(135deg, #0a0f1a 0%, #1a1a2e 50%, #16213e 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  .reports-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 30% 20%, rgba(255, 200, 0, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 70% 80%, rgba(0, 255, 157, 0.05) 0%, transparent 50%);
+  }
+  .reports-hero .container { position: relative; z-index: 1; }
+  .reports-title {
+    font-size: 3rem;
+    font-weight: 900;
+    margin-bottom: 10px;
+    background: linear-gradient(135deg, #fff 0%, #ffc800 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .reports-subtitle {
+    font-size: 1.2rem;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 8px;
+  }
+  .reports-meta {
+    display: flex;
+    gap: 24px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .reports-meta .meta-pill {
+    font-family: monospace;
+    font-size: 0.85rem;
+    padding: 6px 14px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 50px;
+    color: rgba(255,255,255,0.7);
+    background: rgba(255,255,255,0.05);
+  }
+  .reports-meta .meta-pill span { color: #ffc800; font-weight: 700; }
+
+  /* ─── CARDS GRID ─── */
+  .reports-section {
+    padding: 60px 0 80px;
+    background: #0d1117;
+  }
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 32px;
+  }
+  .report-card {
+    display: block;
+    text-decoration: none;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .report-card:hover {
+    border-color: rgba(255, 200, 0, 0.4);
+    background: rgba(255, 200, 0, 0.06);
+    transform: translateY(-2px);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .rank-badge {
+    font-family: monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.06);
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+  .score-badge {
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 4px 12px;
+    border-radius: 6px;
+  }
+  .score-green { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+  .score-yellow { background: rgba(234,179,8,0.15); color: #eab308; border: 1px solid rgba(234,179,8,0.3); }
+  .score-red { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+  .card-name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .card-team {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.45);
+  }
+  .card-unavailable {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .card-unavailable:hover {
+    border-color: rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    transform: none;
+  }
+
+  /* ─── MARKDOWN OVERLAY ─── */
+  #md-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #0d1117;
+    z-index: 1000;
+    overflow-y: auto;
+  }
+  #md-overlay .md-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  .md-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #ffc800;
+    text-decoration: none;
+    font-family: monospace;
+    font-size: 0.9rem;
+    margin-bottom: 32px;
+    transition: opacity 0.2s;
+  }
+  .md-back:hover { opacity: 0.7; }
+
+  /* ─── RENDERED MARKDOWN ─── */
+  .md-rendered { color: rgba(255,255,255,0.85); line-height: 1.7; }
+  .md-rendered h1 { font-size: 2em; font-weight: 900; margin-bottom: 16px; color: #fff; }
+  .md-rendered h2 { font-size: 1.4em; font-weight: 700; color: #ffc800; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .md-rendered h3 { font-size: 1.15em; font-weight: 600; color: #fff; margin: 24px 0 8px; }
+  .md-rendered p { margin: 8px 0; color: rgba(255,255,255,0.6); }
+  .md-rendered strong { color: #fff; }
+  .md-rendered hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 24px 0; }
+  .md-rendered ul, .md-rendered ol { padding-left: 24px; color: rgba(255,255,255,0.6); }
+  .md-rendered li { margin: 4px 0; }
+  .md-rendered table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  .md-rendered th { font-family: monospace; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: #ffc800; padding: 10px 16px; text-align: left; border-bottom: 1px solid rgba(255,200,0,0.3); }
+  .md-rendered td { padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); font-size: 0.9rem; }
+  .md-rendered tr:hover td { background: rgba(255,200,0,0.04); }
+  .md-rendered blockquote { border-left: 3px solid #ffc800; padding-left: 16px; margin: 16px 0; color: rgba(255,255,255,0.5); font-style: italic; }
+  .md-rendered code { font-family: monospace; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; color: #ffc800; }
+  .md-rendered em { color: rgba(255,255,255,0.5); }
+
+  /* Project links bar */
+  .project-links-bar {
+    display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 28px;
+    padding: 16px 20px; border-radius: 10px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+  }
+  .project-link-item {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.85rem; color: rgba(255,255,255,0.7);
+    text-decoration: none; padding: 6px 14px;
+    border-radius: 8px; background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: all 0.2s;
+  }
+  .project-link-item:hover { color: #ffc800; border-color: rgba(255,200,0,0.3); background: rgba(255,200,0,0.08); }
+  .project-link-item img, .project-link-item svg { width: 16px; height: 16px; opacity: 0.7; }
+  .project-link-item:hover img, .project-link-item:hover svg { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- Navbar (same as site) -->
+<nav class="navbar">
+  <div class="nav-container">
+    <a href="https://hackaton.lacrypta.ar" class="nav-logo">
+      <img src="https://raw.githubusercontent.com/lacrypta/branding/refs/heads/main/title/512-white-transparent.png" alt="La Crypta" height="32">
+    </a>
+    <div class="nav-links">
+      <a href="../../index.html">Inicio</a>
+      <a href="../../hackathons.html">Hackathons</a>
+      <a href="foundations.html">FOUNDATIONS</a>
+    </div>
+    <button class="nav-toggle" onclick="toggleMenu()">☰</button>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="reports-hero">
+  <div class="container">
+    <div class="reports-subtitle">LIGHTNING HACKATHON #1</div>
+    <h1 class="reports-title">Reportes FOUNDATIONS</h1>
+    <p style="color:rgba(255,255,255,0.5); font-size:1rem; max-width:600px;">Evaluación detallada de cada proyecto por 3 jueces AI independientes. Puntajes, feedback y recomendaciones.</p>
+    <div class="reports-meta">
+      <div class="meta-pill"><span>15</span> proyectos</div>
+      <div class="meta-pill"><span>3</span> jueces AI</div>
+      <div class="meta-pill"><span>569</span> sats gastados</div>
+    </div>
+  </div>
+</section>
+
+<!-- Cards Grid -->
+<section class="reports-section">
+  <div class="container">
+    <div class="cards-grid">
+
+      <a class="report-card" data-md="proof-of-attendance.md" data-rank="1">
+        <div class="card-top">
+          <span class="rank-badge">#1</span>
+          <span class="score-badge score-green">7.49</span>
+        </div>
+        <div class="card-name">Proof of Attendance</div>
+        <div class="card-team">Looker</div>
+      </a>
+
+      <a class="report-card" data-md="stacktris.md" data-rank="1">
+        <div class="card-top">
+          <span class="rank-badge">#1</span>
+          <span class="score-badge score-green">7.49</span>
+        </div>
+        <div class="card-name">Stacktris</div>
+        <div class="card-team">&nbsp;</div>
+      </a>
+
+      <a class="report-card" data-md="hash21-shop.md" data-rank="3">
+        <div class="card-top">
+          <span class="rank-badge">#3</span>
+          <span class="score-badge score-green">7.07</span>
+        </div>
+        <div class="card-name">Hash21 Shop</div>
+        <div class="card-team">Abstract Lai · Ragnar</div>
+      </a>
+
+      <a class="report-card" data-md="1-sat-to.md" data-rank="4">
+        <div class="card-top">
+          <span class="rank-badge">#4</span>
+          <span class="score-badge score-yellow">7.00</span>
+        </div>
+        <div class="card-name">1 SAT a...</div>
+        <div class="card-team">unllamas · Jona</div>
+      </a>
+
+      <a class="report-card" data-md="bitbybit.md" data-rank="5">
+        <div class="card-top">
+          <span class="rank-badge">#5</span>
+          <span class="score-badge score-yellow">6.98</span>
+        </div>
+        <div class="card-name">BitByBit</div>
+        <div class="card-team">Anix · Llopo · Wander · Leon</div>
+      </a>
+
+      <a class="report-card" data-md="digital-card.md" data-rank="6">
+        <div class="card-top">
+          <span class="rank-badge">#6</span>
+          <span class="score-badge score-yellow">6.83</span>
+        </div>
+        <div class="card-name">Digital card</div>
+        <div class="card-team">negr0</div>
+      </a>
+
+      <a class="report-card" data-md="sweet-shots.md" data-rank="7">
+        <div class="card-top">
+          <span class="rank-badge">#7</span>
+          <span class="score-badge score-yellow">6.58</span>
+        </div>
+        <div class="card-name">Sweet Shots</div>
+        <div class="card-team">Lalo</div>
+      </a>
+
+      <a class="report-card" data-md="satlotto-v2.md" data-rank="8">
+        <div class="card-top">
+          <span class="rank-badge">#8</span>
+          <span class="score-badge score-yellow">6.37</span>
+        </div>
+        <div class="card-name">SatLotto V2</div>
+        <div class="card-team">Fierillo</div>
+      </a>
+
+      <a class="report-card" data-md="wapu-cli.md" data-rank="9">
+        <div class="card-top">
+          <span class="rank-badge">#9</span>
+          <span class="score-badge score-yellow">6.28</span>
+        </div>
+        <div class="card-name">Wapu CLI</div>
+        <div class="card-team">AndyCreed</div>
+      </a>
+
+      <a class="report-card" data-md="streamsats.md" data-rank="10">
+        <div class="card-top">
+          <span class="rank-badge">#10</span>
+          <span class="score-badge score-yellow">6.17</span>
+        </div>
+        <div class="card-name">Streamsats</div>
+        <div class="card-team">Federico</div>
+      </a>
+
+      <a class="report-card" data-md="relampago.md" data-rank="11">
+        <div class="card-top">
+          <span class="rank-badge">#11</span>
+          <span class="score-badge score-yellow">5.92</span>
+        </div>
+        <div class="card-name">RelámPago</div>
+        <div class="card-team">Burgos</div>
+      </a>
+
+      <a class="report-card" data-md="anirayo.md" data-rank="12">
+        <div class="card-top">
+          <span class="rank-badge">#12</span>
+          <span class="score-badge score-yellow">5.85</span>
+        </div>
+        <div class="card-name">AniRayo</div>
+        <div class="card-team">CapitanDelEscabio</div>
+      </a>
+
+      <a class="report-card" data-md="satsparty.md" data-rank="13">
+        <div class="card-top">
+          <span class="rank-badge">#13</span>
+          <span class="score-badge score-red">5.42</span>
+        </div>
+        <div class="card-name">SatsParty</div>
+        <div class="card-team">Cyberpunk</div>
+      </a>
+
+      <a class="report-card" data-md="nosteach.md" data-rank="14">
+        <div class="card-top">
+          <span class="rank-badge">#14</span>
+          <span class="score-badge score-red">5.00</span>
+        </div>
+        <div class="card-name">NosTeach</div>
+        <div class="card-team">Fred · Langostero</div>
+      </a>
+
+      <a class="report-card" data-md="life-action-plan.md" data-rank="15">
+        <div class="card-top">
+          <span class="rank-badge">#15</span>
+          <span class="score-badge score-red">4.83</span>
+        </div>
+        <div class="card-name">Life Action Plan</div>
+        <div class="card-team">naranja</div>
+      </a>
+
+    </div>
+  </div>
+</section>
+
+<!-- Footer (same as site) -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <p style="color:rgba(255,255,255,0.4); font-size:0.85rem; margin-bottom:8px;">Evaluado por 3 jueces AI: Claudio (Claude Opus 4.6) · Gorilatron (OpenAI Codex 5.4) · Gorilator (Claude Opus 4.6)</p>
+      <p>© 2026 La Crypta · <a href="../../hackathons.html">Ver todas las hackathons</a> · <a href="../../index.html">Inicio</a></p>
+    </div>
+  </div>
+</footer>
+
+<!-- Markdown Overlay -->
+<div id="md-overlay">
+  <div class="md-inner">
+    <a href="#" class="md-back" id="md-back">← Volver a reportes</a>
+    <div id="md-content" class="md-rendered"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+function toggleMenu() {
+  document.querySelector('.nav-links')?.classList.toggle('active');
+}
+
+// Scroll navbar
+window.addEventListener('scroll', () => {
+  const navbar = document.querySelector('.navbar');
+  if (window.scrollY > 50) navbar.classList.add('scrolled');
+  else navbar.classList.remove('scrolled');
+});
+
+// Map report slugs back to project repo slugs
+const reportToRepoMap = {
+  'proof-of-attendance': 'proof-of-attendance-hdmp',
+  'satlotto-v2': 'sat-lotto-v2',
+  'bitbybit': 'bitbybit-habits',
+  'streamsats': 'Streamsats',
+  'hash21-shop': 'hash21-shop',
+  'anirayo': 'anirayo',
+  'digital-card': 'digital-card',
+  'wapu-cli': 'wapu-cli',
+  'relampago': 'relam-pago',
+  'stacktris': 'stacktris',
+  'satsparty': 'SatsParty',
+  '1-sat-to': '1-sat-to',
+  'life-action-plan': 'life-action-plan',
+  'nosteach': 'nosteach',
+  'sweet-shots': 'sweet-shots'
+};
+
+let projectsData = null;
+async function getProjectsData() {
+  if (projectsData) return projectsData;
+  try {
+    const res = await fetch('/data/projects/foundations.json');
+    if (res.ok) projectsData = await res.json();
+  } catch(e) {}
+  return projectsData;
+}
+
+function buildProjectLinksBar(project) {
+  if (!project) return '';
+  const ghIcon = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
+  const ytIcon = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.007 2.007 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.007 2.007 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31.4 31.4 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.007 2.007 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A99.788 99.788 0 0 1 7.858 2h.193zM6.4 5.209v4.818l4.157-2.408L6.4 5.209z"/></svg>';
+  const demoIcon = '🌐';
+
+  let links = [];
+  if (project.repo) links.push(`<a href="${project.repo}" target="_blank" class="project-link-item">${ghIcon} GitHub</a>`);
+  if (project.demo) links.push(`<a href="${project.demo}" target="_blank" class="project-link-item">${demoIcon} Demo</a>`);
+  if (project.pitched) links.push(`<a href="${project.pitched}" target="_blank" class="project-link-item">${ytIcon} Pitch</a>`);
+  if (project.pitched_final) links.push(`<a href="${project.pitched_final}" target="_blank" class="project-link-item">${ytIcon} Pitch Final</a>`);
+  // Team GitHub profiles
+  if (project.team) {
+    project.team.forEach(m => {
+      if (m.github) links.push(`<a href="https://github.com/${m.github}" target="_blank" class="project-link-item">${ghIcon} ${m.name}</a>`);
+    });
+  }
+  if (links.length === 0) return '';
+  return `<div class="project-links-bar">${links.join('')}</div>`;
+}
+
+async function openReport(mdFile) {
+  try {
+    const res = await fetch(mdFile);
+    if (!res.ok) { alert('Reporte no disponible aún'); return; }
+    const md = await res.text();
+    
+    // Try to find project data for links bar
+    const slug = mdFile.replace('.md', '');
+    const repoSlug = reportToRepoMap[slug];
+    const data = await getProjectsData();
+    let project = null;
+    if (data && data.projects && repoSlug) {
+      project = data.projects.find(p => (p.repo || '').endsWith('/' + repoSlug) || p.id === repoSlug);
+    }
+    
+    const linksHtml = buildProjectLinksBar(project);
+    document.getElementById('md-content').innerHTML = linksHtml + marked.parse(md);
+    document.getElementById('md-overlay').style.display = 'block';
+    document.getElementById('md-overlay').scrollTop = 0;
+    document.body.style.overflow = 'hidden';
+  } catch(e) { alert('Reporte no disponible aún'); }
+}
+
+function closeMd() {
+  document.getElementById('md-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+  history.pushState(null, '', window.location.pathname);
+}
+
+document.getElementById('md-back').addEventListener('click', e => {
+  e.preventDefault();
+  closeMd();
+});
+
+document.querySelectorAll('.report-card').forEach(card => {
+  const mdFile = card.getAttribute('data-md');
+  if (!mdFile) { card.classList.add('card-unavailable'); return; }
+  card.addEventListener('click', e => {
+    e.preventDefault();
+    const name = mdFile.replace('.md', '');
+    history.pushState({ report: mdFile }, '', '?report=' + name);
+    openReport(mdFile);
+  });
+});
+
+window.addEventListener('popstate', e => {
+  if (e.state && e.state.report) openReport(e.state.report);
+  else closeMd();
+});
+
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const report = params.get('report');
+  if (report) openReport(report + '.md');
+})();
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMd(); });
+</script>
+
+</body>
+</html>

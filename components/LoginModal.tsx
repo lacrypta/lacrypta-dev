@@ -14,6 +14,7 @@ import {
   Link as LinkIcon,
   QrCode,
   Loader2,
+  Wand2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -171,6 +172,42 @@ export default function LoginModal({
       onClose();
     } catch {
       setNip07Loading(false);
+    }
+  }
+
+  /**
+   * Creates a throwaway identity by generating a random nsec locally,
+   * deriving the pubkey, and persisting both in `labs:auth` so the existing
+   * signer flow (`getSigner` → `method:"local"`) can sign events without
+   * any external extension or bunker. Intended for dev / quick demos.
+   */
+  async function handleRandomUser() {
+    try {
+      const { generateSecretKey, getPublicKey, nip19 } = await import(
+        "nostr-tools"
+      );
+      const sk = generateSecretKey(); // Uint8Array (32 bytes)
+      const pubkey = getPublicKey(sk);
+      setAuth({
+        method: "local",
+        pubkey,
+        localSecret: Array.from(sk),
+      });
+      const npub = nip19.npubEncode(pubkey);
+      pushToast({
+        kind: "info",
+        title: "Usuario aleatorio creado",
+        description: `${npub.slice(0, 14)}…${npub.slice(-6)} · la clave queda en localStorage (sólo dev).`,
+        duration: 8000,
+      });
+      router.push("/dashboard");
+      onClose();
+    } catch (e) {
+      pushToast({
+        kind: "error",
+        title: "No se pudo generar el usuario",
+        description: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
@@ -651,6 +688,20 @@ export default function LoginModal({
                         Empezá acá →
                       </a>
                     </p>
+
+                    <div className="pt-1 flex flex-col items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={handleRandomUser}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-dashed border-foreground-subtle/40 bg-white/[0.02] hover:bg-white/[0.06] hover:border-nostr/50 text-[11px] font-mono tracking-wider text-foreground-muted hover:text-nostr transition-colors"
+                      >
+                        <Wand2 className="h-3 w-3" />
+                        Generar usuario random
+                      </button>
+                      <span className="text-[9px] text-foreground-subtle">
+                        dev · nsec guardada en localStorage
+                      </span>
+                    </div>
                   </motion.div>
                 )}
 

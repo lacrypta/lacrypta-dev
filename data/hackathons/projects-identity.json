@@ -1,0 +1,276 @@
+{
+  "hackathon": "identity",
+  "month": "Abril 2026",
+  "projects": [
+    {
+      "id": "nostr-starter",
+      "name": "Nostr Starter Kit",
+      "description": "Template oficial para empezar. Keys, profiles, relays, NIP-01 basics.",
+      "team": [
+        {
+          "name": "La Crypta",
+          "github": "lacrypta",
+          "role": "Organizers"
+        }
+      ],
+      "repo": "https://github.com/lacrypta/nostr-starter",
+      "demo": "",
+      "tech": [
+        "Nostr",
+        "NIP-01",
+        "NDK",
+        "Vite"
+      ],
+      "status": "official",
+      "submittedAt": "2026-04-01"
+    },
+    {
+      "id": "scammer-come-empanadas-detector",
+      "name": "Scammer & Come Empanadas Detector",
+      "description": "Nostr Identity Hub con verificación NIP-05, badges de reputación y detección de scammers/come empanadas para la comunidad de La Crypta.",
+      "team": [
+        {
+          "name": "Looker",
+          "github": "Lo0ker-Noma",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/Lo0ker-Noma/nostr-identity-hub",
+      "demo": "https://nostr-identity-hub.vercel.app/",
+      "tech": [
+        "Nostr",
+        "NIP-05",
+        "NIP-58",
+        "NIP-57",
+        "Vite",
+        "Vercel"
+      ],
+      "status": "building",
+      "submittedAt": "2026-04-07"
+    },
+    {
+      "id": "nostr-en-el-espacio",
+      "name": "Nostr en el Espacio",
+      "description": "Explorá Nostr como si fuera un universo vivo: cargás una npub o nprofile y Nostr en el Espacio descubre follows, conexiones y comunidades para convertirlas en un grafo interactivo que te deja ver, entender y navegar las relaciones entre usuarios.",
+      "team": [
+        {
+          "name": "Naranja",
+          "github": "soyezequiel",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/soyezequiel/nostr-en-el-espacio",
+      "demo": "https://nostr-en-el-espacio.vercel.app/",
+      "tech": [
+        "Next.js",
+        "React 19",
+        "TypeScript",
+        "Zustand",
+        "Dexie",
+        "nostr-tools",
+        "NDK",
+        "d3-force",
+        "deck.gl"
+      ],
+      "status": "building",
+      "submittedAt": "2026-04-09"
+    },
+    {
+      "id": "obelisk",
+      "name": "Obelisk",
+      "description": "Chat grupal tipo Discord donde la identidad viene de tu keypair de Nostr. Sin emails ni passwords — filtrado de spam vía Web of Trust, canales de texto y voz, roles y moderación.",
+      "team": [
+        {
+          "name": "Fabricio",
+          "github": "Fabricio333",
+          "role": "Lead Dev"
+        },
+        {
+          "name": "Topolino",
+          "github": "topolino-claw",
+          "role": "Dev"
+        }
+      ],
+      "repo": "https://github.com/Fabricio333/obelisk",
+      "demo": "https://obelisk.ar",
+      "tech": [
+        "Next.js",
+        "TypeScript",
+        "Nostr",
+        "NDK",
+        "NIP-07",
+        "NIP-46",
+        "NIP-05",
+        "NIP-65",
+        "Prisma",
+        "PostgreSQL",
+        "Socket.io",
+        "Tailwind"
+      ],
+      "status": "building",
+      "submittedAt": "2026-04-10"
+    },
+    {
+      "id": "predictr",
+      "name": "Predictr — P2P Bitcoin Prediction Bulletin",
+      "description": "Mercado de apuestas P2P trustless y browser-native: los usuarios publican bets en Nostr, negocian via DMs cifrados (NIP-44) y liquidan on-chain con contratos Bitcoin Taproot. Sin coordinador, sin custodio, sin backend.",
+      "team": [
+        {
+          "name": "nic(o)",
+          "github": "landaverdend",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/landaverdend/predictr",
+      "demo": "",
+      "tech": [
+        "Bitcoin",
+        "Taproot",
+        "DLC",
+        "Nostr",
+        "NIP-44",
+        "NIP-40",
+        "nostr-tools",
+        "TypeScript",
+        "React",
+        "Vite",
+        "Tailwind"
+      ],
+      "status": "building",
+      "submittedAt": "2026-04-11"
+    },
+    {
+      "id": "arena",
+      "name": "Arena",
+      "description": "Retá a tu red y compartí tu gloria en Nostr. Competí, reclamá recompensas en vivo y forjá tu identidad con badges NIP-58. Cliente de BitByBit.",
+      "team": [
+        {
+          "name": "Anix",
+          "github": "analiaacostaok",
+          "role": "Lead Dev"
+        },
+        {
+          "name": "Wander",
+          "github": "Pizza-Wder",
+          "role": "Designer"
+        }
+      ],
+      "repo": "https://github.com/bitbybit-ar/bitbybit-arena",
+      "demo": "https://arena.bitbybit.com.ar",
+      "tech": [
+        "NIP-01",
+        "NIP-07",
+        "NIP-42",
+        "NIP-46",
+        "NIP-57",
+        "NIP-58",
+        "NIP-75",
+        "Next.js 16",
+        "React 19",
+        "TypeScript",
+        "SCSS Modules",
+        "next-intl",
+        "Drizzle ORM",
+        "Neon",
+        "nostr-tools",
+        "Alby SDK",
+        "JWT (jose)"
+      ],
+      "status": "building",
+      "submittedAt": "2026-04-10"
+    },
+    {
+      "id": "tamagostrich",
+      "name": "Tamagostrich",
+      "description": "Mascota virtual (avestruz) que vive en el protocolo Nostr. Cuidá a Nori, tu Tamagotchi descentralizado con identidad propia.",
+      "team": [
+        {
+          "name": "Negr0",
+          "github": "Negr087",
+          "role": "Dev"
+        }
+      ],
+      "repo": "https://github.com/Negr087/tamagostrich",
+      "demo": "https://tamagostrich.vercel.app",
+      "tech": [
+        "Nostr",
+        "NIP-01",
+        "NIP-07",
+        "NIP-46",
+        "NIP-58",
+        "NIP-65",
+        "NDK",
+        "Next.js",
+        "Three.js",
+        "Vercel"
+      ],
+      "status": "building",
+      "submittedAt": "2026-04-16"
+    },
+    {
+      "id": "nostr-kahoot",
+      "name": "Nostr Kahoot",
+      "description": "Kahoot descentralizado construido en Nostr. Cuestionarios interactivos en tiempo real con autenticación NIP-07, eventos firmados criptográficamente, QR para unirse y ranking en vivo.",
+      "team": [
+        {
+          "name": "Looker",
+          "github": "Lo0ker-Noma",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/Lo0ker-Noma/nostr-kahoot",
+      "demo": "",
+      "tech": [
+        "Nostr",
+        "NIP-07",
+        "React 18",
+        "Vite",
+        "Zustand",
+        "Tailwind CSS",
+        "qrcode.react",
+        "Vercel"
+      ],
+      "status": "building",
+      "submittedAt": "2026-04-15"
+    },
+    {
+      "id": "hash21",
+      "name": "Hash21 — Arte, Identidad y Bitcoin",
+      "description": "Plataforma completa de arte Bitcoin-native. Galería con artistas verificados via Nostr, certificación on-chain (OpenTimestamps), subastas P2P descentralizadas, pagos Lightning directos y shop. 8 NIPs implementados. La identidad Nostr del artista es el eje: firma obras, certifica, subasta y cobra — sin intermediarios.",
+      "team": [
+        {
+          "name": "Lai",
+          "github": "warrior-lai",
+          "role": "Founder and artist"
+        },
+        {
+          "name": "Ragnar",
+          "role": "IA Dev"
+        }
+      ],
+      "repo": "https://github.com/warrior-lai/hash-21",
+      "demo": "https://hash21.studio",
+      "tech": [
+        "Nostr",
+        "NIP-01",
+        "NIP-05",
+        "NIP-07",
+        "NIP-19",
+        "NIP-44",
+        "NIP-46",
+        "NIP-57",
+        "NIP-98",
+        "Bitcoin",
+        "OpenTimestamps",
+        "Lightning",
+        "React 19",
+        "Vite",
+        "Vitest",
+        "Supabase",
+        "Vercel"
+      ],
+      "status": "submitted",
+      "submittedAt": "2026-04-19"
+    }
+  ]
+}

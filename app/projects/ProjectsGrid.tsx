@@ -140,24 +140,34 @@ function toDisplay(p: Project): DisplayProject {
 }
 
 function nostrToDisplay(np: CommunityProject): DisplayProject {
+  const team =
+    np.team && np.team.length > 0
+      ? np.team.map((m) => ({
+          name: m.name,
+          github: m.github ?? "",
+          role: m.role,
+        }))
+      : [
+          {
+            name: `${np.author.slice(0, 8)}…${np.author.slice(-4)}`,
+            github: "",
+            role: "Builder",
+          },
+        ];
   return {
     id: `nostr:${np.author}:${np.id}`,
     name: np.name,
     description: np.description ?? "",
-    status: "live",
-    tags: np.tags ?? [],
-    tech: np.tags,
-    team: [
-      {
-        name: `${np.author.slice(0, 8)}…${np.author.slice(-4)}`,
-        github: "",
-        role: "Builder",
-      },
-    ],
+    status: np.status ?? "submitted",
+    tags: np.tech ?? [],
+    tech: np.tech,
+    team,
     repo: np.repo,
-    demo: np.url,
-    website: np.url,
-    year: new Date(np.eventCreatedAt * 1000).getFullYear(),
+    demo: np.demo,
+    hackathon:
+      np.hackathon === "foundations" || np.hackathon === "identity"
+        ? np.hackathon
+        : undefined,
     source: "nostr",
     author: np.author,
     nostrCreatedAt: np.eventCreatedAt,

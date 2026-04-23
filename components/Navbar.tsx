@@ -16,9 +16,10 @@ import {
 import Logo from "./Logo";
 import LoginModal from "./LoginModal";
 import { cn } from "@/lib/cn";
-import { useAuth, clearAuth } from "@/lib/auth";
+import { useAuth, clearAuth, readAndClearLogoutReason } from "@/lib/auth";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { useNostrProfile } from "@/lib/nostrProfile";
+import { useToast } from "./Toast";
 
 type NavLink = {
   href: string;
@@ -30,11 +31,7 @@ const NAV_LINKS: NavLink[] = [
   { href: "/", label: "Inicio" },
   { href: "/infrastructure", label: "Infraestructura" },
   { href: "/projects", label: "Proyectos" },
-  {
-    href: "https://hackaton.lacrypta.ar/",
-    label: "Hackatones",
-    external: true,
-  },
+  { href: "/hackathons", label: "Hackatones" },
 ];
 
 export default function Navbar() {
@@ -45,12 +42,35 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const { push: pushToast } = useToast();
 
   function handleLogout() {
-    clearAuth();
+    clearAuth("user");
     setMobileOpen(false);
     if (pathname.startsWith("/dashboard")) router.push("/");
   }
+
+  // If the session was cleared by the auth probe (NIP-07 extension vanished
+  // on reload), surface a contextual toast so the user knows why they need
+  // to reconnect. The Navbar is layout-persistent so we can't rely on the
+  // mount effect — instead we consume the reason whenever `auth` is null,
+  // which fires both on initial mount and on clearAuth().
+  useEffect(() => {
+    if (auth) return;
+    const reason = readAndClearLogoutReason();
+    if (!reason) return;
+    if (reason === "signer-missing") {
+      pushToast({
+        kind: "info",
+        title: "Se cerró la sesión",
+        description:
+          "Tu extensión Nostr (Alby, nos2x…) no está disponible. Reconectá para volver a firmar.",
+        duration: 10000,
+      });
+      // Surface the login modal so the action is one click away.
+      setLoginOpen(true);
+    }
+  }, [auth, pushToast]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
@@ -17,7 +17,11 @@ import {
   Globe,
   Calendar,
   Save,
+  UserRound,
+  AlertCircle,
+  BadgeCheck,
 } from "lucide-react";
+import { NIP05_REGEX, queryProfile } from "nostr-tools/nip05";
 import { GithubIcon } from "@/components/BrandIcons";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/auth";
@@ -30,30 +34,155 @@ import {
   getCachedUserProjects,
   publishUserProject,
   type ProjectsDoc,
+  type TeamMember,
   type UserProject,
 } from "@/lib/userProjects";
+import { HACKATHONS } from "@/lib/hackathons";
+import { useNostrProfile } from "@/lib/nostrProfile";
 
 type RelayResult = { relay: string; ok: boolean; error?: string };
 type Phase = "signing" | "publishing" | "done";
 import { cn } from "@/lib/cn";
 
+type TeamRow = {
+  /** stable local id for react keys; doesn't get serialised */
+  key: string;
+  /** NIP-05 identifier typed by the user (e.g. `kassis@lacrypta.ar`). */
+  nip05: string;
+  /** hex pubkey — either seeded (owner) or resolved from NIP-05. */
+  pubkey?: string;
+  /** display name snapshot (from profile, nip05 local part, or legacy value). */
+  name?: string;
+  /** avatar URL snapshot from profile. */
+  picture?: string;
+  /** legacy github handle preserved from older entries. */
+  github?: string;
+  /** whether this row represents the currently-authenticated user. */
+  owner?: boolean;
+  role: string;
+};
+
 type FormState = {
   id: string | null;
   name: string;
   description: string;
-  url: string;
+  demo: string;
   repo: string;
-  tags: string;
+  tech: string[];
+  team: TeamRow[];
+  hackathon: string; // "" means no hackathon assigned
+  /** preserved submittedAt so ediciones no cambian la fecha original */
+  submittedAt?: string;
 };
 
-const EMPTY_FORM: FormState = {
-  id: null,
-  name: "",
-  description: "",
-  url: "",
-  repo: "",
-  tags: "",
-};
+function newRowKey() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+}
+
+function emptyForm(): FormState {
+  return {
+    id: null,
+    name: "",
+    description: "",
+    demo: "",
+    repo: "",
+    tech: [],
+    team: [],
+    hackathon: "",
+  };
+}
+
+/** Common stack labels suggested in the autocomplete. Kept intentionally
+ *  lacrypta-flavoured: Bitcoin / Lightning / Nostr / NIPs first, then the
+ *  usual web and runtime bits people actually use in labs projects. */
+const STACK_SUGGESTIONS: string[] = [
+  // Nostr
+  "Nostr",
+  "NIP-01",
+  "NIP-04",
+  "NIP-05",
+  "NIP-07",
+  "NIP-09",
+  "NIP-19",
+  "NIP-42",
+  "NIP-44",
+  "NIP-46",
+  "NIP-57",
+  "NIP-58",
+  "NIP-65",
+  "NIP-78",
+  "nostr-tools",
+  "NDK",
+  "Bunker",
+  // Bitcoin / Lightning
+  "Bitcoin",
+  "Lightning",
+  "LNURL",
+  "LNURL-Pay",
+  "LNURL-Auth",
+  "BOLT-11",
+  "BOLT-12",
+  "LND",
+  "Core Lightning",
+  "LDK",
+  "BDK",
+  "LNbits",
+  "NWC",
+  "Taproot",
+  "Miniscript",
+  "PSBT",
+  "Cashu",
+  "Fedimint",
+  "Ark",
+  "RGB",
+  // Frameworks / UI
+  "React",
+  "Next.js",
+  "React Native",
+  "Vue",
+  "Svelte",
+  "SvelteKit",
+  "Remix",
+  "Astro",
+  "Solid",
+  "Tailwind",
+  "Shadcn",
+  "Radix",
+  "Framer Motion",
+  "Three.js",
+  // Langs / Runtimes
+  "TypeScript",
+  "JavaScript",
+  "Rust",
+  "Go",
+  "Python",
+  "Elixir",
+  "Node.js",
+  "Bun",
+  "Deno",
+  "Vite",
+  // Storage / Infra
+  "IPFS",
+  "PostgreSQL",
+  "SQLite",
+  "Redis",
+  "Supabase",
+  "Vercel",
+  "Fly.io",
+  "Cloudflare Workers",
+  "Railway",
+  // Crypto / Misc
+  "secp256k1",
+  "schnorr",
+  "Noble",
+  "Zod",
+  "tRPC",
+  "WebSockets",
+  "WASM",
+  "Web of Trust",
+];
 
 export default function UserProjectsClient() {
   const router = useRouter();
@@ -69,8 +198,44 @@ export default function UserProjectsClient() {
   const [phase, setPhase] = useState<Phase | null>(null);
   const [phaseDetail, setPhaseDetail] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>(() => emptyForm());
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // Profile for the currently-authenticated user — used to pre-fill the
+  // owner row in the team editor (avatar + nip05 + display name).
+  const { profile: ownerProfile } = useNostrProfile(auth?.pubkey);
+
+  const ownerRow = useCallback((): TeamRow => {
+    return {
+      key: newRowKey(),
+      nip05: ownerProfile?.nip05 ?? "",
+      pubkey: auth?.pubkey,
+      name:
+        ownerProfile?.display_name ||
+        ownerProfile?.name ||
+        (auth?.pubkey ? `${auth.pubkey.slice(0, 8)}…` : ""),
+      picture: ownerProfile?.picture,
+      owner: true,
+      role: "Lead",
+    };
+  }, [auth?.pubkey, ownerProfile]);
+
+  // When the profile loads after the form is opened for creation, backfill
+  // the owner row so the avatar + nip05 show up without a re-open.
+  useEffect(() => {
+    if (!formOpen || form.id) return;
+    setForm((prev) => {
+      const first = prev.team[0];
+      if (!first?.owner) return prev;
+      const hasPicture = !!first.picture;
+      const hasNip05 = !!first.nip05;
+      if (hasPicture && hasNip05) return prev;
+      const seeded = ownerRow();
+      const next = [...prev.team];
+      next[0] = { ...first, ...seeded, key: first.key };
+      return { ...prev, team: next };
+    });
+  }, [ownerRow, formOpen, form.id]);
 
   const relays = useMemo(() => {
     const out = new Set<string>(DEFAULT_USER_RELAYS);
@@ -246,18 +411,40 @@ export default function UserProjectsClient() {
   }
 
   function openCreate() {
-    setForm(EMPTY_FORM);
+    setForm({ ...emptyForm(), team: [ownerRow()] });
     setFormOpen(true);
   }
 
   function openEdit(p: UserProject) {
+    const rows: TeamRow[] =
+      p.team && p.team.length > 0
+        ? p.team.map((m) => ({
+            key: newRowKey(),
+            nip05: m.nip05 ?? "",
+            pubkey: m.pubkey,
+            name: m.name,
+            picture: m.picture,
+            github: m.github,
+            owner: !!(auth?.pubkey && m.pubkey === auth.pubkey),
+            role: m.role,
+          }))
+        : [ownerRow()];
+    // Make sure the owner is represented — if the saved team doesn't
+    // include the signer we prepend a fresh owner row so they can still
+    // identify themselves on the next publish.
+    if (auth?.pubkey && !rows.some((r) => r.pubkey === auth.pubkey)) {
+      rows.unshift(ownerRow());
+    }
     setForm({
       id: p.id,
       name: p.name,
       description: p.description ?? "",
-      url: p.url ?? "",
+      demo: p.demo ?? "",
       repo: p.repo ?? "",
-      tags: (p.tags ?? []).join(", "),
+      tech: p.tech ?? [],
+      team: rows,
+      hackathon: p.hackathon ?? "",
+      submittedAt: p.submittedAt,
     });
     setFormOpen(true);
   }
@@ -265,22 +452,47 @@ export default function UserProjectsClient() {
   async function handleSave() {
     if (!doc || !auth) return;
     const now = Math.floor(Date.now() / 1000);
+    const today = new Date().toISOString().slice(0, 10);
     const clean = (s: string) => s.trim();
-    const tags = clean(form.tags)
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+    const tech = form.tech.map((t) => t.trim()).filter(Boolean);
+
+    const team: TeamMember[] = form.team
+      .map((row) => {
+        const nip05 = clean(row.nip05);
+        const name =
+          clean(row.name ?? "") ||
+          (nip05 ? nip05.split("@")[0] : "") ||
+          (row.pubkey ? `${row.pubkey.slice(0, 8)}…` : "");
+        return {
+          name,
+          role: clean(row.role) || "Builder",
+          nip05: nip05 || undefined,
+          pubkey: row.pubkey,
+          picture: row.picture,
+          github: row.github ? clean(row.github) || undefined : undefined,
+        };
+      })
+      .filter((m) => m.name.length > 0 || m.nip05 || m.pubkey);
+
+    const hackathon = clean(form.hackathon) || null;
+    const status = hackathon ? "submitted" : "building";
+    const existing = form.id
+      ? doc.projects.find((p) => p.id === form.id)
+      : undefined;
+    const createdAt = existing?.createdAt ?? now;
 
     const base: UserProject = {
       id: form.id ?? crypto.randomUUID(),
       name: clean(form.name),
-      description: clean(form.description) || undefined,
-      url: clean(form.url) || undefined,
+      description: clean(form.description) || "",
+      team,
       repo: clean(form.repo) || undefined,
-      tags: tags.length ? tags : undefined,
-      createdAt: form.id
-        ? (doc.projects.find((p) => p.id === form.id)?.createdAt ?? now)
-        : now,
+      demo: clean(form.demo) || undefined,
+      tech: tech.length ? tech : undefined,
+      status,
+      hackathon,
+      submittedAt: hackathon ? (existing?.submittedAt ?? today) : undefined,
+      createdAt,
       updatedAt: now,
     };
 
@@ -301,7 +513,7 @@ export default function UserProjectsClient() {
         return { projects: next };
       });
       setFormOpen(false);
-      setForm(EMPTY_FORM);
+      setForm(emptyForm());
     } catch {
       /* persistProject already surfaced the error */
     }
@@ -468,7 +680,7 @@ export default function UserProjectsClient() {
         onSave={handleSave}
         onClose={() => {
           setFormOpen(false);
-          setForm(EMPTY_FORM);
+          setForm(emptyForm());
         }}
         publishing={publishing}
         phase={phase}
@@ -572,9 +784,9 @@ function ProjectCard({
         </p>
       )}
 
-      {project.tags && project.tags.length > 0 && (
+      {project.tech && project.tech.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {project.tags.map((t) => (
+          {project.tech.map((t) => (
             <span
               key={t}
               className="px-1.5 py-0.5 rounded-md border border-border bg-white/[0.03] text-[10px] font-mono uppercase tracking-wider text-foreground-muted"
@@ -598,15 +810,15 @@ function ProjectCard({
               Repo
             </a>
           )}
-          {project.url && (
+          {project.demo && (
             <a
-              href={project.url}
+              href={project.demo}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
             >
               <Globe className="h-3.5 w-3.5" />
-              Sitio
+              Demo
             </a>
           )}
         </div>
@@ -745,27 +957,51 @@ function ProjectFormModal({
                     className="w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm font-mono placeholder:text-foreground-subtle"
                   />
                 </Field>
-                <Field label="Sitio">
+                <Field label="Demo / Sitio">
                   <input
                     type="url"
-                    value={form.url}
-                    onChange={(e) => setForm({ ...form, url: e.target.value })}
+                    value={form.demo}
+                    onChange={(e) => setForm({ ...form, demo: e.target.value })}
                     disabled={publishing}
                     placeholder="https://..."
                     className="w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm font-mono placeholder:text-foreground-subtle"
                   />
                 </Field>
               </div>
-              <Field label="Tags" hint="separados por coma">
-                <input
-                  type="text"
-                  value={form.tags}
-                  onChange={(e) => setForm({ ...form, tags: e.target.value })}
+              <Field label="Stack" hint="enter o coma para sumar">
+                <TagsInput
+                  value={form.tech}
+                  onChange={(tech) => setForm({ ...form, tech })}
                   disabled={publishing}
-                  placeholder="bitcoin, lightning, nostr"
-                  className="w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm placeholder:text-foreground-subtle"
+                  placeholder="Lightning, Nostr, NIP-01…"
+                  suggestions={STACK_SUGGESTIONS}
                 />
               </Field>
+              <Field
+                label="Hackatón"
+                hint="asignalo para que aparezca en /hackathons"
+              >
+                <select
+                  value={form.hackathon}
+                  onChange={(e) =>
+                    setForm({ ...form, hackathon: e.target.value })
+                  }
+                  disabled={publishing}
+                  className="w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm"
+                >
+                  <option value="">Sin hackatón asignado</option>
+                  {HACKATHONS.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.icon} {h.name} · {h.monthShort} {h.year}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <TeamEditor
+                team={form.team}
+                onChange={(team) => setForm({ ...form, team })}
+                disabled={publishing}
+              />
             </div>
 
             <div className="relative px-6 py-4 bg-black/30 border-t border-border flex items-center justify-end gap-3">
@@ -826,6 +1062,459 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+/* ───────────────────────── Stack tags input ───────────────────────── */
+
+function TagsInput({
+  value,
+  onChange,
+  disabled,
+  placeholder,
+  suggestions = [],
+  maxTags,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  suggestions?: string[];
+  maxTags?: number;
+}) {
+  const [draft, setDraft] = useState("");
+  const [focused, setFocused] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const blurTimer = useRef<number | null>(null);
+
+  const normalized = useMemo(
+    () => new Set(value.map((v) => v.trim().toLowerCase())),
+    [value],
+  );
+
+  const filtered = useMemo(() => {
+    const d = draft.trim().toLowerCase();
+    return suggestions
+      .filter((s) => !normalized.has(s.toLowerCase()))
+      .filter((s) => !d || s.toLowerCase().includes(d))
+      .slice(0, 8);
+  }, [suggestions, draft, normalized]);
+
+  function commit(raw: string) {
+    const clean = raw.trim().replace(/^,+|,+$/g, "").trim();
+    if (!clean) {
+      setDraft("");
+      return;
+    }
+    if (normalized.has(clean.toLowerCase())) {
+      setDraft("");
+      return;
+    }
+    if (maxTags && value.length >= maxTags) return;
+    onChange([...value, clean]);
+    setDraft("");
+    setActiveIdx(-1);
+  }
+
+  function remove(index: number) {
+    onChange(value.filter((_, i) => i !== index));
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // Read the live input value — React state (`draft`) may be stale when
+    // two events (input + keydown) fire back-to-back in the same tick.
+    const live = e.currentTarget.value;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (activeIdx >= 0 && filtered[activeIdx]) {
+        commit(filtered[activeIdx]);
+      } else if (live.trim()) {
+        commit(live);
+      }
+    } else if (e.key === ",") {
+      e.preventDefault();
+      if (live.trim()) commit(live);
+    } else if (e.key === "Tab") {
+      if (live.trim()) commit(live);
+      // let Tab do its default to advance focus
+    } else if (e.key === "Backspace" && !live && value.length > 0) {
+      e.preventDefault();
+      remove(value.length - 1);
+    } else if (e.key === "ArrowDown" && filtered.length > 0) {
+      e.preventDefault();
+      setActiveIdx((i) => (i + 1) % filtered.length);
+    } else if (e.key === "ArrowUp" && filtered.length > 0) {
+      e.preventDefault();
+      setActiveIdx((i) => (i <= 0 ? filtered.length - 1 : i - 1));
+    } else if (e.key === "Escape") {
+      setActiveIdx(-1);
+      inputRef.current?.blur();
+    }
+  }
+
+  return (
+    <div className="relative">
+      <div
+        onClick={() => !disabled && inputRef.current?.focus()}
+        className={cn(
+          "flex flex-wrap items-center gap-1.5 min-h-[42px] px-2 py-1.5 rounded-lg bg-white/[0.03] border transition-colors cursor-text",
+          focused && !disabled
+            ? "border-bitcoin/50 bg-white/[0.05]"
+            : "border-border",
+          disabled && "opacity-60 cursor-not-allowed",
+        )}
+      >
+        {value.map((tag, i) => (
+          <span
+            key={`${tag}-${i}`}
+            className="inline-flex items-center gap-0.5 pl-2 pr-0.5 py-0.5 rounded-md border border-bitcoin/30 bg-bitcoin/10 text-[11px] font-mono text-bitcoin"
+          >
+            {tag}
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={(e) => {
+                e.stopPropagation();
+                remove(i);
+              }}
+              className="p-0.5 rounded hover:bg-bitcoin/20 disabled:opacity-50"
+              aria-label={`Quitar ${tag}`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        <input
+          ref={inputRef}
+          type="text"
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setActiveIdx(-1);
+          }}
+          onKeyDown={onKeyDown}
+          onFocus={() => {
+            if (blurTimer.current) {
+              window.clearTimeout(blurTimer.current);
+              blurTimer.current = null;
+            }
+            setFocused(true);
+          }}
+          onBlur={() => {
+            // small delay so clicks on suggestions land before dropdown hides
+            blurTimer.current = window.setTimeout(() => {
+              setFocused(false);
+              if (draft.trim()) commit(draft);
+            }, 120);
+          }}
+          disabled={disabled}
+          placeholder={value.length === 0 ? placeholder : ""}
+          className="flex-1 min-w-[80px] bg-transparent text-sm placeholder:text-foreground-subtle focus:outline-none py-0.5"
+        />
+      </div>
+      {focused && filtered.length > 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-10 rounded-lg border border-border bg-background-card shadow-xl overflow-hidden max-h-60 overflow-y-auto">
+          {filtered.map((s, i) => (
+            <button
+              type="button"
+              key={s}
+              onMouseDown={(e) => {
+                // prevent input blur so focus stays after insertion
+                e.preventDefault();
+                commit(s);
+                inputRef.current?.focus();
+              }}
+              onMouseEnter={() => setActiveIdx(i)}
+              className={cn(
+                "w-full text-left px-3 py-1.5 text-sm font-mono transition-colors",
+                activeIdx === i
+                  ? "bg-bitcoin/10 text-bitcoin"
+                  : "hover:bg-white/5 text-foreground-muted",
+              )}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────────────────────── Team editor (NIP-05) ──────────────────────── */
+
+type Nip05State = {
+  resolving: boolean;
+  pubkey?: string;
+  error?: string;
+};
+
+/** Resolves a NIP-05 identifier to a pubkey. Debounced, cancellable. */
+function useNip05Resolution(nip05: string | undefined): Nip05State {
+  const [state, setState] = useState<Nip05State>({ resolving: false });
+
+  useEffect(() => {
+    const value = (nip05 ?? "").trim();
+    if (!value) {
+      setState({ resolving: false });
+      return;
+    }
+    if (!NIP05_REGEX.test(value)) {
+      setState({ resolving: false, error: "formato inválido" });
+      return;
+    }
+
+    let cancelled = false;
+    setState({ resolving: true });
+
+    const t = window.setTimeout(async () => {
+      try {
+        const res = await queryProfile(value);
+        if (cancelled) return;
+        if (res?.pubkey) {
+          setState({ resolving: false, pubkey: res.pubkey });
+        } else {
+          setState({ resolving: false, error: "no encontrado" });
+        }
+      } catch {
+        if (cancelled) return;
+        setState({ resolving: false, error: "no se pudo resolver" });
+      }
+    }, 450);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [nip05]);
+
+  return state;
+}
+
+function TeamEditor({
+  team,
+  onChange,
+  disabled,
+}: {
+  team: TeamRow[];
+  onChange: (team: TeamRow[]) => void;
+  disabled: boolean;
+}) {
+  function updateRow(i: number, patch: Partial<TeamRow>) {
+    onChange(team.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  }
+  function addRow() {
+    onChange([
+      ...team,
+      { key: newRowKey(), nip05: "", role: "Builder" },
+    ]);
+  }
+  function removeRow(i: number) {
+    onChange(team.filter((_, idx) => idx !== i));
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-medium text-foreground-muted">
+          Equipo
+        </span>
+        <span className="text-[10px] text-foreground-subtle">
+          sumá miembros con su NIP-05
+        </span>
+      </div>
+      <div className="space-y-2">
+        {team.map((row, i) => (
+          <TeamRowEditor
+            key={row.key}
+            row={row}
+            disabled={disabled}
+            onChange={(patch) => updateRow(i, patch)}
+            onRemove={() => removeRow(i)}
+          />
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={addRow}
+        disabled={disabled}
+        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-border bg-white/[0.02] hover:bg-white/[0.05] text-xs font-semibold transition-colors disabled:opacity-50"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Sumar miembro
+      </button>
+    </div>
+  );
+}
+
+function TeamRowEditor({
+  row,
+  disabled,
+  onChange,
+  onRemove,
+}: {
+  row: TeamRow;
+  disabled: boolean;
+  onChange: (patch: Partial<TeamRow>) => void;
+  onRemove: () => void;
+}) {
+  // Don't run NIP-05 resolution for the owner row — its pubkey was seeded
+  // from the signer and the nip05 value reflects the owner's profile, which
+  // we already have via useNostrProfile in the parent.
+  const resolution = useNip05Resolution(row.owner ? "" : row.nip05);
+  const effectivePubkey = row.owner ? row.pubkey : resolution.pubkey;
+  const { profile, loading } = useNostrProfile(effectivePubkey);
+
+  // Keep row.pubkey / name / picture in sync with the resolved profile.
+  useEffect(() => {
+    if (row.owner) return;
+    if (resolution.pubkey && resolution.pubkey !== row.pubkey) {
+      onChange({ pubkey: resolution.pubkey });
+    }
+    if (!resolution.pubkey && !resolution.resolving && row.pubkey) {
+      onChange({ pubkey: undefined, picture: undefined });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolution.pubkey, resolution.resolving]);
+
+  useEffect(() => {
+    if (!profile) return;
+    const name = profile.display_name || profile.name;
+    const patch: Partial<TeamRow> = {};
+    if (name && name !== row.name) patch.name = name;
+    if (profile.picture && profile.picture !== row.picture) {
+      patch.picture = profile.picture;
+    }
+    if (Object.keys(patch).length > 0) onChange(patch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.name, profile?.display_name, profile?.picture]);
+
+  const busy = resolution.resolving || loading;
+  const resolved = !!effectivePubkey && !resolution.error;
+  const error = resolution.error;
+
+  const displayName =
+    row.name ||
+    (row.nip05 ? row.nip05.split("@")[0] : "") ||
+    (effectivePubkey ? `${effectivePubkey.slice(0, 8)}…` : "");
+
+  return (
+    <div>
+      <div className="grid grid-cols-[auto_1fr_120px_auto] gap-2 items-center">
+        <Avatar
+          picture={row.picture}
+          name={displayName}
+          busy={busy}
+          error={!!error}
+        />
+        <div className="relative min-w-0">
+          <input
+            type="text"
+            value={row.nip05}
+            onChange={(e) => onChange({ nip05: e.target.value })}
+            disabled={disabled || row.owner}
+            placeholder="vos@dominio.com"
+            spellCheck={false}
+            autoComplete="off"
+            className={cn(
+              "w-full px-2.5 py-2 pr-7 rounded-lg bg-white/[0.03] border transition-colors text-xs font-mono placeholder:text-foreground-subtle min-w-0",
+              error
+                ? "border-danger/50 focus:border-danger"
+                : resolved
+                  ? "border-success/40 focus:border-success/60"
+                  : "border-border focus:border-bitcoin/50 focus:bg-white/[0.05]",
+              row.owner && "bg-white/[0.02] text-foreground-muted",
+            )}
+          />
+          {resolved && !error && (
+            <BadgeCheck className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-success" />
+          )}
+          {error && (
+            <AlertCircle className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-danger" />
+          )}
+          {busy && (
+            <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-foreground-subtle" />
+          )}
+        </div>
+        <input
+          type="text"
+          value={row.role}
+          onChange={(e) => onChange({ role: e.target.value })}
+          disabled={disabled}
+          placeholder="Rol"
+          className="px-2.5 py-2 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-xs placeholder:text-foreground-subtle min-w-0"
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          className="px-2 py-2 rounded-lg text-foreground-subtle hover:text-danger hover:bg-danger/10 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-foreground-subtle transition-colors"
+          aria-label="Quitar miembro"
+          title={row.owner ? "Quitarte del equipo" : "Quitar miembro"}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      {(row.name || row.owner || error) && (
+        <div className="mt-1 pl-[calc(28px+0.5rem)] text-[10px] font-mono flex items-center gap-2">
+          {row.owner && (
+            <span className="inline-flex items-center gap-0.5 text-bitcoin">
+              <BadgeCheck className="h-3 w-3" /> vos
+            </span>
+          )}
+          {error ? (
+            <span className="text-danger">{error}</span>
+          ) : row.name ? (
+            <span className="text-foreground-subtle truncate">{row.name}</span>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Avatar({
+  picture,
+  name,
+  busy,
+  error,
+}: {
+  picture?: string;
+  name?: string;
+  busy?: boolean;
+  error?: boolean;
+}) {
+  const initial = (name?.trim()?.[0] ?? "?").toUpperCase();
+  return (
+    <div
+      className={cn(
+        "relative h-7 w-7 rounded-full border flex items-center justify-center overflow-hidden shrink-0",
+        error
+          ? "border-danger/40 bg-danger/10"
+          : picture
+            ? "border-success/30"
+            : "border-border bg-gradient-to-br from-bitcoin/30 to-nostr/30",
+      )}
+    >
+      {picture ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={picture}
+          alt={name ?? ""}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="text-[11px] font-display font-bold text-foreground">
+          {initial}
+        </span>
+      )}
+      {busy && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[1px]">
+          <Loader2 className="h-3 w-3 animate-spin text-white" />
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
-import { Award, Check, Loader2, Save, X } from "lucide-react";
+import { AnimatePresence, LayoutGroup, Reorder, motion } from "framer-motion";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Award, Check, GripVertical, Loader2, Save, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { cn } from "@/lib/cn";
@@ -34,7 +34,6 @@ export default function BadgesModal({
   const { push: pushToast } = useToast();
   const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [focused, setFocused] = useState<string | null>(null);
 
   useScrollLock(open);
 
@@ -42,7 +41,6 @@ export default function BadgesModal({
   useEffect(() => {
     if (!open) return;
     setSelected(profileBadges?.aTags ?? []);
-    setFocused(null);
   }, [open, profileBadges]);
 
   useEffect(() => {
@@ -54,13 +52,16 @@ export default function BadgesModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose, saving]);
 
-  const currentATags = useMemo(
-    () => new Set(profileBadges?.aTags ?? []),
+  // Positional comparison: adding, removing AND reordering all count as
+  // changes, because the `selected` order maps 1:1 onto the published NIP-58
+  // event's tag order.
+  const currentATags = useMemo<string[]>(
+    () => profileBadges?.aTags ?? [],
     [profileBadges],
   );
   const dirty = useMemo(() => {
-    if (selected.length !== currentATags.size) return true;
-    return selected.some((a) => !currentATags.has(a));
+    if (selected.length !== currentATags.length) return true;
+    return selected.some((a, i) => a !== currentATags[i]);
   }, [selected, currentATags]);
 
   function toggle(aTag: string) {
@@ -70,10 +71,33 @@ export default function BadgesModal({
     );
   }
 
-  const focusedBadge = useMemo(
-    () => badges.find((b) => b.aTag === focused) ?? null,
-    [badges, focused],
+  // Partition into worn (selected) and unworn. Worn follow the user-defined
+  // `selected` order (which is what gets published to NIP-58). Unworn fall
+  // back to the raw discovery order from `badges`.
+  const wornBadges = useMemo(() => {
+    const byATag = new Map(badges.map((b) => [b.aTag, b]));
+    return selected
+      .map((a) => byATag.get(a))
+      .filter((b): b is AwardedBadge => Boolean(b));
+  }, [badges, selected]);
+  const unwornBadges = useMemo(
+    () => badges.filter((b) => !selected.includes(b.aTag)),
+    [badges, selected],
   );
+  // Only the subset of `selected` that has a resolved badge; passed to the
+  // reorder group so we don't expose unresolved aTags (they'd have no UI
+  // element to drag).
+  const wornATags = useMemo(
+    () => wornBadges.map((b) => b.aTag),
+    [wornBadges],
+  );
+
+  function handleReorder(next: string[]) {
+    // Preserve any previously-selected aTags whose badge hasn't resolved —
+    // tack them onto the end so they survive the publish.
+    const unresolvedTail = selected.filter((a) => !wornATags.includes(a));
+    setSelected([...next, ...unresolvedTail]);
+  }
 
   async function save() {
     if (!dirty || saving) return;
@@ -205,41 +229,37 @@ export default function BadgesModal({
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_260px] gap-5">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {badges.map((b) => {
-                      const isSelected = selected.includes(b.aTag);
-                      const isFocused = focused === b.aTag;
-                      return (
-                        <ModalBadgeTile
-                          key={b.awardId}
-                          badge={b}
-                          selected={isSelected}
-                          focused={isFocused}
-                          onToggle={() => toggle(b.aTag)}
-                          onFocus={() => setFocused(b.aTag)}
-                          disabled={saving}
-                        />
-                      );
-                    })}
+                <LayoutGroup>
+                  <div className="space-y-6">
+                    <WornSection
+                      badges={wornBadges}
+                      values={wornATags}
+                      onReorder={handleReorder}
+                      onToggle={toggle}
+                      disabled={saving}
+                    />
+
+                    {unwornBadges.length > 0 && (
+                      <BadgeSection
+                        title="Otros"
+                        count={unwornBadges.length}
+                        accent="muted"
+                      >
+                        <AnimatePresence initial={false}>
+                          {unwornBadges.map((b) => (
+                            <MiniBadgeTile
+                              key={b.awardId}
+                              badge={b}
+                              selected={false}
+                              onToggle={() => toggle(b.aTag)}
+                              disabled={saving}
+                            />
+                          ))}
+                        </AnimatePresence>
+                      </BadgeSection>
+                    )}
                   </div>
-                  <aside className="hidden md:block">
-                    <div className="sticky top-0 rounded-xl border border-border bg-background-card/70 p-4">
-                      <BadgeDetails
-                        badge={focusedBadge}
-                        worn={
-                          focusedBadge
-                            ? selected.includes(focusedBadge.aTag)
-                            : false
-                        }
-                        onToggle={() =>
-                          focusedBadge && toggle(focusedBadge.aTag)
-                        }
-                        disabled={saving}
-                      />
-                    </div>
-                  </aside>
-                </div>
+                </LayoutGroup>
               )}
             </div>
 
@@ -283,169 +303,300 @@ export default function BadgesModal({
   );
 }
 
-function ModalBadgeTile({
+/** "En el perfil" section — draggable reorder via Framer Motion's Reorder.
+ *  The values passed to Reorder.Group are the aTags (strings) which maps
+ *  directly to the `selected` state; `onReorder` receives the re-ordered
+ *  aTags which we merge back into the selection. */
+function WornSection({
+  badges,
+  values,
+  onReorder,
+  onToggle,
+  disabled,
+}: {
+  badges: AwardedBadge[];
+  values: string[];
+  onReorder: (next: string[]) => void;
+  onToggle: (aTag: string) => void;
+  disabled: boolean;
+}) {
+  const accent: "success" | "muted" = "success";
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3">
+        <h3 className="font-display font-bold text-[11px] uppercase tracking-widest text-foreground-muted">
+          En el perfil
+        </h3>
+        <span
+          className={cn(
+            "inline-flex items-center px-1.5 py-0.5 rounded-full border text-[10px] font-mono tabular-nums",
+            accent === "success"
+              ? "bg-success/10 border-success/30 text-success"
+              : "bg-white/[0.03] border-border text-foreground-subtle",
+          )}
+        >
+          {badges.length}
+        </span>
+        {badges.length > 1 && (
+          <span className="inline-flex items-center gap-0.5 text-[10px] font-mono text-foreground-subtle">
+            <GripVertical className="h-3 w-3" />
+            arrastrá para reordenar
+          </span>
+        )}
+      </div>
+      {badges.length === 0 ? (
+        <div className="text-xs text-foreground-subtle italic px-1 py-4 border border-dashed border-border rounded-lg text-center">
+          Todavía no elegiste ningún badge para mostrar.
+        </div>
+      ) : (
+        <Reorder.Group
+          as="div"
+          axis="x"
+          values={values}
+          onReorder={onReorder}
+          className="grid grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-2"
+        >
+          <AnimatePresence initial={false}>
+            {badges.map((b) => (
+              <DraggableWornBadge
+                key={b.aTag}
+                badge={b}
+                disabled={disabled}
+                onToggle={() => onToggle(b.aTag)}
+              />
+            ))}
+          </AnimatePresence>
+        </Reorder.Group>
+      )}
+    </section>
+  );
+}
+
+/**
+ * A single worn badge, wrapped in a `Reorder.Item` so drag-to-reorder works.
+ *
+ * Framer Motion's `Reorder.Item` captures pointer events for drag detection
+ * and swallows native clicks. Its built-in `onTap` *should* fire on a
+ * pointer release without drag, but in practice (especially with a parent
+ * `LayoutGroup` + `layoutId` cross-section animation) it can miss clicks.
+ * We therefore add our own manual tap discriminator: remember
+ * pointer-down position + time, and on pointer-up fire the toggle if the
+ * release happened close enough (in space and time) to count as a tap.
+ */
+function DraggableWornBadge({
+  badge,
+  disabled,
+  onToggle,
+}: {
+  badge: AwardedBadge;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  const tapStart = useRef<{ x: number; y: number } | null>(null);
+  // Distance-based discriminator: anything under this counts as a tap,
+  // otherwise Framer's drag kicked in. No time gate — users can press and
+  // hold without triggering a toggle.
+  const TAP_MAX_DISTANCE = 6; // px
+  const name = badge.definition?.name ?? badge.definition?.d ?? "Badge";
+
+  return (
+    <Reorder.Item
+      value={badge.aTag}
+      as="div"
+      drag={!disabled}
+      dragListener={!disabled}
+      layoutId={`badge-tile-${badge.awardId}`}
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{ type: "spring", damping: 24, stiffness: 320 }}
+      whileDrag={{
+        scale: 1.1,
+        zIndex: 20,
+        boxShadow: "0 14px 34px rgba(0,0,0,0.55)",
+        cursor: "grabbing",
+      }}
+      onPointerDown={(e) => {
+        tapStart.current = { x: e.clientX, y: e.clientY };
+      }}
+      onPointerUp={(e) => {
+        const start = tapStart.current;
+        tapStart.current = null;
+        if (disabled || !start) return;
+        const dist = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+        if (dist <= TAP_MAX_DISTANCE) {
+          onToggle();
+        }
+      }}
+      onPointerCancel={() => {
+        tapStart.current = null;
+      }}
+      role="button"
+      aria-pressed={true}
+      aria-label={`Quitar del perfil: ${name}`}
+      title={name}
+      className={cn(
+        "relative aspect-square touch-none select-none rounded-lg overflow-hidden border transition-[border-color,box-shadow] border-success/40 shadow-[0_0_0_1px_rgba(34,197,94,0.18)] group",
+        disabled ? "cursor-progress" : "cursor-grab active:cursor-grabbing",
+      )}
+    >
+      <BadgeVisual badge={badge} selected />
+    </Reorder.Item>
+  );
+}
+
+/** Presentational badge content — shared by the draggable Reorder.Item
+ *  (worn) and the plain motion.button (unworn). No motion/event wiring;
+ *  the parent owns click/drag behavior. */
+function BadgeVisual({
   badge,
   selected,
-  focused,
-  onToggle,
-  onFocus,
-  disabled,
 }: {
   badge: AwardedBadge;
   selected: boolean;
-  focused: boolean;
-  onToggle: () => void;
-  onFocus: () => void;
-  disabled: boolean;
 }) {
   const def = badge.definition;
   const [imgOk, setImgOk] = useState(true);
   const image = imgOk ? (def?.thumb ?? def?.image) : null;
   const name = def?.name || def?.d || "Badge";
-
   return (
-    <div
-      className={cn(
-        "relative flex flex-col gap-2 rounded-xl p-3 border bg-background-card/60 transition-all",
-        selected
-          ? "border-nostr/50 bg-nostr/[0.06]"
-          : focused
-            ? "border-border-strong"
-            : "border-border hover:border-border-strong",
+    <>
+      <div className="absolute inset-0 bg-gradient-to-br from-nostr/10 via-transparent to-bitcoin/5" />
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={image}
+          alt={name}
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setImgOk(false)}
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center text-nostr pointer-events-none">
+          <Award className="h-5 w-5" />
+        </div>
       )}
-    >
-      <button
-        type="button"
-        onClick={onFocus}
-        className="relative aspect-square w-full rounded-lg overflow-hidden border border-border bg-gradient-to-br from-nostr/10 via-transparent to-bitcoin/5"
-        aria-label={`Ver detalles de ${name}`}
-      >
-        {image ? (
-          <img
-            src={image}
-            alt={name}
-            className="absolute inset-0 w-full h-full object-cover"
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={() => setImgOk(false)}
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-nostr">
-            <Award className="h-7 w-7" />
-          </div>
-        )}
+      <AnimatePresence initial={false}>
         {selected && (
-          <div className="absolute top-1.5 right-1.5 h-5 w-5 rounded-full bg-nostr flex items-center justify-center ring-2 ring-background-card">
+          <motion.div
+            key="check"
+            initial={{ scale: 0, rotate: -90, opacity: 0 }}
+            animate={{ scale: 1, rotate: 0, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: "spring", damping: 18, stiffness: 380 }}
+            className="absolute top-1 right-1 h-5 w-5 rounded-full bg-success flex items-center justify-center ring-2 ring-background-card shadow-lg shadow-success/30 pointer-events-none"
+          >
             <Check className="h-3 w-3 text-white" strokeWidth={3} />
-          </div>
+          </motion.div>
         )}
-      </button>
-      <div className="text-xs font-semibold leading-tight line-clamp-2 min-h-[2rem]">
-        {name}
+      </AnimatePresence>
+      <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <div className="text-[9px] font-semibold text-white truncate leading-tight">
+          {name}
+        </div>
       </div>
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={disabled}
-        className={cn(
-          "inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50",
-          selected
-            ? "bg-nostr/15 border border-nostr/40 text-nostr hover:bg-nostr/25"
-            : "border border-border bg-white/[0.02] hover:bg-white/[0.06] text-foreground-muted hover:text-foreground",
-        )}
-      >
-        {selected ? (
-          <>
-            <Check className="h-3 w-3" />
-            En el perfil
-          </>
-        ) : (
-          <>Usar en perfil</>
-        )}
-      </button>
-    </div>
+    </>
   );
 }
 
-function BadgeDetails({
+/** Section wrapper that titles + counts a group of badge tiles. The grid
+ *  itself is sized with `auto-fill` so the tiles stay tight regardless of
+ *  how many badges fall into this section. */
+function BadgeSection({
+  title,
+  count,
+  empty,
+  accent,
+  children,
+}: {
+  title: string;
+  count: number;
+  empty?: string;
+  accent: "success" | "muted";
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3">
+        <h3 className="font-display font-bold text-[11px] uppercase tracking-widest text-foreground-muted">
+          {title}
+        </h3>
+        <span
+          className={cn(
+            "inline-flex items-center px-1.5 py-0.5 rounded-full border text-[10px] font-mono tabular-nums",
+            accent === "success"
+              ? "bg-success/10 border-success/30 text-success"
+              : "bg-white/[0.03] border-border text-foreground-subtle",
+          )}
+        >
+          {count}
+        </span>
+      </div>
+      {count === 0 && empty ? (
+        <div className="text-xs text-foreground-subtle italic px-1 py-4 border border-dashed border-border rounded-lg text-center">
+          {empty}
+        </div>
+      ) : (
+        <motion.div
+          layout
+          className="grid grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-2"
+        >
+          {children}
+        </motion.div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Compact badge tile — 50% smaller than before. Single click toggles
+ * selection. Selected tiles display a green check overlay in the top-right
+ * corner; unselected tiles render at 50% opacity and pop to full opacity on
+ * hover.
+ *
+ * Uses a Framer Motion `layoutId` so that when a badge moves between the
+ * two sections (worn ↔ unworn) on toggle, it animates across the grid
+ * rather than popping in/out abruptly.
+ */
+function MiniBadgeTile({
   badge,
-  worn,
+  selected,
   onToggle,
   disabled,
 }: {
-  badge: AwardedBadge | null;
-  worn: boolean;
+  badge: AwardedBadge;
+  selected: boolean;
   onToggle: () => void;
   disabled: boolean;
 }) {
-  if (!badge) {
-    return (
-      <div className="text-xs text-foreground-subtle text-center py-8">
-        Tocá un badge para ver detalles
-      </div>
-    );
-  }
   const def = badge.definition;
-  const image = def?.thumb ?? def?.image;
   const name = def?.name || def?.d || "Badge";
   return (
-    <div className="flex flex-col gap-3">
-      <div className="aspect-square w-full rounded-lg overflow-hidden border border-border bg-gradient-to-br from-nostr/10 via-transparent to-bitcoin/5 relative">
-        {image ? (
-          <img
-            src={image}
-            alt={name}
-            className="absolute inset-0 w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-nostr">
-            <Award className="h-10 w-10" />
-          </div>
-        )}
-      </div>
-      <div>
-        <div className="font-display font-bold text-base leading-tight">
-          {name}
-        </div>
-        <div className="text-[10px] font-mono text-foreground-subtle mt-0.5">
-          otorgado{" "}
-          {new Date(badge.awardedAt * 1000).toLocaleDateString("es-AR", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          })}
-        </div>
-      </div>
-      {def?.description && (
-        <p className="text-xs text-foreground-muted leading-relaxed whitespace-pre-wrap">
-          {def.description}
-        </p>
+    <motion.button
+      layout
+      layoutId={`badge-tile-${badge.awardId}`}
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      title={name}
+      aria-pressed={selected}
+      aria-label={`${selected ? "Quitar del perfil" : "Poner en el perfil"}: ${name}`}
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{ type: "spring", damping: 24, stiffness: 320 }}
+      whileHover={{ scale: disabled ? 1 : 1.04 }}
+      whileTap={{ scale: disabled ? 1 : 0.93 }}
+      className={cn(
+        "group relative aspect-square rounded-lg overflow-hidden border transition-[opacity,border-color,box-shadow]",
+        selected
+          ? "border-success/40 opacity-100 shadow-[0_0_0_1px_rgba(34,197,94,0.18)]"
+          : "border-border opacity-50 hover:opacity-100 hover:border-border-strong",
+        disabled && "cursor-progress",
       )}
-      <div className="text-[10px] font-mono text-foreground-subtle">
-        <span className="text-foreground-muted">issuer</span>{" "}
-        {badge.issuer.slice(0, 10)}…{badge.issuer.slice(-6)}
-      </div>
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={disabled}
-        className={cn(
-          "inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50",
-          worn
-            ? "bg-nostr/15 border border-nostr/40 text-nostr hover:bg-nostr/25"
-            : "bg-nostr text-white hover:bg-purple-600",
-        )}
-      >
-        {worn ? (
-          <>
-            <Check className="h-3.5 w-3.5" />
-            Usándolo en el perfil
-          </>
-        ) : (
-          <>Usar en perfil</>
-        )}
-      </button>
-    </div>
+    >
+      <BadgeVisual badge={badge} selected={selected} />
+    </motion.button>
   );
 }

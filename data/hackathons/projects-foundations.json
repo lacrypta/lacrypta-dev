@@ -1,0 +1,454 @@
+{
+  "$schema": "../projects-schema.json",
+  "hackathon": "foundations",
+  "month": "Marzo 2026",
+  "projects": [
+    {
+      "id": "lightning-starter",
+      "name": "Lightning Starter Kit",
+      "description": "Template oficial para empezar. NWC, Lightning Address, LNURL, WebLN.",
+      "team": [
+        {
+          "name": "La Crypta",
+          "github": "lacrypta",
+          "role": "Organizers"
+        }
+      ],
+      "repo": "https://github.com/lacrypta/lightning-starter",
+      "demo": "https://lightning-starter.vercel.app",
+      "tech": [
+        "Alby SDK",
+        "NWC",
+        "LNURL",
+        "WebLN",
+        "Vite"
+      ],
+      "status": "official",
+      "submittedAt": "2026-02-28"
+    },
+    {
+      "id": "proof-of-attendance-hdmp",
+      "name": "Proof of Attendance (HDMP)",
+      "description": "Sistema de reservas para eventos con depósito en Lightning Network. Pagás sats para reservar, si venís canjeás tu consumición, si no venís perdés la reserva. Elimina los no-shows con fricción mínima.",
+      "team": [
+        {
+          "name": "Lo0ker-Noma",
+          "github": "Lo0ker-Noma",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/Lo0ker-Noma/Proof-of-attendance-HDMP",
+      "tech": [
+        "Lightning Address",
+        "Alby SDK",
+        "LNURL",
+        "WebLN",
+        "Vite"
+      ],
+      "status": "submitted",
+      "submittedAt": "2026-03-04",
+      "pitched": "https://www.youtube.com/watch?v=3sXD0EWWEdo&t=2464s",
+      "pitched_final": "https://www.youtube.com/watch?v=W9Fw72-jFX0&t=848s"
+    },
+    {
+      "id": "sat-lotto-v2",
+      "name": "SatLotto V2",
+      "description": "Juego simple y elegante que usa NWC y LN. Proba tu suerte cada 21 bloques",
+      "team": [
+        {
+          "name": "Fierillo",
+          "github": "Fierillo",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/Fierillo/sat-lotto-v2",
+      "demo": "",
+      "tech": [
+        "Alby SDK",
+        "NWC",
+        "LNURL",
+        "WebLN",
+        "Vite"
+      ],
+      "status": "building",
+      "submittedAt": "2026-03-06",
+      "pitched": "https://www.youtube.com/watch?v=3sXD0EWWEdo&t=4903s",
+      "pitched_final": "https://www.youtube.com/watch?v=W9Fw72-jFX0&t=1126s"
+    },
+    {
+      "id": "bitbybit-habits",
+      "name": "BitByBit",
+      "description": "Habit tracker que recompensa completar tareas con sats reales via Lightning. MVP: Mesada 2.0 donde sponsors crean habitos con recompensa en sats y kids los completan para ganar.",
+      "team": [
+        {
+          "name": "Anix",
+          "github": "analiaacostaok",
+          "role": "Lead Dev"
+        },
+        {
+          "name": "Llopo",
+          "github": "fabricio333",
+          "role": "Dev"
+        },
+        {
+          "name": "Wander",
+          "github": "Pizza-Wder",
+          "role": "Dev"
+        },
+        {
+          "name": "Leon",
+          "github": "leonacostaok",
+          "role": "PM"
+        }
+      ],
+      "repo": "https://github.com/bitbybit-ar/bitbybit-habits",
+      "demo": "https://bitbybit.com.ar",
+      "tech": [
+        "Next.js",
+        "React",
+        "TypeScript",
+        "NWC",
+        "Alby SDK",
+        "Neon DB",
+        "SCSS"
+      ],
+      "status": "building",
+      "submittedAt": "2026-03-07",
+      "pitched": "https://www.youtube.com/watch?v=3sXD0EWWEdo&t=3074s",
+      "pitched_final": "https://www.youtube.com/watch?v=W9Fw72-jFX0&t=1390s"
+    },
+    {
+      "id": "Streamsats",
+      "name": "Streamsats",
+      "description": "Un juego de agilidad mental y rapidez para ganar un bote acumulado de sats.",
+      "team": [
+        {
+          "name": "Federico",
+          "github": "FedericoLuque",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/Streamsats/streamsats.github.io",
+      "demo": "https://streamsats.github.io/",
+      "tech": [
+        "Alby SDK",
+        "NWC",
+        "LNURL",
+        "WebLN",
+        "Vite"
+      ],
+      "status": "submitted",
+      "submittedAt": "2026-03-10",
+      "pitched": "https://www.youtube.com/watch?v=3sXD0EWWEdo&t=4096s"
+    },
+    {
+      "id": "hash21-shop",
+      "name": "Hash21 Shop",
+      "description": "Tienda real de joyería artesanal Bitcoin con pagos nativos Lightning Network. Plata 925 con grabados Bitcoin. Sin intermediarios, sin KYC. LNURL-pay via Lightning Address, zero dependencias, i18n ES/EN.",
+      "team": [
+        {
+          "name": "Abstract Lai",
+          "github": "warrior-lai",
+          "role": "Lead Dev"
+        },
+        {
+          "name": "Ragnar 🪓",
+          "github": "",
+          "role": "AI Dev"
+        }
+      ],
+      "repo": "https://github.com/warrior-lai/hash21-shop",
+      "demo": "https://hash21.studio/shop",
+      "tech": [
+        "LNURL-pay",
+        "Lightning Address",
+        "HTML/CSS/JS",
+        "GitHub Pages"
+      ],
+      "status": "submitted",
+      "submittedAt": "2026-03-07",
+      "pitched_final": "https://www.youtube.com/watch?v=W9Fw72-jFX0&t=1669s"
+    },
+    {
+      "id": "anirayo",
+      "name": "AniRayo",
+      "description": "Convierte cualquier smartphone Android con NFC en una terminal de cobro (POS) con magia NWC y 1-Toque.",
+      "team": [
+        {
+          "name": "CapScabio",
+          "github": "CapScabio",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/CapScabio/Anirayo",
+      "demo": "https://github.com/CapScabio/Anirayo",
+      "tech": [
+        "Web NFC",
+        "Alby SDK",
+        "NWC",
+        "Vite"
+      ],
+      "status": "submitted",
+      "submittedAt": "2026-03-08",
+      "pitched_final": "https://www.youtube.com/watch?v=W9Fw72-jFX0&t=2269s"
+    },
+    {
+      "id": "digital-card",
+      "name": "Digital card",
+      "description": "Tu tarjeta de presentación Bitcoin",
+      "team": [
+        {
+          "name": "negr0",
+          "github": "Negr087",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/Negr087/digital-card",
+      "demo": "https://digitalcard-sigma.vercel.app/",
+      "tech": [
+        "Alby SDK",
+        "NWC",
+        "LNURL",
+        "WebLN",
+        "Vite"
+      ],
+      "status": "building",
+      "submittedAt": "2026-03-08",
+      "pitched_final": "https://www.youtube.com/watch?v=W9Fw72-jFX0&t=2062s"
+    },
+    {
+      "id": "wapu-cli",
+      "name": "Wapu CLI",
+      "description": "CLI OpenSource para operar WapuPay como servicio off-ramp de BTC y USDT a ARS sin KYC. Permite depósitos por Lightning address, y automatización para integraciones de POS y agentes de IA.",
+      "team": [
+        {
+          "name": "Rocket",
+          "github": "rocket-morgan",
+          "role": "Dev"
+        },
+        {
+          "name": "AndyCreed",
+          "github": "andycreed0x",
+          "role": "PM"
+        }
+      ],
+      "repo": "https://github.com/wapu-app/wapu-cli",
+      "demo": "https://wapu.shiafu.com/",
+      "tech": [
+        "Python",
+        "Lightning Address"
+      ],
+      "status": "building",
+      "submittedAt": "2026-03-10",
+      "pitched": "https://www.youtube.com/watch?v=3sXD0EWWEdo&t=3706s",
+      "pitched_final": "https://www.youtube.com/watch?v=W9Fw72-jFX0&t=3577s"
+    },
+    {
+      "id": "relam-pago",
+      "name": "RelámPago",
+      "description": "RelámPago es una app web (PWA) pensada para comerciantes y emprendedores de LATAM que quieren recibir pagos con LN — sin necesidad de saber nada técnico.",
+      "team": [
+        {
+          "name": "Burgos",
+          "github": "Burgos247",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/Burgos247/RelamPago/",
+      "demo": "https://relam-pago.vercel.app",
+      "tech": [
+        "Alby SDK",
+        "NWC",
+        "LNURL",
+        "WebLN",
+        "Vite"
+      ],
+      "status": "building",
+      "submittedAt": "2026-03-10"
+    },
+    {
+      "id": "stacktris",
+      "name": "Stacktris",
+      "description": "Battle Tetris multijugador con una capa de apuestas en Bitcoin Lightning Network.",
+      "team": [
+        {
+          "name": "landaverdend",
+          "github": "landaverdend",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/landaverdend/stacktris",
+      "demo": "https://stacktris.app/",
+      "tech": [
+        "React",
+        "TypeScript",
+        "Node.js",
+        "Express",
+        "WebSockets",
+        "Vite"
+      ],
+      "status": "building",
+      "submittedAt": "2026-03-09",
+      "pitched_final": "https://www.youtube.com/watch?v=W9Fw72-jFX0&t=2887s"
+    },
+    {
+      "id": "SatsParty",
+      "name": "SatsParty",
+      "description": "La solucion para hacer onboarding y proveer wallets a los invitados de tu evento",
+      "team": [
+        {
+          "name": "Cyberpunk",
+          "github": "ViresBTC",
+          "role": "Vibecoder"
+        }
+      ],
+      "repo": "https://github.com/ViresBTC/Satsparty",
+      "demo": "https://satsparty.vercel.app/",
+      "tech": [
+        "Alby SDK",
+        "NWC",
+        "LNURL",
+        "WebLN",
+        "Vite"
+      ],
+      "status": "building",
+      "submittedAt": "2026-03-11",
+      "pitched_final": "https://www.youtube.com/watch?v=W9Fw72-jFX0&t=2583s"
+    },
+    {
+      "id": "1-sat-to",
+      "name": "1 SAT a...",
+      "description": "1 SAT to... es una aplicación para visualizar en tiempo real el valor de un Satoshi en FIAT, incluyendo gráficos históricos, calculadora y soporte para donaciones vía Lightning Network.",
+      "team": [
+        {
+          "name": "Jona",
+          "github": "unllamas",
+          "role": "Dev/Designer"
+        }
+      ],
+      "repo": "https://github.com/unllamas/1-sat-to",
+      "demo": "https://1-sat-to.vercel.app/",
+      "tech": [
+        "React",
+        "Next",
+        "Lightning"
+      ],
+      "status": "building",
+      "submittedAt": "2026-03-17",
+      "pitched_final": "https://www.youtube.com/watch?v=W9Fw72-jFX0&t=3185s"
+    },
+    {
+      "id": "openwork",
+      "name": "openWork",
+      "description": "establece un contrato entre un agente con otro agente para que uno haga un trabajo para el otro contra una contraprestacion usando satoshis de LN",
+      "team": [
+        {
+          "name": "naranja",
+          "github": "soyezequiel",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/soyezequiel/agentic-economy",
+      "status": "idea",
+      "submittedAt": "2026-03-17"
+    },
+    {
+      "id": "life-action-plan",
+      "name": "Life Action Plan (LAP)",
+      "description": "Asistente personal offline-first que usa IA para crear, simular y refinar planes de vida y rutinas diarias, garantizando privacidad extrema y habilitando micro-pagos por token mediante Lightning Network.",
+      "team": [
+        {
+          "name": "naranja",
+          "github": "soyezequiel",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/soyezequiel/life-action-plan",
+      "status": "idea",
+      "submittedAt": "2026-03-18",
+      "pitched_final": "https://www.youtube.com/watch?v=W9Fw72-jFX0&t=4457s"
+    },
+    {
+      "id": "nosteach",
+      "name": "NosTeach",
+      "description": "Plataforma educativa descentralizada. MVP: Patrocinios Lightning para cursos. Alumnos pagan cursos, profesores premian alumnos, patrocinadores becan ambos. Todo via Lightning.",
+      "team": [
+        {
+          "name": "Fred",
+          "github": "fchurca",
+          "role": "Lead Dev"
+        },
+        {
+          "name": "Langostero",
+          "github": "fchurca",
+          "role": "Dev"
+        }
+      ],
+      "repo": "https://github.com/fchurca/nosteach",
+      "demo": "https://nosteach.vercel.app/",
+      "tech": [
+        "Alby SDK",
+        "NWC",
+        "Vite"
+      ],
+      "status": "building",
+      "submittedAt": "2026-03-17",
+      "pitched_final": "https://www.youtube.com/watch?v=W9Fw72-jFX0&t=4103s"
+    },
+    {
+      "id": "sweet-shots",
+      "name": "Sweet Shots",
+      "description": "E-commerce de postres artesanales con pagos nativos Lightning Network. Login sin email via Nostr (NIP-07), catálogo con precios dual USD+sats en tiempo real, programa de fidelidad nativo en sats y descuento del 5% por pagar con Bitcoin.",
+      "team": [
+        {
+          "name": "Lalo1821",
+          "github": "Lalo1821",
+          "role": "Lead Dev"
+        }
+      ],
+      "repo": "https://github.com/Lalo1821/sweet-shots",
+      "demo": "https://sweet-shots.vercel.app",
+      "tech": [
+        "Lightning Address",
+        "Nostr NIP-07",
+        "WebLN",
+        "Alby SDK",
+        "Vite",
+        "Vanilla JS"
+      ],
+      "status": "building",
+      "submittedAt": "2026-03-18"
+    }
+  ],
+  "_instructions": {
+    "howToAdd": "Para agregar tu proyecto, hacé un PR a este archivo agregando tu proyecto al array 'projects'.",
+    "requiredFields": [
+      "id",
+      "name",
+      "description",
+      "team",
+      "status"
+    ],
+    "optionalFields": [
+      "repo",
+      "demo",
+      "tech",
+      "submittedAt"
+    ],
+    "statusOptions": [
+      "idea",
+      "building",
+      "submitted",
+      "finalist",
+      "winner",
+      "official"
+    ],
+    "teamRoles": [
+      "Lead Dev",
+      "Dev",
+      "Designer",
+      "PM",
+      "Organizers"
+    ]
+  }
+}

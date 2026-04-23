@@ -1,6 +1,11 @@
 "use client";
 
 import type { SignedEvent, UnsignedEvent, UserSigner } from "./nostrSigner";
+import type {
+  HackathonProject,
+  ProjectStatus,
+  TeamMember,
+} from "./hackathons";
 
 /** NIP-78 parameterized replaceable event kind */
 export const PROJECT_KIND = 30078;
@@ -9,14 +14,17 @@ export const PROJECT_TAG = "lacrypta-labs-project";
 /** `d` tag prefix; the suffix is the project's stable local id */
 export const PROJECT_D_PREFIX = "lacrypta.labs:project:";
 
-export type UserProject = {
-  id: string;
-  name: string;
-  description?: string;
-  url?: string;
-  repo?: string;
-  tags?: string[];
+/**
+ * User projects published via NIP-78 share the same shape as curated
+ * HackathonProjects so they can live in the same lists on the hackathon
+ * detail page. Extra runtime fields (`createdAt`, `updatedAt`) are kept for
+ * sorting and merge logic.
+ */
+export type UserProject = HackathonProject & {
+  /** unix seconds — when the local draft was created */
   createdAt: number;
+  /** unix seconds — local `updatedAt`, matches the event's `created_at` once
+   *  published. Independent from the `report` timestamps. */
   updatedAt: number;
 };
 
@@ -31,6 +39,8 @@ export type CommunityProject = UserProject & {
   eventId: string;
   eventCreatedAt: number;
 };
+
+export type { HackathonProject, ProjectStatus, TeamMember };
 
 export type RelayScanState =
   | "pending"
@@ -175,18 +185,79 @@ function parseProjectContent(
   const asString = (v: unknown) =>
     typeof v === "string" && v.trim() ? v : undefined;
   const asStringArray = (v: unknown) =>
-    Array.isArray(v) ? v.map((x) => String(x)).filter(Boolean) : undefined;
+    Array.isArray(v)
+      ? v.map((x) => String(x)).filter(Boolean)
+      : undefined;
+
+  // Retro-compat: old events stored `url` and `tags`; new ones store `demo`
+  // and `tech`. Map both into the unified shape.
+  const demo = asString(parsed.demo) ?? asString(parsed.url);
+  const tech = asStringArray(parsed.tech) ?? asStringArray(parsed.tags);
+  const team = parseTeamArray(parsed.team);
+  const hackathon = asString(parsed.hackathon) ??
+    event.tags.find((t) => t[0] === "h")?.[1] ??
+    null;
+
+  const description =
+    asString(parsed.description) ?? "";
+
+  const allowedStatuses: ProjectStatus[] = [
+    "idea",
+    "building",
+    "submitted",
+    "finalist",
+    "winner",
+    "official",
+  ];
+  const rawStatus = asString(parsed.status);
+  const status: ProjectStatus = allowedStatuses.includes(
+    rawStatus as ProjectStatus,
+  )
+    ? (rawStatus as ProjectStatus)
+    : hackathon
+      ? "submitted"
+      : "building";
 
   return {
     id: String(id),
     name,
-    description: asString(parsed.description),
-    url: asString(parsed.url),
+    description,
+    team,
     repo: asString(parsed.repo),
-    tags: asStringArray(parsed.tags),
+    demo,
+    tech,
+    status,
+    submittedAt: asString(parsed.submittedAt),
+    hackathon,
     createdAt: Number(parsed.createdAt ?? event.created_at),
     updatedAt: Number(parsed.updatedAt ?? event.created_at),
   };
+}
+
+function parseTeamArray(raw: unknown): TeamMember[] {
+  if (!Array.isArray(raw)) return [];
+  const out: TeamMember[] = [];
+  for (const m of raw) {
+    if (!m || typeof m !== "object") continue;
+    const rec = m as Record<string, unknown>;
+    const str = (v: unknown) =>
+      typeof v === "string" && v.trim() ? v.trim() : undefined;
+    const nip05 = str(rec.nip05);
+    const pubkey = str(rec.pubkey);
+    // Accept members with just a NIP-05 / pubkey even if `name` is empty —
+    // we can still render them with a fallback label.
+    const name = str(rec.name) ?? (nip05 ? nip05.split("@")[0] : undefined);
+    if (!name && !nip05 && !pubkey) continue;
+    out.push({
+      name: name ?? "",
+      role: str(rec.role) ?? "Builder",
+      nip05,
+      pubkey,
+      picture: str(rec.picture),
+      github: str(rec.github),
+    });
+  }
+  return out;
 }
 
 /** Keeps only the freshest event per (pubkey, d-tag). */
@@ -271,7 +342,7 @@ function buildProjectEvent(
   project: UserProject,
   signerPubkey: string,
 ): UnsignedEvent {
-  const tagList = project.tags ?? [];
+  const techList = project.tech ?? [];
   return {
     kind: PROJECT_KIND,
     pubkey: signerPubkey,
@@ -279,19 +350,29 @@ function buildProjectEvent(
     tags: [
       ["d", projectDTag(project.id)],
       ["t", PROJECT_TAG],
-      ...tagList.map((t) => ["t", t] as string[]),
+      ...techList.map((t) => ["t", t] as string[]),
+      ...(project.hackathon
+        ? [
+            ["t", project.hackathon],
+            ["h", project.hackathon],
+          ]
+        : []),
       ["client", "La Crypta Labs"],
       ...(project.name ? [["name", project.name]] : []),
       ...(project.repo ? [["r", project.repo]] : []),
-      ...(project.url ? [["r", project.url]] : []),
+      ...(project.demo ? [["r", project.demo]] : []),
     ],
     content: JSON.stringify({
       id: project.id,
       name: project.name,
       description: project.description,
-      url: project.url,
       repo: project.repo,
-      tags: project.tags,
+      demo: project.demo,
+      tech: project.tech,
+      team: project.team,
+      status: project.status,
+      hackathon: project.hackathon,
+      submittedAt: project.submittedAt,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     }),

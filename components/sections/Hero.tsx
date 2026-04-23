@@ -4,6 +4,13 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, Sparkles, Zap } from "lucide-react";
 import { GithubIcon } from "@/components/BrandIcons";
+import {
+  HACKATHONS,
+  PROGRAM,
+  allProjects,
+  formatSats,
+} from "@/lib/hackathons";
+import { PROJECTS } from "@/lib/projects";
 
 export default function Hero() {
   return (
@@ -132,11 +139,34 @@ export default function Hero() {
 }
 
 function HeroStats() {
+  const curatedCount = PROJECTS.length;
+  const hackathonProjects = allProjects().length;
+  const totalProjects = curatedCount + hackathonProjects;
+  const buildersCount = new Set(
+    allProjects().flatMap((p) => p.team.map((m) => m.name.toLowerCase())),
+  ).size;
+
   const stats = [
-    { label: "Proyectos open source", value: "24+", accent: "text-bitcoin" },
-    { label: "Builders en la comunidad", value: "500+", accent: "text-nostr" },
-    { label: "Eventos organizados", value: "40+", accent: "text-cyan" },
-    { label: "Nodo Lightning", value: "Público", accent: "text-lightning" },
+    {
+      label: "Proyectos open source",
+      value: `${totalProjects}+`,
+      accent: "text-bitcoin",
+    },
+    {
+      label: "Builders en hackatones",
+      value: `${buildersCount}+`,
+      accent: "text-nostr",
+    },
+    {
+      label: "Hackatones 2026",
+      value: String(HACKATHONS.length),
+      accent: "text-cyan",
+    },
+    {
+      label: "Premios totales",
+      value: `${formatSats(PROGRAM.totalPrize)} sats`,
+      accent: "text-lightning",
+    },
   ];
 
   return (
