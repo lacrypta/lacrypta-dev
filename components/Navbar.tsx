@@ -2,16 +2,25 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  AnimatePresence,
+  motion,
+  useScroll,
+  useMotionValueEvent,
+} from "framer-motion";
 import {
   Menu,
   X,
   LogIn,
   Zap,
   LayoutDashboard,
+  FolderKanban,
   LogOut,
   ExternalLink,
+  Trophy,
+  Globe,
+  ChevronDown,
 } from "lucide-react";
 import Logo from "./Logo";
 import LoginModal from "./LoginModal";
@@ -28,11 +37,46 @@ type NavLink = {
 };
 
 const NAV_LINKS: NavLink[] = [
-  { href: "/", label: "Inicio" },
-  { href: "/infrastructure", label: "Infraestructura" },
-  { href: "/projects", label: "Proyectos" },
   { href: "/hackathons", label: "Hackatones" },
+  { href: "/projects", label: "Proyectos" },
+  { href: "/infrastructure", label: "Infra pública" },
 ];
+
+const NARRATIVE_NAV = [
+  {
+    href: "/hackathons",
+    role: "CÓMO",
+    label: "Hackatones",
+    description: "Desde 0, ganando premios",
+    icon: Trophy,
+    colorClass: "text-bitcoin",
+    bgClass: "bg-bitcoin/10",
+    borderClass: "border-bitcoin/30",
+    glowClass: "hover:shadow-[0_0_40px_-8px_theme(colors.bitcoin/0.5)]",
+  },
+  {
+    href: "/projects",
+    role: "QUÉ",
+    label: "Proyectos",
+    description: "Construí algo real, open source y usable hoy",
+    icon: FolderKanban,
+    colorClass: "text-nostr",
+    bgClass: "bg-nostr/10",
+    borderClass: "border-nostr/30",
+    glowClass: "hover:shadow-[0_0_40px_-8px_theme(colors.nostr/0.5)]",
+  },
+  {
+    href: "/infrastructure",
+    role: "CON",
+    label: "Infra propia",
+    description: "Herramientas y nodos abiertos para todos",
+    icon: Globe,
+    colorClass: "text-cyan",
+    bgClass: "bg-cyan/10",
+    borderClass: "border-cyan/30",
+    glowClass: "hover:shadow-[0_0_40px_-8px_theme(colors.cyan/0.5)]",
+  },
+] as const;
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -40,9 +84,35 @@ export default function Navbar() {
   const { auth } = useAuth();
   const { profile } = useNostrProfile(auth?.pubkey);
   const [scrolled, setScrolled] = useState(false);
+  const isHome = pathname === "/";
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const { push: pushToast } = useToast();
+
+  const { scrollY } = useScroll();
+
+  // Sync expanded state whenever route changes
+  useEffect(() => {
+    setIsExpanded(isHome && scrollY.get() < 80);
+  }, [isHome, scrollY]);
+
+  useMotionValueEvent(scrollY, "change", (v) => {
+    setScrolled(v > 8);
+    setIsExpanded(isHome && v < 80);
+  });
+
+  // Detect desktop (lg breakpoint) — useLayoutEffect avoids flash on mobile
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   function handleLogout() {
     clearAuth("user");
@@ -50,11 +120,6 @@ export default function Navbar() {
     if (pathname.startsWith("/dashboard")) router.push("/");
   }
 
-  // If the session was cleared by the auth probe (NIP-07 extension vanished
-  // on reload), surface a contextual toast so the user knows why they need
-  // to reconnect. The Navbar is layout-persistent so we can't rely on the
-  // mount effect — instead we consume the reason whenever `auth` is null,
-  // which fires both on initial mount and on clearAuth().
   useEffect(() => {
     if (auth) return;
     const reason = readAndClearLogoutReason();
@@ -67,21 +132,25 @@ export default function Navbar() {
           "Tu extensión Nostr (Alby, nos2x…) no está disponible. Reconectá para volver a firmar.",
         duration: 10000,
       });
-      // Surface the login modal so the action is one click away.
       setLoginOpen(true);
     }
   }, [auth, pushToast]);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+    setMobileOpen(false);
+    setUserMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+    if (!userMenuOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [userMenuOpen]);
 
   useScrollLock(mobileOpen);
 
@@ -92,18 +161,30 @@ export default function Navbar() {
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
         className={cn(
-          "fixed top-0 inset-x-0 z-50 transition-all duration-300",
+          "fixed top-0 inset-x-0 z-50 overflow-hidden",
+          "transition-[height,background-color,border-color,box-shadow] duration-500 ease-in-out",
+          isDesktop && isExpanded ? "h-screen" : "h-16",
           scrolled
             ? "glass-strong border-b border-border"
-            : "bg-transparent border-b border-transparent",
+            : isExpanded && isDesktop
+              ? "bg-background/98 backdrop-blur-2xl border-b border-white/[0.06]"
+              : "bg-transparent border-b border-transparent",
         )}
       >
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        {/* Top bar — always 64px */}
+        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between relative z-10">
           <Link href="/" className="group relative z-10">
             <Logo />
           </Link>
 
-          <div className="hidden lg:flex items-center gap-1">
+          {/* Compact desktop nav — fades in when collapsed */}
+          <div
+            className={cn(
+              "hidden lg:flex items-center gap-1 transition-opacity duration-300",
+              isDesktop && isExpanded ? "opacity-0 pointer-events-none" : "opacity-100",
+            )}
+            aria-hidden={isDesktop && isExpanded}
+          >
             {NAV_LINKS.map((link) => {
               const active =
                 link.external
@@ -141,11 +222,17 @@ export default function Navbar() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className={className}
+                  tabIndex={isDesktop && isExpanded ? -1 : 0}
                 >
                   {content}
                 </a>
               ) : (
-                <Link key={link.href} href={link.href} className={className}>
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={className}
+                  tabIndex={isDesktop && isExpanded ? -1 : 0}
+                >
                   {content}
                 </Link>
               );
@@ -172,33 +259,68 @@ export default function Navbar() {
             </a>
 
             {auth ? (
-              <Link
-                href="/dashboard"
-                className="relative inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full text-sm font-semibold bg-white/[0.03] border border-border hover:bg-white/[0.06] hover:border-border-strong transition-all"
-                aria-label="Ir al dashboard"
-              >
-                <span className="relative h-7 w-7 shrink-0 rounded-full overflow-hidden bg-gradient-to-br from-bitcoin/30 to-nostr/30 ring-1 ring-border-strong flex items-center justify-center text-[10px] font-display font-bold">
-                  {profile?.picture ? (
-                    <img
-                      src={profile.picture}
-                      alt=""
-                      className="block w-full h-full object-cover object-center"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display =
-                          "none";
-                      }}
-                    />
-                  ) : (
-                    <span>{auth.pubkey.slice(0, 2).toUpperCase()}</span>
+              <div ref={userMenuRef} className="relative hidden lg:block">
+                <button
+                  onClick={() => setUserMenuOpen((v) => !v)}
+                  className="relative inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full text-sm font-semibold bg-white/[0.03] border border-border hover:bg-white/[0.06] hover:border-border-strong transition-all"
+                  aria-label="Menú de usuario"
+                  aria-expanded={userMenuOpen}
+                >
+                  <span className="relative h-7 w-7 shrink-0 rounded-full overflow-hidden bg-gradient-to-br from-bitcoin/30 to-nostr/30 ring-1 ring-border-strong flex items-center justify-center text-[10px] font-display font-bold">
+                    {profile?.picture ? (
+                      <img
+                        src={profile.picture}
+                        alt=""
+                        className="block w-full h-full object-cover object-center"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <span>{auth.pubkey.slice(0, 2).toUpperCase()}</span>
+                    )}
+                  </span>
+                  <span className="text-xs text-foreground truncate max-w-[14ch]">
+                    {profile?.display_name || profile?.name || `${auth.pubkey.slice(0, 6)}…`}
+                  </span>
+                </button>
+
+                <AnimatePresence>
+                  {userMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-border bg-background-elevated shadow-xl overflow-hidden z-50"
+                    >
+                      <Link
+                        href="/dashboard"
+                        className="flex items-center gap-2.5 px-4 py-3 text-sm text-foreground-muted hover:text-foreground hover:bg-white/[0.05] transition-colors"
+                      >
+                        <LayoutDashboard className="h-4 w-4 shrink-0" />
+                        Mi dashboard
+                      </Link>
+                      <Link
+                        href="/dashboard/projects"
+                        className="flex items-center gap-2.5 px-4 py-3 text-sm text-foreground-muted hover:text-foreground hover:bg-white/[0.05] transition-colors"
+                      >
+                        <FolderKanban className="h-4 w-4 shrink-0" />
+                        Mis proyectos
+                      </Link>
+                      <div className="border-t border-border mx-2" />
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-foreground-muted hover:text-danger hover:bg-danger/5 transition-colors"
+                      >
+                        <LogOut className="h-4 w-4 shrink-0" />
+                        Cerrar sesión
+                      </button>
+                    </motion.div>
                   )}
-                </span>
-                <span className="text-xs text-foreground truncate max-w-[14ch]">
-                  {profile?.display_name ||
-                    profile?.name ||
-                    `${auth.pubkey.slice(0, 6)}…`}
-                </span>
-              </Link>
+                </AnimatePresence>
+              </div>
             ) : (
               <button
                 onClick={() => setLoginOpen(true)}
@@ -223,6 +345,106 @@ export default function Navbar() {
             </button>
           </div>
         </nav>
+
+        {/* Expanded full-screen nav — desktop only, fades out on scroll */}
+        <div
+          style={{ height: "calc(100vh - 4rem)" }}
+          className={cn(
+            "hidden lg:flex flex-col items-center px-8 pb-8",
+            "transition-opacity duration-300",
+            isDesktop && isExpanded ? "opacity-100" : "opacity-0 pointer-events-none",
+          )}
+          aria-hidden={!(isDesktop && isExpanded)}
+        >
+          <div className="flex-1 flex flex-col items-center justify-center w-full gap-14 px-8">
+            {/* Headline */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="text-center"
+            >
+              <p className="text-[11px] font-mono tracking-[0.25em] uppercase text-foreground-subtle mb-4">
+                La Crypta Labs
+              </p>
+              <h1 className="font-display text-6xl xl:text-7xl font-bold tracking-tight leading-tight">
+                <span className="text-foreground-muted">Aprendé </span>
+                <span className="text-foreground">haciendo</span>
+              </h1>
+            </motion.div>
+
+            {/* Timeline row */}
+            <div className="relative w-full max-w-3xl xl:max-w-4xl">
+              {/* Connecting gradient line */}
+              <div className="absolute top-[27px] left-[calc(1/6*100%+4px)] right-[calc(1/6*100%+4px)] h-px"
+                style={{ background: "linear-gradient(to right, #f7931a, #a855f7 50%, #22d3ee)" }}
+              />
+
+              <div className="relative flex justify-between items-start">
+                {NARRATIVE_NAV.map(({ href, role, label, description, icon: Icon, colorClass, bgClass, borderClass, glowClass }, i) => (
+                  <motion.div
+                    key={href}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 + i * 0.1, duration: 0.4, ease: "easeOut" }}
+                    className="flex-1 flex flex-col items-center gap-4 px-6 xl:px-10"
+                  >
+                    {/* Icon circle */}
+                    <div className={cn(
+                      "h-14 w-14 rounded-full border-2 flex items-center justify-center transition-all duration-300 shrink-0",
+                      "bg-background",
+                      bgClass.replace("/10", "/20"),
+                      borderClass,
+                    )}>
+                      <Icon className={cn("h-6 w-6", colorClass)} aria-hidden />
+                    </div>
+
+                    {/* Role badge */}
+                    <span className={cn(
+                      "text-[10px] font-mono tracking-[0.22em] uppercase font-bold",
+                      colorClass,
+                    )}>
+                      {role}
+                    </span>
+
+                    {/* Label + description as link */}
+                    <Link
+                      href={href}
+                      tabIndex={isExpanded ? 0 : -1}
+                      className={cn(
+                        "group flex flex-col items-center gap-2 px-5 py-4 rounded-2xl border",
+                        "bg-white/[0.02] border-white/[0.06]",
+                        "hover:bg-white/[0.06] hover:border-white/[0.14]",
+                        "hover:scale-[1.02] active:scale-[0.99]",
+                        "transition-all duration-300 text-center w-full",
+                        glowClass,
+                      )}
+                    >
+                      <span className={cn(
+                        "font-display font-bold text-xl xl:text-2xl tracking-tight transition-colors duration-200",
+                        colorClass,
+                      )}>
+                        {label}
+                      </span>
+                      <span className="text-xs text-foreground-subtle leading-snug">
+                        {description}
+                      </span>
+                    </Link>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <motion.div
+            animate={{ y: [0, 6, 0] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+            className="flex flex-col items-center gap-1.5 text-foreground-subtle"
+            aria-hidden="true"
+          >
+            <span className="text-[10px] font-mono tracking-[0.2em] uppercase">Scroll</span>
+            <ChevronDown className="h-4 w-4" />
+          </motion.div>
+        </div>
       </motion.header>
 
       {/* Mobile drawer */}
@@ -331,6 +553,13 @@ export default function Navbar() {
                           {auth.pubkey.slice(0, 10)}…{auth.pubkey.slice(-4)}
                         </div>
                       </div>
+                      <button
+                        onClick={handleLogout}
+                        className="shrink-0 p-2 rounded-md text-foreground-subtle hover:text-danger hover:bg-danger/10 transition-colors"
+                        aria-label="Cerrar sesión"
+                      >
+                        <LogOut className="h-4 w-4" />
+                      </button>
                     </div>
                     <Link
                       href="/dashboard"
@@ -340,13 +569,14 @@ export default function Navbar() {
                       <LayoutDashboard className="h-4 w-4" />
                       Mi dashboard
                     </Link>
-                    <button
-                      onClick={handleLogout}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold border border-border hover:bg-danger/10 hover:border-danger/30 hover:text-danger transition-colors"
+                    <Link
+                      href="/dashboard/projects"
+                      onClick={() => setMobileOpen(false)}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold border border-border hover:bg-foreground/5 transition-colors"
                     >
-                      <LogOut className="h-4 w-4" />
-                      Cerrar sesión
-                    </button>
+                      <FolderKanban className="h-4 w-4" />
+                      Mis Proyectos
+                    </Link>
                   </>
                 ) : (
                   <button

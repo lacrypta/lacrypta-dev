@@ -23,8 +23,6 @@ import {
   Pencil,
   Save,
   X,
-  Upload,
-  Image as ImageIcon,
   Plus,
   Trash2,
   ArrowDownUp,
@@ -63,9 +61,12 @@ import { useToast } from "@/components/Toast";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { cn } from "@/lib/cn";
 import BadgesModal from "./BadgesModal";
-import ImageCropModal, {
-  type CropResult,
-} from "@/components/ImageCropModal";
+import ImageCropModal, { type CropResult } from "@/components/ImageCropModal";
+import {
+  AvatarUploader,
+  BannerUploader,
+  type UploadReveal,
+} from "@/components/ImageUploader";
 
 type DashboardProfile = BaseNostrProfile & {
   pubkey: string;
@@ -1344,32 +1345,21 @@ function ProfileEditorModal({
 
             <div className="relative max-h-[70vh] overflow-y-auto">
               {/* Banner upload area */}
-              <div className="relative">
-                <BannerPreview
-                  src={form.banner}
-                  uploading={phase === "uploading-banner"}
-                  reveal={
-                    uploadReveal?.target === "banner"
-                      ? {
-                          localUrl: uploadReveal.localUrl,
-                          percent: uploadReveal.percent,
-                          fading: uploadReveal.fading,
-                        }
-                      : null
-                  }
-                />
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/40">
-                  <button
-                    type="button"
-                    onClick={() => pickFile("banner")}
-                    disabled={busy}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/60 border border-white/20 hover:bg-black/80 text-white text-xs font-semibold disabled:opacity-50"
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                    Cambiar banner
-                  </button>
-                </div>
-              </div>
+              <BannerUploader
+                src={form.banner}
+                uploading={phase === "uploading-banner"}
+                disabled={busy}
+                onPick={() => pickFile("banner")}
+                reveal={
+                  uploadReveal?.target === "banner"
+                    ? {
+                        localUrl: uploadReveal.localUrl,
+                        percent: uploadReveal.percent,
+                        fading: uploadReveal.fading,
+                      }
+                    : null
+                }
+              />
               <input
                 ref={bannerInputRef}
                 type="file"
@@ -1385,8 +1375,8 @@ function ProfileEditorModal({
               <div className="px-6 py-5 space-y-4">
                 {/* Avatar upload */}
                 <div className="flex items-start gap-4 -mt-16 relative z-10">
-                  <AvatarPicker
-                    picture={form.picture}
+                  <AvatarUploader
+                    src={form.picture}
                     name={
                       form.display_name || form.name || shorten(auth.pubkey)
                     }
@@ -1403,6 +1393,7 @@ function ProfileEditorModal({
                         : null
                     }
                   />
+
                   <input
                     ref={avatarInputRef}
                     type="file"
@@ -1576,187 +1567,6 @@ function ProfileEditorModal({
   );
 }
 
-/** Upload-reveal descriptor — the local cropped blob URL + the 0..100
- *  percent of bytes already uploaded. While this is set, the preview shows
- *  the new image progressively wiping over the old one left→right in sync
- *  with the real upload progress. `fading` triggers a CSS opacity
- *  transition so the final handoff to the remote URL is smooth. */
-type UploadReveal = {
-  localUrl: string;
-  percent: number;
-  fading?: boolean;
-};
-
-function BannerPreview({
-  src,
-  uploading,
-  reveal,
-}: {
-  src?: string;
-  uploading: boolean;
-  reveal: UploadReveal | null;
-}) {
-  return (
-    <div className="relative h-32 w-full bg-gradient-to-br from-bitcoin/20 via-nostr/15 to-cyan/15 overflow-hidden">
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={src}
-          alt="banner"
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-          }}
-        />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center text-foreground-subtle text-[10px] font-mono uppercase tracking-widest">
-          <ImageIcon className="h-4 w-4 mr-2" />
-          Sin banner
-        </div>
-      )}
-      {reveal && (
-        <RevealOverlay
-          localUrl={reveal.localUrl}
-          percent={reveal.percent}
-          fading={reveal.fading}
-        />
-      )}
-      {uploading && !reveal && (
-        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-white" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Progress-bar reveal. The cropped local blob is drawn on top of the
- * existing preview, but clipped to the left `percent%` — so as the real
- * upload progresses, the new image sweeps in from the left replacing the
- * old one. A thin glowing hairline marks the reveal edge and a small
- * percent pill in the corner makes the numeric progress explicit.
- *
- * `fading=true` triggers a CSS opacity fade-out — used once the background
- * `<img>` has been swapped to the remote URL so the handoff is smooth
- * (no flash of the previous image).
- */
-function RevealOverlay({
-  localUrl,
-  percent,
-  fading,
-}: {
-  localUrl: string;
-  percent: number;
-  fading?: boolean;
-}) {
-  const clamped = Math.max(0, Math.min(100, percent));
-  return (
-    <div
-      className={cn(
-        "absolute inset-0 pointer-events-none transition-opacity duration-300 ease-out",
-        fading ? "opacity-0" : "opacity-100",
-      )}
-      aria-hidden
-    >
-      <div
-        className="absolute inset-0 overflow-hidden transition-[clip-path] duration-200 ease-out"
-        style={{
-          clipPath: `inset(0 ${100 - clamped}% 0 0)`,
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={localUrl}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-      </div>
-      {/* Glowing reveal edge */}
-      <div
-        className="absolute top-0 bottom-0 w-0.5 bg-bitcoin shadow-[0_0_8px_rgba(247,147,26,0.9)] transition-[left,opacity] duration-200 ease-out"
-        style={{
-          left: `calc(${clamped}% - 1px)`,
-          opacity: clamped > 0 && clamped < 100 ? 1 : 0,
-        }}
-      />
-      {/* Percent pill */}
-      <div className="absolute bottom-1.5 right-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/70 border border-white/10 backdrop-blur-sm text-[10px] font-mono tabular-nums text-white">
-        <span className="h-1.5 w-1.5 rounded-full bg-bitcoin animate-pulse" />
-        {clamped}%
-      </div>
-    </div>
-  );
-}
-
-function AvatarPicker({
-  picture,
-  name,
-  uploading,
-  disabled,
-  onPick,
-  reveal,
-}: {
-  picture?: string;
-  name: string;
-  uploading: boolean;
-  disabled: boolean;
-  onPick: () => void;
-  reveal: UploadReveal | null;
-}) {
-  const initials = name.slice(0, 2).toUpperCase();
-  return (
-    <button
-      type="button"
-      onClick={onPick}
-      disabled={disabled}
-      className="relative h-24 w-24 rounded-2xl overflow-hidden border-4 border-background bg-background-card ring-1 ring-border-strong hover:ring-2 hover:ring-bitcoin/60 transition-all disabled:opacity-70 disabled:cursor-progress group shrink-0"
-      aria-label="Cambiar avatar"
-    >
-      {picture ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={picture}
-          alt={name}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-          }}
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-bitcoin/30 to-nostr/30 text-2xl font-display font-bold">
-          {initials}
-        </div>
-      )}
-      {reveal && (
-        <RevealOverlay
-          localUrl={reveal.localUrl}
-          percent={reveal.percent}
-          fading={reveal.fading}
-        />
-      )}
-      <div
-        className={cn(
-          "absolute inset-0 flex items-center justify-center text-white text-[10px] font-mono uppercase tracking-widest transition-opacity",
-          uploading && !reveal
-            ? "bg-black/60 opacity-100"
-            : reveal
-              ? "opacity-0"
-              : "bg-black/50 opacity-0 group-hover:opacity-100",
-        )}
-      >
-        {uploading ? (
-          <Loader2 className="h-5 w-5 animate-spin" />
-        ) : (
-          <div className="flex flex-col items-center gap-1">
-            <Upload className="h-4 w-4" />
-            Cambiar
-          </div>
-        )}
-      </div>
-    </button>
-  );
-}
 
 function TextField({
   label,
