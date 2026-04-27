@@ -51,9 +51,11 @@ const nclog = (...args: unknown[]) => {
 export default function LoginModal({
   open,
   onClose,
+  redirectTo = "/dashboard",
 }: {
   open: boolean;
   onClose: () => void;
+  redirectTo?: string;
 }) {
   const router = useRouter();
   const { push: pushToast } = useToast();
@@ -135,9 +137,9 @@ export default function LoginModal({
   useEffect(() => {
     if (ncState !== "connected") return;
     // Prefetch + auto-navigate shortly after success
-    router.prefetch("/dashboard");
+    router.prefetch(redirectTo);
     const t = window.setTimeout(() => {
-      router.push("/dashboard");
+      router.push(redirectTo);
       onClose();
     }, 700);
     return () => window.clearTimeout(t);
@@ -168,7 +170,7 @@ export default function LoginModal({
         return;
       }
       setAuth({ method: "nip07", pubkey });
-      router.push("/dashboard");
+      router.push(redirectTo);
       onClose();
     } catch {
       setNip07Loading(false);
@@ -200,7 +202,7 @@ export default function LoginModal({
         description: `${npub.slice(0, 14)}…${npub.slice(-6)} · la clave queda en localStorage (sólo dev).`,
         duration: 8000,
       });
-      router.push("/dashboard");
+      router.push(redirectTo);
       onClose();
     } catch (e) {
       pushToast({

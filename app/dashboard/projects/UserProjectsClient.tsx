@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -186,6 +186,7 @@ const STACK_SUGGESTIONS: string[] = [
 
 export default function UserProjectsClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { auth, ready } = useAuth();
   const { push: pushToast } = useToast();
 
@@ -410,10 +411,21 @@ export default function UserProjectsClient() {
     );
   }
 
-  function openCreate() {
-    setForm({ ...emptyForm(), team: [ownerRow()] });
+  function openCreate(hackathonId?: string) {
+    setForm({ ...emptyForm(), hackathon: hackathonId ?? "", team: [ownerRow()] });
     setFormOpen(true);
   }
+
+  // Auto-open create form from ?hackathon=&new=1 query params (e.g. from hackathon inscription button)
+  const autoOpenDone = useRef(false);
+  useEffect(() => {
+    if (autoOpenDone.current) return;
+    if (!ready || loading) return;
+    if (searchParams.get("new") !== "1") return;
+    autoOpenDone.current = true;
+    openCreate(searchParams.get("hackathon") ?? undefined);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, loading, searchParams]);
 
   function openEdit(p: UserProject) {
     const rows: TeamRow[] =
@@ -648,6 +660,7 @@ export default function UserProjectsClient() {
                 <ProjectCard
                   key={p.id}
                   project={p}
+                  pubkey={auth!.pubkey}
                   onEdit={() => openEdit(p)}
                   onDelete={() => setDeleteId(p.id)}
                   disabled={publishing}
@@ -736,11 +749,13 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 
 function ProjectCard({
   project,
+  pubkey,
   onEdit,
   onDelete,
   disabled,
 }: {
   project: UserProject;
+  pubkey: string;
   onEdit: () => void;
   onDelete: () => void;
   disabled: boolean;
@@ -755,9 +770,12 @@ function ProjectCard({
       className="group relative rounded-2xl border border-border bg-background-card p-6 flex flex-col hover:border-border-strong transition-colors"
     >
       <div className="flex items-start justify-between gap-3">
-        <h3 className="font-display text-lg font-bold tracking-tight flex-1 min-w-0 break-words">
+        <Link
+          href={`/projects/${pubkey}/${project.id}`}
+          className="font-display text-lg font-bold tracking-tight flex-1 min-w-0 break-words hover:text-bitcoin transition-colors"
+        >
           {project.name}
-        </h3>
+        </Link>
         <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
           <button
             onClick={onEdit}

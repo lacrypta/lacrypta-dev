@@ -24,6 +24,7 @@ import {
 } from "@/lib/hackathons";
 import { cn } from "@/lib/cn";
 import HackathonProjectsList from "./HackathonProjectsList";
+import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
 
 export function generateStaticParams() {
   return HACKATHONS.map((h) => ({ id: h.id }));
@@ -153,6 +154,11 @@ export default async function HackathonPage({
                   </span>
                 ))}
               </div>
+              {status !== "closed" && (
+                <div className="mt-6">
+                  <HackathonInscripcionButton hackathonId={hackathon.id} />
+                </div>
+              )}
             </div>
           </div>
         </div>
