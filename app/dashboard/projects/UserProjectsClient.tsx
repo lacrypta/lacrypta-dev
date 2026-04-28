@@ -660,7 +660,7 @@ export default function UserProjectsClient() {
                 <ProjectCard
                   key={p.id}
                   project={p}
-                  pubkey={auth!.pubkey}
+                  pubkey={auth?.pubkey}
                   onEdit={() => openEdit(p)}
                   onDelete={() => setDeleteId(p.id)}
                   disabled={publishing}
@@ -755,11 +755,17 @@ function ProjectCard({
   disabled,
 }: {
   project: UserProject;
-  pubkey: string;
+  pubkey?: string;
   onEdit: () => void;
   onDelete: () => void;
   disabled: boolean;
 }) {
+  const detailHref = project.hackathon
+    ? `/hackathons/${project.hackathon}/${project.id}`
+    : pubkey
+      ? `/projects/${pubkey}/${project.id}`
+      : null;
+
   return (
     <motion.div
       layout
@@ -770,12 +776,18 @@ function ProjectCard({
       className="group relative rounded-2xl border border-border bg-background-card p-6 flex flex-col hover:border-border-strong transition-colors"
     >
       <div className="flex items-start justify-between gap-3">
-        <Link
-          href={`/projects/${pubkey}/${project.id}`}
-          className="font-display text-lg font-bold tracking-tight flex-1 min-w-0 break-words hover:text-bitcoin transition-colors"
-        >
-          {project.name}
-        </Link>
+        {detailHref ? (
+          <Link
+            href={detailHref}
+            className="font-display text-lg font-bold tracking-tight flex-1 min-w-0 break-words hover:text-bitcoin transition-colors"
+          >
+            {project.name}
+          </Link>
+        ) : (
+          <span className="font-display text-lg font-bold tracking-tight flex-1 min-w-0 break-words">
+            {project.name}
+          </span>
+        )}
         <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
           <button
             onClick={onEdit}
