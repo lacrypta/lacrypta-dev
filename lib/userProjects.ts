@@ -614,3 +614,79 @@ export async function fetchCommunityProjects(
   setCachedCommunityProjects(projects);
   return projects;
 }
+
+/**
+ * Fetch a single project directly from relays using its NIP-78 d-tag.
+ * Works without any local cache — suitable for public project pages.
+ */
+export async function fetchProjectByDTag(
+  pubkey: string,
+  projectId: string,
+  relays: string[] = TOP10_RELAYS,
+  timeoutMs = 5000,
+): Promise<UserProject | null> {
+  const { SimplePool } = await import("nostr-tools/pool");
+  const pool = new SimplePool();
+  let found: UserProject | null = null;
+
+  const closer = pool.subscribe(
+    relays,
+    {
+      kinds: [PROJECT_KIND],
+      authors: [pubkey],
+      "#d": [projectDTag(projectId)],
+    },
+    {
+      onevent(ev: IncomingEvent) {
+        if (!found) found = parseProjectContent(ev);
+      },
+      oneose() {
+        closer.close();
+      },
+    },
+  );
+
+  await new Promise((r) => setTimeout(r, timeoutMs));
+  closer.close();
+  try {
+    pool.close(relays);
+  } catch {}
+
+  return found;
+}
+
+/** Batch-fetch kind:0 profile pictures for a list of pubkeys. */
+export async function fetchAuthorPictures(
+  pubkeys: string[],
+  relays: string[] = TOP10_RELAYS,
+  timeoutMs = 4000,
+): Promise<Map<string, string>> {
+  if (pubkeys.length === 0) return new Map();
+  const { SimplePool } = await import("nostr-tools/pool");
+  const pool = new SimplePool();
+  const pictures = new Map<string, string>();
+
+  const closer = pool.subscribe(
+    relays,
+    { kinds: [0], authors: pubkeys },
+    {
+      onevent(ev: { pubkey: string; content: string; created_at: number }) {
+        try {
+          const meta = JSON.parse(ev.content) as Record<string, unknown>;
+          if (typeof meta.picture === "string" && meta.picture) {
+            pictures.set(ev.pubkey, meta.picture);
+          }
+        } catch {}
+      },
+      oneose() {},
+    },
+  );
+
+  await new Promise((r) => setTimeout(r, timeoutMs));
+  closer.close();
+  try {
+    pool.close(relays);
+  } catch {}
+
+  return pictures;
+}
