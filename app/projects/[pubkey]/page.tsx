@@ -3,8 +3,8 @@ import UserProjectsPage from "./UserProjectsPage";
 export default async function Page({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ pubkey: string }>;
 }) {
-  const { id: pubkey } = await params;
+  const { pubkey } = await params;
   return <UserProjectsPage pubkey={pubkey} />;
 }
