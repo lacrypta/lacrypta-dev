@@ -1094,7 +1094,7 @@ function RelayPublishProgress({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 10, scale: 0.92 }}
       transition={{ duration: 0.22, ease: "easeOut" }}
-      className="fixed bottom-6 right-6 z-[200] glass-strong border border-border-strong rounded-2xl p-4 shadow-2xl shadow-black/40 w-72"
+      className="fixed bottom-6 left-6 z-[200] glass-strong border border-border-strong rounded-2xl p-4 shadow-2xl shadow-black/40 w-72"
     >
       <div className="flex items-start gap-3.5">
         {/* Circular progress ring */}

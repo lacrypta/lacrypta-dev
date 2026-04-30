@@ -230,6 +230,7 @@ export default function NewProjectModal({
   const [step, setStep] = useState<"repo" | "fetching" | "form">("repo");
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [optimisticClosed, setOptimisticClosed] = useState(false);
   const [phase, setPhase] = useState<Phase | null>(null);
   const [phaseDetail, setPhaseDetail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -257,6 +258,7 @@ export default function NewProjectModal({
       setError(null);
       setStep("repo");
       setFetchError(null);
+      setOptimisticClosed(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -333,17 +335,17 @@ export default function NewProjectModal({
         },
       });
       setPhase("publishing");
-      setPhaseDetail(`${relays.length} relays`);
+      setOptimisticClosed(true);
       const result = await publishUserProject(signer, project, relays, {
         onRelayResult: (r) => setRelayResults((prev) => [...prev, r]),
       });
       const okCount = result.relays.filter((r) => r.ok).length;
       setPhase("done");
-      setPhaseDetail(`${okCount}/${result.relays.length} relays`);
       pushToast({ kind: "success", title: "Proyecto creado", description: `Publicado en ${okCount}/${result.relays.length} relays.` });
-      setTimeout(() => onClose(), 1800);
+      onClose();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      setOptimisticClosed(false);
       setError(msg);
       pushToast({ kind: "error", title: "No se pudo crear el proyecto", description: msg, duration: 12000 });
     } finally {
@@ -383,7 +385,7 @@ export default function NewProjectModal({
   return (
     <>
     <AnimatePresence>
-      {open && (
+      {open && !optimisticClosed && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -646,7 +648,7 @@ function RelayPublishProgress({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 10, scale: 0.92 }}
       transition={{ duration: 0.22, ease: "easeOut" }}
-      className="fixed bottom-6 right-6 z-[200] glass-strong border border-border-strong rounded-2xl p-4 shadow-2xl shadow-black/40 w-72"
+      className="fixed bottom-6 left-6 z-[200] glass-strong border border-border-strong rounded-2xl p-4 shadow-2xl shadow-black/40 w-72"
     >
       <div className="flex items-start gap-3.5">
         <div className="relative w-12 h-12 shrink-0">
