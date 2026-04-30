@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -68,6 +68,7 @@ export default function HackathonProjectsList({
   const [authorPictures, setAuthorPictures] = useState<Map<string, string>>(
     new Map(),
   );
+  const sectionRef = useRef<HTMLElement>(null);
 
   const awards = useMemo<PrizedProject[]>(
     () => prizedProjects(hackathon.id),
@@ -130,6 +131,18 @@ export default function HackathonProjectsList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hackathon.id]);
 
+  useEffect(() => {
+    function onPublished(e: Event) {
+      const { hackathonId } = (e as CustomEvent<{ hackathonId: string }>).detail;
+      if (hackathonId !== hackathon.id) return;
+      sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      scan();
+    }
+    window.addEventListener("labs:project-published", onPublished);
+    return () => window.removeEventListener("labs:project-published", onPublished);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hackathon.id]);
+
   const curated = merged.filter((p) => !p.nostrEventId);
   const nostrCount = merged.length - curated.length;
   const total = merged.length;
@@ -142,7 +155,7 @@ export default function HackathonProjectsList({
         : "PROYECTOS INSCRIPTOS";
 
   return (
-    <section className="py-12 border-t border-border">
+    <section ref={sectionRef} className="py-12 border-t border-border">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-start justify-between gap-3 mb-6 flex-wrap">
           <div>

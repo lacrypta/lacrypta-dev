@@ -342,6 +342,9 @@ export default function NewProjectModal({
       const okCount = result.relays.filter((r) => r.ok).length;
       setPhase("done");
       pushToast({ kind: "success", title: "Proyecto creado", description: `Publicado en ${okCount}/${result.relays.length} relays.` });
+      if (form.hackathon) {
+        window.dispatchEvent(new CustomEvent("labs:project-published", { detail: { hackathonId: form.hackathon } }));
+      }
       onClose();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
