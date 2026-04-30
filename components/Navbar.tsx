@@ -161,7 +161,7 @@ export default function Navbar() {
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
         className={cn(
-          "fixed top-0 inset-x-0 z-50 overflow-hidden",
+          "fixed top-0 inset-x-0 z-50",
           "transition-[height,background-color,border-color,box-shadow] duration-500 ease-in-out",
           isDesktop && isExpanded ? "h-screen" : "h-16",
           scrolled
@@ -544,10 +544,12 @@ export default function Navbar() {
                         )}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold truncate">
-                          {profile?.display_name ||
-                            profile?.name ||
-                            `${auth.pubkey.slice(0, 10)}…`}
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-sm font-semibold truncate">
+                            {profile?.display_name ||
+                              profile?.name ||
+                              `${auth.pubkey.slice(0, 10)}…`}
+                          </div>
                         </div>
                         <div className="text-[11px] text-foreground-subtle font-mono truncate">
                           {auth.pubkey.slice(0, 10)}…{auth.pubkey.slice(-4)}

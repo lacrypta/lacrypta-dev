@@ -24,6 +24,7 @@ import {
 } from "@/lib/hackathons";
 import { cn } from "@/lib/cn";
 import HackathonProjectsList from "./HackathonProjectsList";
+import HackathonResultsClient from "./HackathonResultsClient";
 import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
 
 export function generateStaticParams() {
@@ -248,66 +249,58 @@ export default async function HackathonPage({
               subtitle={`${formatSats(PROGRAM.prizePerHackathon)} sats`}
             >
               {awards.length > 0 ? (
-                <ol className="space-y-2">
-                  {awards.map((a) => (
-                    <li key={a.project.id}>
-                      <Link
-                        href={`/hackathons/${hackathon.id}/${a.project.id}`}
-                        className={cn(
-                          "group flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
-                          a.position === 1
-                            ? "bg-bitcoin/10 border-bitcoin/30 hover:bg-bitcoin/15"
-                            : "bg-white/[0.02] border-border hover:bg-white/[0.05]",
-                        )}
-                      >
-                        <span className="text-lg leading-none shrink-0 w-7 text-center">
-                          {medal(a.position) || (
-                            <span className="text-xs font-mono text-foreground-muted">
-                              #{a.position}
-                            </span>
+                <>
+                  <ol className="space-y-2">
+                    {awards.map((a) => (
+                      <li key={a.project.id}>
+                        <Link
+                          href={`/hackathons/${hackathon.id}/${a.project.id}`}
+                          className={cn(
+                            "group flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
+                            a.position === 1
+                              ? "bg-bitcoin/10 border-bitcoin/30 hover:bg-bitcoin/15"
+                              : "bg-white/[0.02] border-border hover:bg-white/[0.05]",
                           )}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-semibold truncate group-hover:text-bitcoin transition-colors">
-                            {a.project.name}
-                          </div>
-                          <div className="text-[10px] font-mono text-foreground-subtle flex items-center gap-1.5">
-                            <span className="tabular-nums">
-                              {formatSats(a.prize)} sats
-                            </span>
-                            {a.tied && (
-                              <span className="px-1 rounded bg-lightning/10 text-lightning border border-lightning/30 text-[9px] tracking-widest uppercase">
-                                empate
+                        >
+                          <span className="text-lg leading-none shrink-0 w-7 text-center">
+                            {medal(a.position) || (
+                              <span className="text-xs font-mono text-foreground-muted">
+                                #{a.position}
                               </span>
                             )}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[13px] font-semibold truncate group-hover:text-bitcoin transition-colors">
+                              {a.project.name}
+                            </div>
+                            <div className="text-[10px] font-mono text-foreground-subtle flex items-center gap-1.5">
+                              <span className="tabular-nums">
+                                {formatSats(a.prize)} sats
+                              </span>
+                              {a.tied && (
+                                <span className="px-1 rounded bg-lightning/10 text-lightning border border-lightning/30 text-[9px] tracking-widest uppercase">
+                                  empate
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ol>
+                        </Link>
+                      </li>
+                    ))}
+                  </ol>
+                  {awards.some((a) => a.tied) && (
+                    <p className="mt-3 text-[10px] font-mono text-foreground-subtle leading-relaxed">
+                      * Los premios de posiciones empatadas se dividen en partes
+                      iguales.
+                    </p>
+                  )}
+                </>
               ) : (
-                <ol className="space-y-2">
-                  {PROGRAM.prizeDistribution.map((slot) => (
-                    <li
-                      key={slot.position}
-                      className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.02] border border-border"
-                    >
-                      <span className="text-sm font-mono text-foreground-muted">
-                        {medal(slot.position) || `#${slot.position}`}
-                      </span>
-                      <span className="text-sm font-bold tabular-nums">
-                        {formatSats(slot.sats)} sats
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              )}
-              {awards.some((a) => a.tied) && (
-                <p className="mt-3 text-[10px] font-mono text-foreground-subtle leading-relaxed">
-                  * Los premios de posiciones empatadas se dividen en partes
-                  iguales.
-                </p>
+                /* Hackathons #03+ — fetch live results from Nostr */
+                <HackathonResultsClient
+                  hackathonId={hackathon.id}
+                  prizeDistribution={PROGRAM.prizeDistribution}
+                />
               )}
             </Card>
 

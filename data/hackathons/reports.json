@@ -1610,5 +1610,103 @@
         "improvements": []
       }
     }
+  },
+  "identity": {
+    "arena": {
+      "title": "Arena",
+      "position": 1,
+      "finalScore": 8.17,
+      "team": [],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "obelisk": {
+      "title": "Obelisk",
+      "position": 2,
+      "finalScore": 7.54,
+      "team": [],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "tamagostrich": {
+      "title": "Tamagostrich",
+      "position": 3,
+      "finalScore": 7.19,
+      "team": [],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "hash21": {
+      "title": "Hash21 — Arte, Identidad y Bitcoin",
+      "position": 4,
+      "finalScore": 6.98,
+      "team": [],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "predictr": {
+      "title": "Predictr — P2P Bitcoin Prediction Bulletin",
+      "position": 5,
+      "finalScore": 6.96,
+      "team": [],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "nostr-kahoot": {
+      "title": "Nostr Kahoot",
+      "position": 6,
+      "finalScore": 6.58,
+      "team": [],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "nostr-en-el-espacio": {
+      "title": "Nostr en el Espacio",
+      "position": 7,
+      "finalScore": 6.39,
+      "team": [],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "scammer-come-empanadas-detector": {
+      "title": "Scammer & Come Empanadas Detector",
+      "position": 8,
+      "finalScore": 6.25,
+      "team": [],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    }
   }
 }

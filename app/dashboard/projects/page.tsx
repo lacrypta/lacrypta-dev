@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import UserProjectsClient from "./UserProjectsClient";
 
@@ -8,5 +9,9 @@ export const metadata: Metadata = {
 };
 
 export default function UserProjectsPage() {
-  return <UserProjectsClient />;
+  return (
+    <Suspense>
+      <UserProjectsClient />
+    </Suspense>
+  );
 }

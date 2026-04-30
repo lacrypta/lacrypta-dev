@@ -17,8 +17,10 @@ import {
   type CommunityProject,
 } from "@/lib/userProjects";
 import { getHackathon, type Hackathon } from "@/lib/hackathons";
+import { useProjectReport } from "@/lib/nostrReports";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
+import { Trophy, Lightbulb, AlertTriangle } from "lucide-react";
 
 const STATUS_BADGE: Record<string, string> = {
   official: "bg-bitcoin/10 border-bitcoin/40 text-bitcoin",
@@ -41,6 +43,7 @@ export default function NostrProjectPage({
   );
   const [authorPicture, setAuthorPicture] = useState<string | undefined>();
   const hackathon = getHackathon(hackathonId) as Hackathon;
+  const { report } = useProjectReport(hackathonId, projectId);
 
   useEffect(() => {
     async function load() {
@@ -209,6 +212,153 @@ export default function NostrProjectPage({
                 </p>
               </div>
             </div>
+
+            {/* Nostr-sourced judge report */}
+            {report && (
+              <>
+                {report.position != null && (
+                  <div className="mt-6 rounded-2xl border border-bitcoin/40 bg-gradient-to-br from-bitcoin/10 via-transparent to-nostr/5 overflow-hidden">
+                    <div className="flex flex-col sm:flex-row items-stretch divide-y sm:divide-y-0 sm:divide-x divide-border/60">
+                      <div className="flex items-center gap-4 px-5 py-4 flex-1">
+                        <div className="text-5xl leading-none">
+                          {report.position === 1
+                            ? "🥇"
+                            : report.position === 2
+                              ? "🥈"
+                              : report.position === 3
+                                ? "🥉"
+                                : `#${report.position}`}
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-mono uppercase tracking-widest text-foreground-subtle">
+                            POSICIÓN FINAL
+                          </div>
+                          <div className="font-display text-2xl font-bold">
+                            {report.position === 1
+                              ? "1° — Ganador"
+                              : `${report.position}° lugar`}
+                          </div>
+                        </div>
+                      </div>
+                      {report.finalScore != null && (
+                        <div className="flex flex-col items-center justify-center px-5 py-4 min-w-[110px]">
+                          <div className="text-[10px] font-mono uppercase tracking-widest text-foreground-subtle">
+                            Score
+                          </div>
+                          <div className="font-display text-3xl font-bold tabular-nums">
+                            {report.finalScore.toFixed(2)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-6 rounded-xl border border-border bg-background-card overflow-hidden">
+                  <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
+                    <Trophy className="h-4 w-4 text-bitcoin" />
+                    <h2 className="text-xs font-mono uppercase tracking-widest font-bold">
+                      Jurado AI
+                    </h2>
+                    {report.finalScore != null && (
+                      <span className="ml-auto text-sm font-mono tabular-nums">
+                        promedio ·{" "}
+                        <span className="font-bold">
+                          {report.finalScore.toFixed(2)}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="divide-y divide-border">
+                    {report.judges.map((j) => (
+                      <div key={j.name} className="px-5 py-4">
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                          <div>
+                            <div className="font-display font-bold text-sm">
+                              {j.name}
+                            </div>
+                            {j.model && (
+                              <div className="text-[10px] font-mono text-foreground-subtle">
+                                {j.model}
+                              </div>
+                            )}
+                          </div>
+                          {j.score != null && (
+                            <span className="font-mono text-base font-bold tabular-nums">
+                              {j.score.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        {j.categories.length > 0 && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                            {j.categories.map((c) => (
+                              <div
+                                key={c.name}
+                                className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white/[0.02] border border-border text-xs"
+                              >
+                                <span className="text-foreground-muted truncate">
+                                  {c.name}
+                                </span>
+                                <span className="font-mono font-bold tabular-nums">
+                                  {c.score}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {j.summary && (
+                          <p className="text-xs text-foreground-muted leading-relaxed whitespace-pre-wrap">
+                            {j.summary}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {(report.feedback.strengths.length > 0 ||
+                  report.feedback.improvements.length > 0) && (
+                  <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {report.feedback.strengths.length > 0 && (
+                      <div className="rounded-xl border border-success/30 bg-background-card p-5">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Lightbulb className="h-4 w-4 text-success" />
+                          <h3 className="text-xs font-mono uppercase tracking-widest font-bold">
+                            Fortalezas
+                          </h3>
+                        </div>
+                        <ul className="space-y-2 text-xs text-foreground-muted leading-relaxed">
+                          {report.feedback.strengths.map((s, i) => (
+                            <li key={i} className="flex gap-2">
+                              <span className="text-foreground-subtle">›</span>
+                              <span className="flex-1">{s}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {report.feedback.improvements.length > 0 && (
+                      <div className="rounded-xl border border-lightning/30 bg-background-card p-5">
+                        <div className="flex items-center gap-2 mb-3">
+                          <AlertTriangle className="h-4 w-4 text-lightning" />
+                          <h3 className="text-xs font-mono uppercase tracking-widest font-bold">
+                            Áreas de Mejora
+                          </h3>
+                        </div>
+                        <ul className="space-y-2 text-xs text-foreground-muted leading-relaxed">
+                          {report.feedback.improvements.map((s, i) => (
+                            <li key={i} className="flex gap-2">
+                              <span className="text-foreground-subtle">›</span>
+                              <span className="flex-1">{s}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           <aside className="space-y-4">

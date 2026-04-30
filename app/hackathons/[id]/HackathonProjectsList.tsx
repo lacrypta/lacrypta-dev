@@ -27,6 +27,7 @@ import {
   type CommunityProject,
 } from "@/lib/userProjects";
 import { formatSats } from "@/lib/hackathons";
+import { useHackathonResults, type WinnerEntry } from "@/lib/nostrReports";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
 
@@ -75,6 +76,15 @@ export default function HackathonProjectsList({
   const prizeByProjectId = useMemo(
     () => new Map(awards.map((a) => [a.project.id, a])),
     [awards],
+  );
+
+  const { results: nostrResults } = useHackathonResults(hackathon.id);
+  const nostrWinnerByProjectId = useMemo(
+    () =>
+      new Map<string, WinnerEntry>(
+        nostrResults?.winners.map((w) => [w.projectId, w]) ?? [],
+      ),
+    [nostrResults],
   );
 
   const merged = useMemo(
@@ -179,6 +189,7 @@ export default function HackathonProjectsList({
                 project={p}
                 hackathonId={hackathon.id}
                 award={prizeByProjectId.get(p.id) ?? null}
+                nostrWinner={nostrWinnerByProjectId.get(p.id) ?? null}
                 authorPicture={
                   p.nostrAuthor
                     ? authorPictures.get(p.nostrAuthor)
@@ -197,16 +208,18 @@ function ProjectRow({
   project,
   hackathonId,
   award,
+  nostrWinner,
   authorPicture,
 }: {
   project: HackathonSubmission;
   hackathonId: string;
   award: PrizedProject | null;
+  nostrWinner: WinnerEntry | null;
   authorPicture?: string;
 }) {
-  const pos = project.report?.position;
-  const score = project.report?.finalScore;
-  const prize = award?.prize ?? null;
+  const pos = project.report?.position ?? nostrWinner?.position ?? null;
+  const score = project.report?.finalScore ?? null;
+  const prize = award?.prize ?? nostrWinner?.sats ?? null;
   const isNostr = !!project.nostrEventId;
   const href = `/hackathons/${hackathonId}/${project.id}`;
 
