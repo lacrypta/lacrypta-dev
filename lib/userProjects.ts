@@ -402,6 +402,7 @@ async function publishSignedEvent(
   signed: SignedEvent,
   relays: string[],
   perRelayTimeoutMs = 8000,
+  onRelayResult?: (r: { relay: string; ok: boolean; error?: string }) => void,
 ): Promise<PublishProjectResult["relays"]> {
   const { SimplePool } = await import("nostr-tools/pool");
   const pool = new SimplePool();
@@ -411,13 +412,17 @@ async function publishSignedEvent(
       const relay = relays[i];
       try {
         await withTimeout(p, perRelayTimeoutMs, relay);
-        return { relay, ok: true };
+        const r = { relay, ok: true as const };
+        onRelayResult?.(r);
+        return r;
       } catch (e) {
-        return {
+        const r = {
           relay,
-          ok: false,
+          ok: false as const,
           error: e instanceof Error ? e.message : String(e),
         };
+        onRelayResult?.(r);
+        return r;
       }
     }),
   );
@@ -436,6 +441,7 @@ export async function publishUserProject(
   opts?: {
     signTimeoutMs?: number;
     publishTimeoutMs?: number;
+    onRelayResult?: (r: { relay: string; ok: boolean; error?: string }) => void;
   },
 ): Promise<PublishProjectResult> {
   const { signTimeoutMs = 30_000, publishTimeoutMs = 8_000 } = opts ?? {};
@@ -455,6 +461,7 @@ export async function publishUserProject(
     signed,
     relays,
     publishTimeoutMs,
+    opts?.onRelayResult,
   );
   const ok = relayResults.some((r) => r.ok);
   if (!ok) {
@@ -474,7 +481,11 @@ export async function deleteUserProject(
   signer: UserSigner,
   projectId: string,
   relays: string[] = DEFAULT_USER_RELAYS,
-  opts?: { signTimeoutMs?: number; publishTimeoutMs?: number },
+  opts?: {
+    signTimeoutMs?: number;
+    publishTimeoutMs?: number;
+    onRelayResult?: (r: { relay: string; ok: boolean; error?: string }) => void;
+  },
 ): Promise<PublishProjectResult> {
   const { signTimeoutMs = 30_000, publishTimeoutMs = 8_000 } = opts ?? {};
   const unsigned = buildTombstoneEvent(projectId, signer.pubkey);
@@ -487,6 +498,7 @@ export async function deleteUserProject(
     signed,
     relays,
     publishTimeoutMs,
+    opts?.onRelayResult,
   );
   const ok = relayResults.some((r) => r.ok);
   if (!ok) {
