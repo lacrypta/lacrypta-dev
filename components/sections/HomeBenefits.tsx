@@ -57,13 +57,11 @@ function Header() {
         Tu próximo nivel
       </span>
       <h2 className="mt-6 font-display text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-[0.95]">
-        Del primer commit al{" "}
-        <span className="text-gradient-hero">primer pago en sats</span>.
+        Tu primer laburo como{" "}
+        <span className="text-gradient-hero">bitcoiner open-source</span>.
       </h2>
       <p className="mt-5 text-base sm:text-lg text-foreground-muted leading-relaxed">
-        Construir en bitcoin no es una promesa lejana. Es un camino que arranca
-        público, se documenta solo y termina con vos cobrando en la red más
-        sólida del planeta.
+        Aprendés mientras ganás sats.
       </p>
     </motion.header>
   );
@@ -94,8 +92,7 @@ function BenefitGitHub() {
             <span className="text-gradient-bitcoin">es tu GitHub</span>
           </h3>
           <p className="mt-4 text-sm sm:text-[15px] text-foreground-muted leading-relaxed max-w-md">
-            Cada commit es un punto. Cada repo, un capítulo. En bitcoin no se
-            firma un PDF — se firma código que cualquiera puede verificar.
+            Talk is cheap. Show me the code.
           </p>
         </div>
 
@@ -275,8 +272,7 @@ function BenefitExperience() {
             <span className="text-gradient-nostr">experiencia real</span>
           </h3>
           <p className="mt-4 text-sm sm:text-[15px] text-foreground-muted leading-relaxed">
-            Hackatones mensuales, proyectos open source, mentoría de la
-            industria. Aprendés construyendo, no mirando.
+            Hackatones, open source, mentores. Aprendés construyendo.
           </p>
         </div>
 
@@ -399,9 +395,9 @@ function Constellation() {
 function ExperienceStats() {
   return (
     <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
-      <Stat label="Hackatones" value={12} />
-      <Stat label="Proyectos" value={87} suffix="+" />
-      <Stat label="Sats girados" value={2.1} suffix="M" decimals={1} />
+      <Stat label="Hackatones" value={2} />
+      <Stat label="Proyectos" value={26} />
+      <Stat label="Sats entregados" value={2} suffix="M" />
     </div>
   );
 }
@@ -484,8 +480,7 @@ function BenefitJobs() {
             </span>
           </h3>
           <p className="mt-4 text-sm sm:text-[15px] text-foreground-muted leading-relaxed">
-            Empresas BTC-only escuchan Nostr. Tu performance en hackatones queda
-            firmada y pública. Los reclutadores ya están leyendo.
+            Las BTC-only leen Nostr. Tu trabajo firmado les llega solo.
           </p>
           <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/[0.07] px-3 py-1.5">
             <span className="relative flex h-2 w-2">
@@ -604,9 +599,6 @@ function Outro() {
         <div>
           <p className="font-display text-xl sm:text-2xl font-bold tracking-tight">
             Empezá tu historial pública.
-          </p>
-          <p className="mt-1 text-sm text-foreground-muted">
-            El próximo hackatón es tu primer commit firmado.
           </p>
         </div>
       </div>

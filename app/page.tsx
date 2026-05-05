@@ -7,8 +7,8 @@ export default function Home() {
       <h1 className="sr-only">
         La Crypta Dev — Bitcoin, Lightning y Nostr en Argentina
       </h1>
-      <HomeScroll />
       <HomeBenefits />
+      <HomeScroll />
     </>
   );
 }
