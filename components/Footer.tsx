@@ -2,6 +2,7 @@ import Link from "next/link";
 import Logo from "./Logo";
 import { Zap } from "lucide-react";
 import { GithubIcon, XIcon } from "@/components/BrandIcons";
+import { version as appVersion } from "@/package.json";
 
 const COLS = [
   {
@@ -125,7 +126,7 @@ export default async function Footer() {
           <div className="flex items-center gap-3 text-xs text-foreground-subtle">
             <span className="inline-flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-              <span className="font-mono">v0.1.0 — EN LÍNEA</span>
+              <span className="font-mono">v{appVersion} — EN LÍNEA</span>
             </span>
           </div>
         </div>
