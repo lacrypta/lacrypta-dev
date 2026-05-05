@@ -1,4 +1,5 @@
 import HomeScroll from "@/components/sections/HomeScroll";
+import HomeBenefits from "@/components/sections/HomeBenefits";
 
 export default function Home() {
   return (
@@ -7,6 +8,7 @@ export default function Home() {
         La Crypta Dev — Bitcoin, Lightning y Nostr en Argentina
       </h1>
       <HomeScroll />
+      <HomeBenefits />
     </>
   );
 }

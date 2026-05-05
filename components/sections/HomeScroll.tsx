@@ -337,6 +337,13 @@ function SectionPanel({
     [0, 1],
   );
 
+  // Only the visible panel should capture clicks. Without this, faded panels
+  // stacked on top (later in DOM order) intercept pointer events and block
+  // the active panel's CTA.
+  const panelPointerEvents = useTransform(opacity, (o) =>
+    o > 0.5 ? "auto" : "none",
+  );
+
   const Icon = section.icon;
 
   return (
@@ -344,10 +351,9 @@ function SectionPanel({
       style={{ opacity, y: yShift }}
       className="absolute inset-0 flex items-center px-12 xl:px-20 py-12 pointer-events-none"
     >
-      {/* pointer-events-auto only when opaque so hidden panels don't block clicks */}
-      <div
-        className="w-full max-w-lg pointer-events-auto"
-        style={{ pointerEvents: "auto" }}
+      <motion.div
+        className="w-full max-w-lg"
+        style={{ pointerEvents: panelPointerEvents }}
       >
         {/* Number + icon row */}
         <div className="flex items-center gap-3 mb-7">
@@ -431,7 +437,7 @@ function SectionPanel({
             <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
           </Link>
         </motion.div>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
