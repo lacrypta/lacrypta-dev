@@ -1,5 +1,6 @@
 import HomeScroll from "@/components/sections/HomeScroll";
 import HomeBenefits from "@/components/sections/HomeBenefits";
+import NewsletterCTA from "@/components/sections/NewsletterCTA";
 
 export default function Home() {
   return (
@@ -9,6 +10,7 @@ export default function Home() {
       </h1>
       <HomeBenefits />
       <HomeScroll />
+      <NewsletterCTA />
     </>
   );
 }

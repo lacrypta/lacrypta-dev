@@ -9,17 +9,16 @@ import {
   type MotionValue,
 } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Trophy,
   FolderKanban,
-  Globe,
+  Layers,
   ArrowRight,
   Code2,
   Zap,
   Award,
   Users,
-  Radio,
-  Cpu,
   GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -28,6 +27,11 @@ type Feature = {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
+};
+
+type Pillar = {
+  src: string;
+  label: string;
 };
 
 type Section = {
@@ -43,7 +47,8 @@ type Section = {
   icon: React.ComponentType<{ className?: string }>;
   href: string;
   cta: string;
-  features: Feature[];
+  features?: Feature[];
+  pillars?: Pillar[];
 };
 
 const SECTIONS: Section[] = [
@@ -114,35 +119,28 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    id: "infrastructure",
+    id: "tech",
     number: "03",
-    label: "Infra pública",
-    tagline: "Infraestructura abierta",
+    label: "Tecnologías",
+    tagline: "El stack abierto",
     description:
-      "Nodos, relays y cómputo disponibles para toda la comunidad. Sin permisos, sin registro.",
+      "Las 8 piezas con las que se construye en cada hackatón. Bitcoin layer 2s, Nostr y assets nativos sobre cadenas afines.",
     colorClass: "text-cyan",
     bgClass: "bg-cyan/10",
     borderClass: "border-cyan/30",
     dotBgClass: "bg-cyan",
-    icon: Globe,
-    href: "/infrastructure",
-    cta: "Ver infra",
-    features: [
-      {
-        icon: Zap,
-        title: "Bitcoin + Lightning",
-        description: "Nodo propio con canales activos de Lightning Network.",
-      },
-      {
-        icon: Radio,
-        title: "Nostr & Blossom",
-        description: "Relay de Nostr y almacenamiento distribuido con Blossom.",
-      },
-      {
-        icon: Cpu,
-        title: "Cómputo AI",
-        description: "Tokens para usar modelos de inteligencia artificial.",
-      },
+    icon: Layers,
+    href: "/hackathons",
+    cta: "Ver hackatones",
+    pillars: [
+      { src: "/pilares/lightning.svg", label: "Lightning" },
+      { src: "/pilares/nostr.svg", label: "Nostr" },
+      { src: "/pilares/liquid.svg", label: "Liquid" },
+      { src: "/pilares/rgb.svg", label: "RGB" },
+      { src: "/pilares/taproot-assets.png", label: "Taproot Assets" },
+      { src: "/pilares/spark.svg", label: "Spark" },
+      { src: "/pilares/ark.png", label: "Ark" },
+      { src: "/pilares/rsk.jpg", label: "Rootstock" },
     ],
   },
 ];
@@ -246,30 +244,52 @@ export default function HomeScroll() {
               <p className="text-foreground-muted leading-relaxed mb-8">
                 {s.description}
               </p>
-              <ul className="space-y-4 mb-8">
-                {s.features.map((f) => {
-                  const FIcon = f.icon;
-                  return (
-                    <li key={f.title} className="flex items-start gap-3">
-                      <span
-                        className={cn(
-                          "p-1.5 rounded-lg border shrink-0 mt-0.5",
-                          s.bgClass,
-                          s.borderClass,
-                        )}
-                      >
-                        <FIcon className={cn("h-3.5 w-3.5", s.colorClass)} />
+              {s.pillars ? (
+                <div className="grid grid-cols-4 gap-3 mb-8">
+                  {s.pillars.map((p) => (
+                    <div
+                      key={p.label}
+                      className="flex flex-col items-center gap-2 p-3 rounded-xl border border-border bg-background-card/40"
+                    >
+                      <Image
+                        src={p.src}
+                        alt={p.label}
+                        width={32}
+                        height={32}
+                        className="h-8 w-8 object-contain"
+                      />
+                      <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-foreground-subtle text-center leading-tight">
+                        {p.label}
                       </span>
-                      <div>
-                        <div className="font-semibold text-sm">{f.title}</div>
-                        <div className="text-sm text-foreground-muted mt-0.5">
-                          {f.description}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <ul className="space-y-4 mb-8">
+                  {s.features?.map((f) => {
+                    const FIcon = f.icon;
+                    return (
+                      <li key={f.title} className="flex items-start gap-3">
+                        <span
+                          className={cn(
+                            "p-1.5 rounded-lg border shrink-0 mt-0.5",
+                            s.bgClass,
+                            s.borderClass,
+                          )}
+                        >
+                          <FIcon className={cn("h-3.5 w-3.5", s.colorClass)} />
+                        </span>
+                        <div>
+                          <div className="font-semibold text-sm">{f.title}</div>
+                          <div className="text-sm text-foreground-muted mt-0.5">
+                            {f.description}
+                          </div>
                         </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
               <Link
                 href={s.href}
                 className={cn(
@@ -386,40 +406,65 @@ function SectionPanel({
           {section.description}
         </p>
 
-        {/* Features — scroll-driven stagger */}
-        <ul className="space-y-4 mb-10">
-          {section.features.map((f, fi) => {
-            const FIcon = f.icon;
-            return (
-              <motion.li
-                key={f.title}
-                style={{
-                  opacity: featureOpacities[fi],
-                  y: featureYs[fi],
-                }}
-                className="flex items-start gap-4"
+        {section.pillars ? (
+          <div className="grid grid-cols-4 gap-3 mb-10">
+            {section.pillars.map((p) => (
+              <div
+                key={p.label}
+                className={cn(
+                  "flex flex-col items-center gap-2 p-3 rounded-xl border",
+                  "bg-background-card/40 border-border",
+                  "hover:bg-background-card/70 hover:border-border-strong transition-colors",
+                )}
               >
-                <span
-                  className={cn(
-                    "p-2 rounded-xl border shrink-0 mt-0.5",
-                    section.bgClass,
-                    section.borderClass,
-                  )}
-                >
-                  <FIcon className={cn("h-4 w-4", section.colorClass)} />
+                <Image
+                  src={p.src}
+                  alt={p.label}
+                  width={32}
+                  height={32}
+                  className="h-8 w-8 object-contain"
+                />
+                <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-foreground-subtle text-center leading-tight">
+                  {p.label}
                 </span>
-                <div>
-                  <div className="font-semibold text-sm text-foreground">
-                    {f.title}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <ul className="space-y-4 mb-10">
+            {section.features?.map((f, fi) => {
+              const FIcon = f.icon;
+              return (
+                <motion.li
+                  key={f.title}
+                  style={{
+                    opacity: featureOpacities[fi],
+                    y: featureYs[fi],
+                  }}
+                  className="flex items-start gap-4"
+                >
+                  <span
+                    className={cn(
+                      "p-2 rounded-xl border shrink-0 mt-0.5",
+                      section.bgClass,
+                      section.borderClass,
+                    )}
+                  >
+                    <FIcon className={cn("h-4 w-4", section.colorClass)} />
+                  </span>
+                  <div>
+                    <div className="font-semibold text-sm text-foreground">
+                      {f.title}
+                    </div>
+                    <div className="text-sm text-foreground-muted mt-0.5">
+                      {f.description}
+                    </div>
                   </div>
-                  <div className="text-sm text-foreground-muted mt-0.5">
-                    {f.description}
-                  </div>
-                </div>
-              </motion.li>
-            );
-          })}
-        </ul>
+                </motion.li>
+              );
+            })}
+          </ul>
+        )}
 
         {/* CTA */}
         <motion.div style={{ opacity: ctaOpacity }}>
