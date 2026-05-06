@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AnimatePresence,
   motion,
@@ -18,9 +18,6 @@ import {
   FolderKanban,
   LogOut,
   ExternalLink,
-  Trophy,
-  Globe,
-  ChevronDown,
 } from "lucide-react";
 import Logo from "./Logo";
 import LoginModal from "./LoginModal";
@@ -42,51 +39,12 @@ const NAV_LINKS: NavLink[] = [
   { href: "/infrastructure", label: "Infra pública" },
 ];
 
-const NARRATIVE_NAV = [
-  {
-    href: "/hackathons",
-    role: "CÓMO",
-    label: "Hackatones",
-    description: "Desde 0, ganando premios",
-    icon: Trophy,
-    colorClass: "text-bitcoin",
-    bgClass: "bg-bitcoin/10",
-    borderClass: "border-bitcoin/30",
-    glowClass: "hover:shadow-[0_0_40px_-8px_theme(colors.bitcoin/0.5)]",
-  },
-  {
-    href: "/projects",
-    role: "QUÉ",
-    label: "Proyectos",
-    description: "Construí algo real, open source y usable hoy",
-    icon: FolderKanban,
-    colorClass: "text-nostr",
-    bgClass: "bg-nostr/10",
-    borderClass: "border-nostr/30",
-    glowClass: "hover:shadow-[0_0_40px_-8px_theme(colors.nostr/0.5)]",
-  },
-  {
-    href: "/infrastructure",
-    role: "CON",
-    label: "Infra propia",
-    description: "Herramientas y nodos abiertos para todos",
-    icon: Globe,
-    colorClass: "text-cyan",
-    bgClass: "bg-cyan/10",
-    borderClass: "border-cyan/30",
-    glowClass: "hover:shadow-[0_0_40px_-8px_theme(colors.cyan/0.5)]",
-  },
-] as const;
-
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { auth } = useAuth();
   const { profile } = useNostrProfile(auth?.pubkey);
   const [scrolled, setScrolled] = useState(false);
-  const isHome = pathname === "/";
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -95,24 +53,9 @@ export default function Navbar() {
 
   const { scrollY } = useScroll();
 
-  // Sync expanded state whenever route changes
-  useEffect(() => {
-    setIsExpanded(isHome && scrollY.get() < 80);
-  }, [isHome, scrollY]);
-
   useMotionValueEvent(scrollY, "change", (v) => {
     setScrolled(v > 8);
-    setIsExpanded(isHome && v < 80);
   });
-
-  // Detect desktop (lg breakpoint) — useLayoutEffect avoids flash on mobile
-  useLayoutEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
-    setIsDesktop(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
 
   function handleLogout() {
     clearAuth("user");
@@ -161,14 +104,11 @@ export default function Navbar() {
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
         className={cn(
-          "fixed top-0 inset-x-0 z-50",
-          "transition-[height,background-color,border-color,box-shadow] duration-500 ease-in-out",
-          isDesktop && isExpanded ? "h-screen" : "h-16",
+          "fixed top-0 inset-x-0 z-50 h-16",
+          "transition-[background-color,border-color,box-shadow] duration-300 ease-in-out",
           scrolled
             ? "glass-strong border-b border-border"
-            : isExpanded && isDesktop
-              ? "bg-background/98 backdrop-blur-2xl border-b border-white/[0.06]"
-              : "bg-transparent border-b border-transparent",
+            : "bg-transparent border-b border-transparent",
         )}
       >
         {/* Top bar — always 64px */}
@@ -177,14 +117,7 @@ export default function Navbar() {
             <Logo />
           </Link>
 
-          {/* Compact desktop nav — fades in when collapsed */}
-          <div
-            className={cn(
-              "hidden lg:flex items-center gap-1 transition-opacity duration-300",
-              isDesktop && isExpanded ? "opacity-0 pointer-events-none" : "opacity-100",
-            )}
-            aria-hidden={isDesktop && isExpanded}
-          >
+          <div className="hidden lg:flex items-center gap-1">
             {NAV_LINKS.map((link) => {
               const active =
                 link.external
@@ -222,17 +155,11 @@ export default function Navbar() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className={className}
-                  tabIndex={isDesktop && isExpanded ? -1 : 0}
                 >
                   {content}
                 </a>
               ) : (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={className}
-                  tabIndex={isDesktop && isExpanded ? -1 : 0}
-                >
+                <Link key={link.href} href={link.href} className={className}>
                   {content}
                 </Link>
               );
@@ -345,106 +272,6 @@ export default function Navbar() {
             </button>
           </div>
         </nav>
-
-        {/* Expanded full-screen nav — desktop only, fades out on scroll */}
-        <div
-          style={{ height: "calc(100vh - 4rem)" }}
-          className={cn(
-            "hidden lg:flex flex-col items-center px-8 pb-8",
-            "transition-opacity duration-300",
-            isDesktop && isExpanded ? "opacity-100" : "opacity-0 pointer-events-none",
-          )}
-          aria-hidden={!(isDesktop && isExpanded)}
-        >
-          <div className="flex-1 flex flex-col items-center justify-center w-full gap-14 px-8">
-            {/* Headline */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-              className="text-center"
-            >
-              <p className="text-[11px] font-mono tracking-[0.25em] uppercase text-foreground-subtle mb-4">
-                La Crypta Dev
-              </p>
-              <h1 className="font-display text-6xl xl:text-7xl font-bold tracking-tight leading-tight">
-                <span className="text-foreground-muted">Aprendé </span>
-                <span className="text-foreground">haciendo</span>
-              </h1>
-            </motion.div>
-
-            {/* Timeline row */}
-            <div className="relative w-full max-w-3xl xl:max-w-4xl">
-              {/* Connecting gradient line */}
-              <div className="absolute top-[27px] left-[calc(1/6*100%+4px)] right-[calc(1/6*100%+4px)] h-px"
-                style={{ background: "linear-gradient(to right, #f7931a, #a855f7 50%, #22d3ee)" }}
-              />
-
-              <div className="relative flex justify-between items-start">
-                {NARRATIVE_NAV.map(({ href, role, label, description, icon: Icon, colorClass, bgClass, borderClass, glowClass }, i) => (
-                  <motion.div
-                    key={href}
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 + i * 0.1, duration: 0.4, ease: "easeOut" }}
-                    className="flex-1 flex flex-col items-center gap-4 px-6 xl:px-10"
-                  >
-                    {/* Icon circle */}
-                    <div className={cn(
-                      "h-14 w-14 rounded-full border-2 flex items-center justify-center transition-all duration-300 shrink-0",
-                      "bg-background",
-                      bgClass.replace("/10", "/20"),
-                      borderClass,
-                    )}>
-                      <Icon className={cn("h-6 w-6", colorClass)} aria-hidden />
-                    </div>
-
-                    {/* Role badge */}
-                    <span className={cn(
-                      "text-[10px] font-mono tracking-[0.22em] uppercase font-bold",
-                      colorClass,
-                    )}>
-                      {role}
-                    </span>
-
-                    {/* Label + description as link */}
-                    <Link
-                      href={href}
-                      tabIndex={isExpanded ? 0 : -1}
-                      className={cn(
-                        "group flex flex-col items-center gap-2 px-5 py-4 rounded-2xl border",
-                        "bg-white/[0.02] border-white/[0.06]",
-                        "hover:bg-white/[0.06] hover:border-white/[0.14]",
-                        "hover:scale-[1.02] active:scale-[0.99]",
-                        "transition-all duration-300 text-center w-full",
-                        glowClass,
-                      )}
-                    >
-                      <span className={cn(
-                        "font-display font-bold text-xl xl:text-2xl tracking-tight transition-colors duration-200",
-                        colorClass,
-                      )}>
-                        {label}
-                      </span>
-                      <span className="text-xs text-foreground-subtle leading-snug">
-                        {description}
-                      </span>
-                    </Link>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <motion.div
-            animate={{ y: [0, 6, 0] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-            className="flex flex-col items-center gap-1.5 text-foreground-subtle"
-            aria-hidden="true"
-          >
-            <span className="text-[10px] font-mono tracking-[0.2em] uppercase">Scroll</span>
-            <ChevronDown className="h-4 w-4" />
-          </motion.div>
-        </div>
       </motion.header>
 
       {/* Mobile drawer */}
