@@ -30,8 +30,8 @@ export default function HomeBenefits() {
         <Header />
 
         <div className="grid grid-cols-12 gap-5 sm:gap-6">
-          <BenefitGitHub />
           <BenefitExperience />
+          <BenefitGitHub />
           <BenefitJobs />
         </div>
 
@@ -54,10 +54,10 @@ function Header() {
     >
       <span className="inline-flex items-center gap-2 rounded-full border border-bitcoin/30 bg-bitcoin/[0.06] px-3 py-1.5 text-[10px] font-mono font-bold tracking-[0.25em] uppercase text-bitcoin">
         <Sparkles className="h-3 w-3" />
-        Tu próximo nivel
+        Sin experiencia
       </span>
       <h2 className="mt-6 font-display text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-[0.95]">
-        Tu primer laburo como{" "}
+        Tu primer trabajo{" "}
         <span className="text-gradient-hero">bitcoiner open-source</span>.
       </h2>
       <p className="mt-5 text-base sm:text-lg text-foreground-muted leading-relaxed">
@@ -84,12 +84,12 @@ function BenefitGitHub() {
       <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0">
           <span className="inline-flex items-center gap-2 text-[10px] font-mono font-bold tracking-[0.25em] uppercase text-bitcoin">
-            01 · Identidad
+            02 · Experiencia verificable
           </span>
           <h3 className="mt-3 font-display text-3xl sm:text-4xl md:text-[44px] font-black tracking-tight leading-[1.05]">
-            Tu currículum
+            Tu GitHub
             <br />
-            <span className="text-gradient-bitcoin">es tu GitHub</span>
+            <span className="text-gradient-bitcoin">es tu currículum</span>
           </h3>
           <p className="mt-4 text-sm sm:text-[15px] text-foreground-muted leading-relaxed max-w-md">
             Talk is cheap. Show me the code.
@@ -145,7 +145,7 @@ function ContributionGraph() {
           últimos 6 meses · 312 commits
         </span>
         <span className="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-mono text-foreground-subtle">
-          menos
+          front
           <span className="flex gap-[2px]">
             {[0, 1, 2, 3, 4].map((l) => (
               <span
@@ -154,7 +154,7 @@ function ContributionGraph() {
               />
             ))}
           </span>
-          más
+          back
         </span>
       </div>
 
@@ -221,7 +221,7 @@ function CommitTerminal() {
       <div className="p-4 space-y-1.5 leading-relaxed">
         <div className="flex gap-2">
           <span className="text-success">$</span>
-          <span className="text-foreground">git log --oneline -1</span>
+          <span className="text-foreground">git commit -m "primer proyecto"</span>
         </div>
         <motion.div
           key={i}
@@ -264,7 +264,7 @@ function BenefitExperience() {
       <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0">
           <span className="inline-flex items-center gap-2 text-[10px] font-mono font-bold tracking-[0.25em] uppercase text-nostr">
-            02 · Práctica
+            01 · Práctica
           </span>
           <h3 className="mt-3 font-display text-3xl sm:text-4xl font-black tracking-tight leading-[1.05]">
             Adquirí
@@ -272,7 +272,7 @@ function BenefitExperience() {
             <span className="text-gradient-nostr">experiencia real</span>
           </h3>
           <p className="mt-4 text-sm sm:text-[15px] text-foreground-muted leading-relaxed">
-            Hackatones, open source, mentores. Aprendés construyendo.
+            Aprendé construyendo participando en hackatons
           </p>
         </div>
 
@@ -395,9 +395,9 @@ function Constellation() {
 function ExperienceStats() {
   return (
     <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
-      <Stat label="Hackatones" value={2} />
-      <Stat label="Proyectos" value={26} />
-      <Stat label="Sats entregados" value={2} suffix="M" />
+      <Stat label="Hackatons" value={8} />
+      <Stat label="Sats en premios" value={8} suffix="M" />
+      <Stat label="Premios" value={48} />
     </div>
   );
 }
@@ -480,7 +480,7 @@ function BenefitJobs() {
             </span>
           </h3>
           <p className="mt-4 text-sm sm:text-[15px] text-foreground-muted leading-relaxed">
-            Las BTC-only leen Nostr. Tu trabajo firmado les llega solo.
+            Se buscan builders que tenga experiencia en Bitcoin.
           </p>
           <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/[0.07] px-3 py-1.5">
             <span className="relative flex h-2 w-2">
@@ -488,7 +488,7 @@ function BenefitJobs() {
               <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
             </span>
             <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-success">
-              7 búsquedas activas
+              búsquedas activas
             </span>
           </div>
         </div>
@@ -504,16 +504,16 @@ function BenefitJobs() {
 type Job = { co: string; role: string; sats: string; loc: string };
 
 const JOBS: Job[] = [
-  { co: "Strike",       role: "Lightning Engineer",  sats: "6.0M",  loc: "Remote" },
-  { co: "Galoy",        role: "Backend Rust",        sats: "5.4M",  loc: "Remote · LATAM" },
-  { co: "Voltage",      role: "DevRel",              sats: "4.8M",  loc: "Remote" },
-  { co: "Fedi",         role: "Mobile Engineer",     sats: "5.1M",  loc: "Remote" },
-  { co: "Lightspark",   role: "SDK Engineer",        sats: "6.5M",  loc: "Remote" },
-  { co: "Wapupay",      role: "Product Engineer",    sats: "3.8M",  loc: "Buenos Aires" },
-  { co: "Cash App BTC", role: "Senior Engineer",     sats: "7.2M",  loc: "Remote" },
-  { co: "Coinos",       role: "Full-stack",          sats: "4.4M",  loc: "Remote" },
-  { co: "Mutiny",       role: "Web Engineer",        sats: "5.0M",  loc: "Remote" },
-  { co: "Breez",        role: "iOS Engineer",        sats: "5.6M",  loc: "Remote" },
+  { co: "Strike",       role: "Lightning Engineer",  sats: "48.0M", loc: "Remote" },
+  { co: "Galoy",        role: "Backend Rust",        sats: "43.2M", loc: "Remote · LATAM" },
+  { co: "Voltage",      role: "DevRel",              sats: "38.4M", loc: "Remote" },
+  { co: "Fedi",         role: "Mobile Engineer",     sats: "40.8M", loc: "Remote" },
+  { co: "Lightspark",   role: "SDK Engineer",        sats: "52.0M", loc: "Remote" },
+  { co: "Wapupay",      role: "Product Engineer",    sats: "30.4M", loc: "Buenos Aires" },
+  { co: "Cash App BTC", role: "Senior Engineer",     sats: "57.6M", loc: "Remote" },
+  { co: "Coinos",       role: "Full-stack",          sats: "35.2M", loc: "Remote" },
+  { co: "Mutiny",       role: "Web Engineer",        sats: "40.0M", loc: "Remote" },
+  { co: "Breez",        role: "iOS Engineer",        sats: "44.8M", loc: "Remote" },
 ];
 
 function JobTicker() {
@@ -598,15 +598,15 @@ function Outro() {
         </div>
         <div>
           <p className="font-display text-xl sm:text-2xl font-bold tracking-tight">
-            Empezá tu historial pública.
+            Enterate de las propuestas
           </p>
         </div>
       </div>
       <Link
-        href="/hackathons"
+        href="#oportunidades"
         className="group inline-flex items-center gap-2 rounded-2xl border border-bitcoin/40 bg-bitcoin/[0.08] px-5 py-3 font-semibold text-sm text-bitcoin hover:bg-bitcoin/[0.14] hover:border-bitcoin/60 transition-all hover:scale-[1.02] active:scale-[0.98]"
       >
-        Ver hackatones
+        Ver oportunidades
         <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
       </Link>
     </motion.div>

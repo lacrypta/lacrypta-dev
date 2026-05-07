@@ -22,7 +22,7 @@ export default function NewsletterCTA() {
   }
 
   return (
-    <section className="relative overflow-hidden border-t border-border bg-[linear-gradient(180deg,#0a0d1a_0%,#05070e_100%)]">
+    <section id="oportunidades" className="relative overflow-hidden border-t border-border bg-[linear-gradient(180deg,#0a0d1a_0%,#05070e_100%)]">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -44,7 +44,7 @@ export default function NewsletterCTA() {
           className="inline-flex items-center gap-2 rounded-full border border-bitcoin/30 bg-bitcoin/[0.06] px-3 py-1.5 text-[10px] font-mono font-bold tracking-[0.25em] uppercase text-bitcoin"
         >
           <Sparkles className="h-3 w-3" />
-          Newsletter
+          Oportunidades
         </motion.span>
 
         <motion.h2
@@ -54,8 +54,8 @@ export default function NewsletterCTA() {
           transition={{ duration: 0.5, ease: "easeOut", delay: 0.05 }}
           className="mt-5 font-display text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-[1.05]"
         >
-          El próximo hackatón{" "}
-          <span className="text-gradient-hero">en tu inbox</span>.
+          La data que importa{" "}
+          <span className="text-gradient-hero">en tu inbox</span>
         </motion.h2>
 
         <motion.p
@@ -65,8 +65,7 @@ export default function NewsletterCTA() {
           transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
           className="mt-4 text-sm sm:text-base text-foreground-muted leading-relaxed"
         >
-          Una vez al mes. Cero spam. Sólo el próximo desafío y los proyectos que
-          ganaron.
+          Cero spam. Nuevas hackatons y oportunidades de trabajo.
         </motion.p>
 
         <motion.form

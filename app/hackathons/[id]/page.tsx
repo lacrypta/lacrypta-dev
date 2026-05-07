@@ -105,6 +105,8 @@ function medal(position: number | null): string {
 
 function SponsorStrip({ sponsors }: { sponsors: Sponsor[] }) {
   if (sponsors.length === 0) return null;
+  if (sponsors.length === 1) return <SponsorHero sponsor={sponsors[0]} />;
+
   return (
     <div className="mt-10 rounded-2xl border border-border bg-background-card/60 backdrop-blur-sm p-5 sm:p-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 sm:gap-8">
@@ -168,6 +170,106 @@ function SponsorStrip({ sponsors }: { sponsors: Sponsor[] }) {
               </span>
             );
           })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SponsorHero({ sponsor }: { sponsor: Sponsor }) {
+  return (
+    <div
+      className="mt-10 relative overflow-hidden rounded-3xl border-2 border-[#ec1d6a]/40 p-8 sm:p-10 lg:p-12"
+      style={{
+        background:
+          "radial-gradient(ellipse at 20% 0%, rgba(236,29,106,0.22) 0%, transparent 55%), radial-gradient(ellipse at 100% 100%, rgba(168,85,247,0.18) 0%, transparent 55%), linear-gradient(135deg, rgba(15,17,28,0.95), rgba(5,7,14,0.98))",
+      }}
+    >
+      {/* ambient glows */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 -left-24 h-80 w-80 rounded-full blur-3xl"
+        style={{ background: "rgba(236,29,106,0.25)" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-nostr/15 blur-3xl"
+      />
+      {/* eyebrow strip */}
+      <div className="relative flex items-center gap-2 text-[10px] font-mono font-bold tracking-[0.3em] uppercase text-[#ec1d6a]">
+        <span className="h-1.5 w-1.5 rounded-full bg-[#ec1d6a] animate-pulse" />
+        Partner oficial · Bonus ARS
+      </div>
+
+      <div className="relative mt-6 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
+        {/* Logo block */}
+        <div className="lg:col-span-5 flex flex-col items-start gap-5">
+          <div className="relative inline-flex items-center justify-center rounded-2xl border border-[#ec1d6a]/30 bg-white/95 px-6 py-4 shadow-[0_0_60px_rgba(236,29,106,0.30)]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={sponsor.logo}
+              alt={sponsor.name}
+              className="h-16 sm:h-20 w-auto object-contain"
+            />
+          </div>
+          <span
+            className="inline-flex items-center gap-2 rounded-full border-2 px-4 py-2 font-display font-black text-sm uppercase tracking-wide"
+            style={{
+              borderColor: "rgba(236,29,106,0.60)",
+              background: "rgba(236,29,106,0.15)",
+              color: "#ff5d96",
+            }}
+          >
+            <Sparkles className="h-4 w-4" />
+            +2 puntos de bonus
+          </span>
+        </div>
+
+        {/* Copy + CTAs */}
+        <div className="lg:col-span-7">
+          <h3 className="font-display text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-[1.05]">
+            Pasá de{" "}
+            <span className="text-bitcoin">sats</span> a{" "}
+            <span style={{ color: "#ec1d6a" }}>ARS</span>
+          </h3>
+          <p className="mt-4 text-sm sm:text-base text-foreground-muted leading-relaxed max-w-xl">
+            Sin KYC, directo a tu cuenta. Integrá{" "}
+            <span className="font-semibold text-foreground">{sponsor.name}</span>{" "}
+            en tu proyecto y sumás{" "}
+            <span className="font-bold" style={{ color: "#ff5d96" }}>
+              2 puntos más
+            </span>{" "}
+            al puntaje final.
+          </p>
+
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            {sponsor.url && (
+              <a
+                href={sponsor.url}
+                target="_blank"
+                rel="noopener noreferrer sponsored"
+                className="group inline-flex items-center gap-2.5 rounded-2xl px-6 py-3.5 font-display font-black text-base uppercase tracking-wide text-white shadow-[0_0_40px_rgba(236,29,106,0.45)] hover:shadow-[0_0_60px_rgba(236,29,106,0.65)] hover:scale-[1.03] active:scale-[0.97] transition-all"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #ec1d6a 0%, #ff5d96 100%)",
+                }}
+              >
+                Probar {sponsor.name}
+                <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </a>
+            )}
+            {sponsor.docs && (
+              <a
+                href={sponsor.docs}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-2xl border-2 border-[#ec1d6a]/40 bg-[#ec1d6a]/[0.06] px-5 py-3.5 font-display font-black text-sm uppercase tracking-wide text-[#ff5d96] hover:border-[#ec1d6a]/70 hover:bg-[#ec1d6a]/[0.12] transition-all"
+              >
+                <BookOpen className="h-4 w-4" />
+                Documentación
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </div>
