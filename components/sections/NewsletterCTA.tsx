@@ -92,41 +92,29 @@ export default function NewsletterCTA() {
               required
               autoComplete="email"
               inputMode="email"
-              placeholder="tu@mail.com"
+              placeholder="En construcción"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              disabled={status === "submitting" || status === "success"}
-              className="w-full pl-9 pr-3 py-3 rounded-xl text-sm bg-background-card/60 border border-border focus:border-bitcoin/60 focus:bg-background-card focus:outline-none focus:ring-2 focus:ring-bitcoin/20 placeholder:text-foreground-subtle transition-all disabled:opacity-60"
+              disabled
+              aria-describedby="newsletter-status"
+              className="w-full pl-9 pr-3 py-3 rounded-xl text-sm bg-background-card/60 border border-border focus:border-bitcoin/60 focus:bg-background-card focus:outline-none focus:ring-2 focus:ring-bitcoin/20 placeholder:text-foreground-subtle transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             />
           </div>
           <button
             type="submit"
-            disabled={status === "submitting" || status === "success"}
+            disabled
             className="group inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-bitcoin to-bitcoin/80 text-black shadow-lg shadow-bitcoin/20 hover:shadow-bitcoin/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
-            {status === "success" ? (
-              <>
-                <Check className="h-4 w-4" strokeWidth={2.5} />
-                Listo
-              </>
-            ) : status === "submitting" ? (
-              "Enviando…"
-            ) : (
-              <>
-                Suscribirme
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </>
-            )}
+            En construcción
           </button>
         </motion.form>
 
         <p
+          id="newsletter-status"
           className="mt-3 text-[11px] text-foreground-subtle"
           aria-live="polite"
         >
-          {status === "success"
-            ? "Te avisamos en cuanto abra la próxima edición."
-            : "Te podés dar de baja con un click."}
+          El formulario de suscripción está en construcción.
         </p>
       </div>
     </section>

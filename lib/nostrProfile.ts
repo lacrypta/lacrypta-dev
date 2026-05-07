@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DEFAULT_RELAYS } from "./nostrRelayConfig";
 import type { UnsignedEvent, UserSigner } from "./nostrSigner";
 
 export type NostrProfile = {
@@ -29,13 +30,7 @@ const HARD_TTL_MS = 24 * 60 * 60 * 1000;
 const STALE_MS = 30 * 60 * 1000;
 const EVENT = "labs:profile:changed";
 
-export const DEFAULT_PROFILE_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://relay.primal.net",
-  "wss://relay.nostr.band",
-  "wss://nos.lol",
-  "wss://relay.snort.social",
-];
+export const DEFAULT_PROFILE_RELAYS = DEFAULT_RELAYS;
 
 export function getCachedProfile(pubkey: string): CachedProfile | null {
   if (typeof window === "undefined") return null;

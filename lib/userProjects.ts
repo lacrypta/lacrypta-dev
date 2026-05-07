@@ -1,6 +1,7 @@
 "use client";
 
 import type { SignedEvent, UnsignedEvent, UserSigner } from "./nostrSigner";
+import { DEFAULT_RELAYS, FAST_USER_RELAYS } from "./nostrRelayConfig";
 import type {
   HackathonProject,
   ProjectStatus,
@@ -66,26 +67,10 @@ export type CommunityScanProgress = {
 const USER_CACHE_PREFIX = "labs:user-projects-v2:";
 const COMMUNITY_CACHE_KEY = "labs:community-projects:v1";
 
-export const DEFAULT_USER_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://relay.primal.net",
-  "wss://relay.nostr.band",
-  "wss://nos.lol",
-];
+export const DEFAULT_USER_RELAYS = FAST_USER_RELAYS;
 
-/** Top 10 public relays used to index community projects. */
-export const TOP10_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://relay.primal.net",
-  "wss://relay.nostr.band",
-  "wss://nos.lol",
-  "wss://relay.snort.social",
-  "wss://nostr.wine",
-  "wss://nostr-pub.wellorder.net",
-  "wss://purplepag.es",
-  "wss://offchain.pub",
-  "wss://relay.nsec.app",
-];
+/** Public relays used to index community projects. */
+export const TOP10_RELAYS = DEFAULT_RELAYS;
 
 /* ─────────────────────────── cache (localStorage) ──────────────────────── */
 
