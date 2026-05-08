@@ -23,6 +23,7 @@ import Logo from "./Logo";
 import { setAuth } from "@/lib/auth";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { useToast } from "./Toast";
+import { NIP46_LOGIN_RELAYS } from "@/lib/nostrRelayConfig";
 import { cn } from "@/lib/cn";
 import type { BunkerSigner as BunkerSignerType } from "nostr-tools/nip46";
 import { Nip46Client, type EncryptionVersion } from "@/lib/nip46Client";
@@ -39,11 +40,7 @@ type NcState =
   | "connected"
   | "error";
 
-const DEFAULT_NC_RELAYS = [
-  "wss://relay.nsec.app",
-  "wss://relay.nostr.band",
-  "wss://nos.lol",
-];
+const DEFAULT_NC_RELAYS = NIP46_LOGIN_RELAYS;
 
 const NC_DEBUG = true;
 const nclog = (...args: unknown[]) => {

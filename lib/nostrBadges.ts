@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DEFAULT_RELAYS } from "./nostrRelayConfig";
 import type { SignedEvent, UserSigner } from "./nostrSigner";
 
 /* NIP-58 Badges
@@ -45,14 +46,7 @@ const PROFILE_BADGES_D = "profile_badges";
 const CACHE_PREFIX = "labs:badges:";
 const TTL_MS = 6 * 60 * 60 * 1000;
 
-export const DEFAULT_BADGE_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://relay.primal.net",
-  "wss://relay.nostr.band",
-  "wss://nos.lol",
-  "wss://relay.snort.social",
-  "wss://nostr.wine",
-];
+export const DEFAULT_BADGE_RELAYS = DEFAULT_RELAYS;
 
 type IncomingEvent = {
   id: string;

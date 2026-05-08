@@ -168,7 +168,7 @@ export default function Navbar() {
 
           <div className="flex items-center gap-3">
             <a
-              href="https://github.com/lacrypta-dev"
+              href="https://github.com/lacrypta/lacrypta-dev"
               target="_blank"
               rel="noopener noreferrer"
               className="hidden md:inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-foreground-muted hover:text-foreground hover:bg-white/5 transition-colors"
@@ -420,7 +420,7 @@ export default function Navbar() {
                   </button>
                 )}
                 <a
-                  href="https://github.com/lacrypta-dev"
+                  href="https://github.com/lacrypta/lacrypta-dev"
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => setMobileOpen(false)}

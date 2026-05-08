@@ -1,5 +1,7 @@
 "use client";
 
+import { DEFAULT_RELAYS, FAST_USER_RELAYS } from "./nostrRelayConfig";
+
 /**
  * NIP-65 — Relay List Metadata (kind:10002).
  *
@@ -41,26 +43,10 @@ const EVENT = "labs:relay-list:changed";
 
 /** Bootstrap relays used to discover a user's NIP-65 when we don't know one
  *  yet. Overlaps with profile relays; diversity matters more than size. */
-export const DEFAULT_RELAY_LIST_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://relay.primal.net",
-  "wss://relay.nostr.band",
-  "wss://nos.lol",
-  "wss://purplepag.es",
-];
+export const DEFAULT_RELAY_LIST_RELAYS = FAST_USER_RELAYS;
 
 /** A reasonable starter set for users who haven't published a NIP-65 yet. */
-export const SUGGESTED_RELAYS: string[] = [
-  "wss://relay.damus.io",
-  "wss://relay.primal.net",
-  "wss://relay.nostr.band",
-  "wss://nos.lol",
-  "wss://relay.snort.social",
-  "wss://nostr.wine",
-  "wss://purplepag.es",
-  "wss://offchain.pub",
-  "wss://relay.nsec.app",
-];
+export const SUGGESTED_RELAYS: string[] = DEFAULT_RELAYS;
 
 export function getCachedRelayList(pubkey: string): CachedRelayList | null {
   if (typeof window === "undefined") return null;

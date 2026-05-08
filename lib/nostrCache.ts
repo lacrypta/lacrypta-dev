@@ -9,23 +9,13 @@
  */
 
 import { cacheLife, cacheTag } from "next/cache";
+import { DEFAULT_RELAYS } from "./nostrRelayConfig";
 
 const PROJECT_KIND = 30078;
 const PROJECT_TAG = "lacrypta-dev-project";
 const PROJECT_D_PREFIX = "lacrypta.dev:project:";
 
-const TOP10_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://relay.primal.net",
-  "wss://relay.nostr.band",
-  "wss://nos.lol",
-  "wss://relay.snort.social",
-  "wss://nostr.wine",
-  "wss://nostr-pub.wellorder.net",
-  "wss://purplepag.es",
-  "wss://offchain.pub",
-  "wss://relay.nsec.app",
-];
+const TOP10_RELAYS = DEFAULT_RELAYS;
 
 type IncomingEvent = {
   id: string;

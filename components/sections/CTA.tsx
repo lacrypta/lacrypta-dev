@@ -60,7 +60,7 @@ export default function CTA() {
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
               <a
-                href="https://github.com/lacrypta-dev"
+                href="https://github.com/lacrypta/lacrypta-dev"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl glass-strong border border-border-strong font-semibold hover:bg-white/5 transition-all"

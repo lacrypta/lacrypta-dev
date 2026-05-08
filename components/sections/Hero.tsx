@@ -122,12 +122,12 @@ export default function Hero() {
             <GithubIcon className="h-3.5 w-3.5" />
             <span>100% código abierto ·</span>
             <a
-              href="https://github.com/lacrypta-dev"
+              href="https://github.com/lacrypta/lacrypta-dev"
               target="_blank"
               rel="noopener noreferrer"
               className="text-foreground-muted hover:text-bitcoin transition-colors"
             >
-              github.com/lacrypta-dev
+              github.com/lacrypta/lacrypta-dev
             </a>
           </motion.div>
         </div>

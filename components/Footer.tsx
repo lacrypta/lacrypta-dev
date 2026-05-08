@@ -28,7 +28,7 @@ const COLS = [
     title: "Construí",
     links: [
       {
-        href: "https://github.com/lacrypta-dev",
+        href: "https://github.com/lacrypta/lacrypta-dev",
         label: "GitHub",
         external: true,
       },
@@ -56,7 +56,7 @@ export default async function Footer() {
             </p>
             <div className="mt-5 flex items-center gap-2">
               <a
-                href="https://github.com/lacrypta-dev"
+                href="https://github.com/lacrypta/lacrypta-dev"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-foreground-muted hover:text-foreground hover:bg-white/5 transition-colors"
