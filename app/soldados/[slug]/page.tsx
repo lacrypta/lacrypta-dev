@@ -14,11 +14,11 @@ import {
 import { GithubIcon } from "@/components/BrandIcons";
 import { HACKATHON_LABELS } from "@/lib/projects";
 import {
-  getSoldadoBySlug,
-  getSoldados,
-  type Soldado,
-  type SoldadoProjectRef,
-} from "@/lib/soldados";
+  getSoldierBySlug,
+  getSoldiers,
+  type Soldier,
+  type SoldierProjectRef,
+} from "@/lib/soldiers";
 import { getCachedNostrProfile } from "@/lib/nostrProfileCache";
 import { cn } from "@/lib/cn";
 
@@ -30,7 +30,7 @@ export async function generateMetadata({
   params: Promise<RouteParams>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const s = await getSoldadoBySlug(slug);
+  const s = await getSoldierBySlug(slug);
   if (!s) return { title: "Soldado", robots: { index: false } };
   return {
     title: `${s.name} — Soldados`,
@@ -38,7 +38,7 @@ export async function generateMetadata({
   };
 }
 
-function avatarSrc(s: Soldado, profilePicture?: string): string | null {
+function avatarSrc(s: Soldier, profilePicture?: string): string | null {
   if (profilePicture) return profilePicture;
   if (s.picture) return s.picture;
   if (s.github) return `https://github.com/${s.github}.png?size=320`;
@@ -78,34 +78,34 @@ function safeNpub(pubkey?: string): string | null {
   }
 }
 
-export default async function SoldadoProfilePage({
+export default async function SoldierProfilePage({
   params,
 }: {
   params: Promise<RouteParams>;
 }) {
   const { slug } = await params;
-  const soldado = await getSoldadoBySlug(slug);
-  if (!soldado) notFound();
+  const soldier = await getSoldierBySlug(slug);
+  if (!soldier) notFound();
 
   // Live Nostr profile (kind 0) for richer data when we know a pubkey.
-  const profile = soldado.pubkey
-    ? await getCachedNostrProfile(soldado.pubkey)
+  const profile = soldier.pubkey
+    ? await getCachedNostrProfile(soldier.pubkey)
     : null;
 
   const displayName =
-    profile?.display_name || profile?.name || soldado.name;
+    profile?.display_name || profile?.name || soldier.name;
   const banner = profile?.banner;
-  const avatar = avatarSrc(soldado, profile?.picture);
-  const npub = safeNpub(soldado.pubkey);
+  const avatar = avatarSrc(soldier, profile?.picture);
+  const npub = safeNpub(soldier.pubkey);
   const lud16 = profile?.lud16;
   const website = profile?.website;
-  const nip05 = profile?.nip05 ?? soldado.nip05;
+  const nip05 = profile?.nip05 ?? soldier.nip05;
   const about = profile?.about;
 
   const hackathons = new Set<string>();
-  for (const p of soldado.projects) if (p.hackathonId) hackathons.add(p.hackathonId);
+  for (const p of soldier.projects) if (p.hackathonId) hackathons.add(p.hackathonId);
 
-  const sortedProjects = [...soldado.projects].sort((a, b) => {
+  const sortedProjects = [...soldier.projects].sort((a, b) => {
     const pa = a.position ?? 999;
     const pb = b.position ?? 999;
     if (pa !== pb) return pa - pb;
@@ -141,7 +141,7 @@ export default async function SoldadoProfilePage({
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-3xl sm:text-4xl font-black tracking-tight leading-tight flex items-center gap-2 flex-wrap">
               <span className="break-words">{displayName}</span>
-              {soldado.hasNostr && (
+              {soldier.hasNostr && (
                 <span
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-nostr/15 border border-nostr/40 text-nostr text-[10px] font-mono font-bold uppercase tracking-widest"
                   title="Verificado en Nostr"
@@ -158,15 +158,15 @@ export default async function SoldadoProfilePage({
                   {nip05}
                 </span>
               )}
-              {soldado.github && (
+              {soldier.github && (
                 <a
-                  href={`https://github.com/${soldado.github}`}
+                  href={`https://github.com/${soldier.github}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
                 >
                   <GithubIcon className="h-3 w-3" />
-                  {soldado.github}
+                  {soldier.github}
                 </a>
               )}
               {website && (
@@ -194,23 +194,23 @@ export default async function SoldadoProfilePage({
         <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           <ScoreCell
             label="Score"
-            value={soldado.score}
+            value={soldier.score}
             tone="bitcoin"
             big
           />
           <ScoreCell
             label="Hackatones"
             value={hackathons.size}
-            sub={`+${soldado.scoreBreakdown.hackathons} pts`}
+            sub={`+${soldier.scoreBreakdown.hackathons} pts`}
           />
           <ScoreCell
             label="Proyectos"
-            value={soldado.projects.length}
-            sub={`+${soldado.scoreBreakdown.projects} pts`}
+            value={soldier.projects.length}
+            sub={`+${soldier.scoreBreakdown.projects} pts`}
           />
           <ScoreCell
             label="Posiciones"
-            value={`+${soldado.scoreBreakdown.positions}`}
+            value={`+${soldier.scoreBreakdown.positions}`}
             sub="podio"
           />
         </div>
@@ -226,7 +226,7 @@ export default async function SoldadoProfilePage({
             )}
 
             <Card
-              title={`Proyectos (${soldado.projects.length})`}
+              title={`Proyectos (${soldier.projects.length})`}
               icon={<Trophy className="h-4 w-4 text-bitcoin" />}
             >
               <ul className="divide-y divide-border -my-2">
@@ -276,13 +276,13 @@ export default async function SoldadoProfilePage({
                       <ExternalLink className="h-3 w-3 shrink-0 mt-0.5" />
                     </a>
                   </div>
-                  {soldado.pubkey && (
+                  {soldier.pubkey && (
                     <div>
                       <div className="text-[10px] uppercase tracking-widest text-foreground-subtle mb-0.5">
                         pubkey (hex)
                       </div>
                       <span className="text-foreground-muted">
-                        {soldado.pubkey}
+                        {soldier.pubkey}
                       </span>
                     </div>
                   )}
@@ -290,10 +290,10 @@ export default async function SoldadoProfilePage({
               </Card>
             )}
 
-            {soldado.roles.length > 0 && (
+            {soldier.roles.length > 0 && (
               <Card title="Roles" icon={<Award className="h-4 w-4" />}>
                 <div className="flex flex-wrap gap-1.5">
-                  {soldado.roles.map((r) => (
+                  {soldier.roles.map((r) => (
                     <span
                       key={r}
                       className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-white/[0.03] text-[10px] font-mono uppercase tracking-widest text-foreground-muted"
@@ -396,7 +396,7 @@ function Card({
   );
 }
 
-function ProjectRow({ project }: { project: SoldadoProjectRef }) {
+function ProjectRow({ project }: { project: SoldierProjectRef }) {
   const href = project.hackathonId
     ? `/hackathons/${project.hackathonId}/${project.projectId}`
     : `/projects#${project.projectId}`;

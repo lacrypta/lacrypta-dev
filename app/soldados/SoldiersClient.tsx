@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { LayoutGrid, List } from "lucide-react";
 import { cn } from "@/lib/cn";
-import type { Soldado } from "@/lib/soldados";
-import SoldadosGrid from "./SoldadosGrid";
-import SoldadosTable from "./SoldadosTable";
+import type { Soldier } from "@/lib/soldiers";
+import SoldiersGrid from "./SoldiersGrid";
+import SoldiersTable from "./SoldiersTable";
 
 type View = "grid" | "table";
 
-export default function SoldadosClient({ soldados }: { soldados: Soldado[] }) {
+export default function SoldiersClient({ soldiers }: { soldiers: Soldier[] }) {
   const [view, setView] = useState<View>("table");
 
   return (
@@ -17,7 +17,7 @@ export default function SoldadosClient({ soldados }: { soldados: Soldado[] }) {
       <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
         <p className="text-sm text-foreground-muted">
           <span className="font-display font-bold text-foreground">
-            {soldados.length}
+            {soldiers.length}
           </span>{" "}
           builders en la comunidad
           {view === "table" && " · ranking por score"}.
@@ -39,9 +39,9 @@ export default function SoldadosClient({ soldados }: { soldados: Soldado[] }) {
       </div>
 
       {view === "table" ? (
-        <SoldadosTable soldados={soldados} />
+        <SoldiersTable soldiers={soldiers} />
       ) : (
-        <SoldadosGrid soldados={soldados} />
+        <SoldiersGrid soldiers={soldiers} />
       )}
     </div>
   );

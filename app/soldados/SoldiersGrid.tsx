@@ -3,9 +3,9 @@ import { Zap, Trophy } from "lucide-react";
 import { GithubIcon } from "@/components/BrandIcons";
 import { HACKATHON_LABELS } from "@/lib/projects";
 import { cn } from "@/lib/cn";
-import type { Soldado } from "@/lib/soldados";
+import type { Soldier } from "@/lib/soldiers";
 
-function avatarSrc(s: Soldado): string | null {
+function avatarSrc(s: Soldier): string | null {
   if (s.picture) return s.picture;
   if (s.github) return `https://github.com/${s.github}.png?size=160`;
   return null;
@@ -21,7 +21,7 @@ function initials(name: string): string {
   return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
 }
 
-function uniqHackathons(s: Soldado): string[] {
+function uniqHackathons(s: Soldier): string[] {
   const set = new Set<string>();
   for (const p of s.projects) if (p.hackathonId) set.add(p.hackathonId);
   return [...set];
@@ -34,39 +34,39 @@ function hackathonLabel(id: string): string {
   return id;
 }
 
-export default function SoldadosGrid({ soldados }: { soldados: Soldado[] }) {
-  if (soldados.length === 0) {
+export default function SoldiersGrid({ soldiers }: { soldiers: Soldier[] }) {
+  if (soldiers.length === 0) {
     return (
       <div className="text-center text-foreground-muted py-16">
-        Todavía no hay soldados.
+        Todavía no hay soldiers.
       </div>
     );
   }
 
   return (
     <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
-      {soldados.map((s) => (
-        <SoldadoCard key={s.id} soldado={s} />
+      {soldiers.map((s) => (
+        <SoldierCard key={s.id} soldier={s} />
       ))}
     </ul>
   );
 }
 
-function SoldadoCard({ soldado }: { soldado: Soldado }) {
-  const src = avatarSrc(soldado);
-  const hackathons = uniqHackathons(soldado);
+function SoldierCard({ soldier }: { soldier: Soldier }) {
+  const src = avatarSrc(soldier);
+  const hackathons = uniqHackathons(soldier);
 
   return (
     <li
       className={cn(
         "group relative overflow-hidden rounded-2xl border bg-background-card/60 backdrop-blur-sm p-5 flex flex-col gap-4",
-        soldado.hasNostr
+        soldier.hasNostr
           ? "border-nostr/30 hover:border-nostr/60 shadow-[0_0_40px_-20px_rgba(168,85,247,0.45)]"
           : "border-border hover:border-border-strong",
         "transition-colors",
       )}
     >
-      {soldado.hasNostr && (
+      {soldier.hasNostr && (
         <span
           aria-hidden
           className="pointer-events-none absolute -top-12 -right-12 h-32 w-32 rounded-full bg-nostr/15 blur-3xl"
@@ -75,33 +75,33 @@ function SoldadoCard({ soldado }: { soldado: Soldado }) {
 
       <div className="relative flex items-center gap-3">
         <Link
-          href={`/soldados/${soldado.slug}`}
+          href={`/soldados/${soldier.slug}`}
           className="shrink-0 hover:scale-[1.04] transition-transform"
-          aria-label={`Ver perfil de ${soldado.name}`}
+          aria-label={`Ver perfil de ${soldier.name}`}
         >
           {src ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={src}
-              alt={soldado.name}
+              alt={soldier.name}
               className="h-14 w-14 rounded-full object-cover ring-1 ring-border-strong"
               loading="lazy"
             />
           ) : (
             <span className="h-14 w-14 rounded-full ring-1 ring-border-strong bg-gradient-to-br from-bitcoin/30 to-nostr/30 inline-flex items-center justify-center font-display font-bold text-sm">
-              {initials(soldado.name)}
+              {initials(soldier.name)}
             </span>
           )}
         </Link>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 min-w-0">
             <Link
-              href={`/soldados/${soldado.slug}`}
+              href={`/soldados/${soldier.slug}`}
               className="font-display font-bold text-base truncate hover:text-bitcoin transition-colors"
             >
-              {soldado.name}
+              {soldier.name}
             </Link>
-            {soldado.hasNostr && (
+            {soldier.hasNostr && (
               <span
                 className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-nostr/15 border border-nostr/40 text-nostr shrink-0"
                 title="Verificado en Nostr"
@@ -111,23 +111,23 @@ function SoldadoCard({ soldado }: { soldado: Soldado }) {
               </span>
             )}
           </div>
-          {soldado.github && (
+          {soldier.github && (
             <a
-              href={`https://github.com/${soldado.github}`}
+              href={`https://github.com/${soldier.github}`}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-0.5 inline-flex items-center gap-1 text-xs font-mono text-foreground-subtle hover:text-foreground transition-colors"
             >
               <GithubIcon className="h-3 w-3" />
-              {soldado.github}
+              {soldier.github}
             </a>
           )}
         </div>
       </div>
 
       <div className="relative text-[11px] font-mono text-foreground-subtle uppercase tracking-widest">
-        {soldado.projects.length}{" "}
-        {soldado.projects.length === 1 ? "proyecto" : "proyectos"}
+        {soldier.projects.length}{" "}
+        {soldier.projects.length === 1 ? "proyecto" : "proyectos"}
         {hackathons.length > 0 && (
           <>
             {" · "}
@@ -153,7 +153,7 @@ function SoldadoCard({ soldado }: { soldado: Soldado }) {
       )}
 
       <ul className="relative flex flex-col gap-1">
-        {soldado.projects.slice(0, 4).map((p, i) => {
+        {soldier.projects.slice(0, 4).map((p, i) => {
           const href = p.hackathonId
             ? `/hackathons/${p.hackathonId}/${p.projectId}`
             : `/projects#${p.projectId}`;
@@ -173,13 +173,13 @@ function SoldadoCard({ soldado }: { soldado: Soldado }) {
             </li>
           );
         })}
-        {soldado.projects.length > 4 && (
+        {soldier.projects.length > 4 && (
           <li>
             <Link
-              href={`/soldados/${soldado.slug}`}
+              href={`/soldados/${soldier.slug}`}
               className="text-[10px] font-mono text-foreground-subtle hover:text-bitcoin transition-colors"
             >
-              +{soldado.projects.length - 4} más
+              +{soldier.projects.length - 4} más
             </Link>
           </li>
         )}

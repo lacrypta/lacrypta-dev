@@ -2,9 +2,9 @@ import Link from "next/link";
 import { Trophy, Zap } from "lucide-react";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
-import type { Soldado } from "@/lib/soldados";
+import type { Soldier } from "@/lib/soldiers";
 
-function avatarSrc(s: Soldado): string | null {
+function avatarSrc(s: Soldier): string | null {
   if (s.picture) return s.picture;
   if (s.github) return `https://github.com/${s.github}.png?size=80`;
   return null;
@@ -20,13 +20,13 @@ function initials(name: string): string {
   return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
 }
 
-function uniqHackathonsCount(s: Soldado): number {
+function uniqHackathonsCount(s: Soldier): number {
   const set = new Set<string>();
   for (const p of s.projects) if (p.hackathonId) set.add(p.hackathonId);
   return set.size;
 }
 
-function bestPosition(s: Soldado): number | null {
+function bestPosition(s: Soldier): number | null {
   let best: number | null = null;
   for (const p of s.projects) {
     if (p.position == null) continue;
@@ -42,15 +42,32 @@ function medal(position: number | null): string {
   return "";
 }
 
-export default function SoldadosTable({ soldados }: { soldados: Soldado[] }) {
+function medalCounts(s: Soldier): {
+  gold: number;
+  silver: number;
+  bronze: number;
+  total: number;
+} {
+  let gold = 0;
+  let silver = 0;
+  let bronze = 0;
+  for (const p of s.projects) {
+    if (p.position === 1) gold++;
+    else if (p.position === 2) silver++;
+    else if (p.position === 3) bronze++;
+  }
+  return { gold, silver, bronze, total: gold + silver + bronze };
+}
+
+export default function SoldiersTable({ soldiers }: { soldiers: Soldier[] }) {
   // Sort by score desc, then name asc.
-  const ranked = [...soldados].sort((a, b) => {
+  const ranked = [...soldiers].sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
     return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
   });
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-background-card/40 backdrop-blur-sm">
+    <div className="rounded-2xl border border-border bg-background-card/40 backdrop-blur-sm">
       {/* Desktop / tablet */}
       <table className="hidden sm:table w-full">
         <thead className="bg-white/[0.02] border-b border-border">
@@ -59,6 +76,7 @@ export default function SoldadosTable({ soldados }: { soldados: Soldado[] }) {
             <th className="px-4 py-3 text-left">Builder</th>
             <th className="px-4 py-3 text-right tabular-nums">Hackatones</th>
             <th className="px-4 py-3 text-right tabular-nums">Proyectos</th>
+            <th className="px-4 py-3 text-right tabular-nums">Medallas</th>
             <th className="px-4 py-3 text-right tabular-nums">Mejor</th>
             <th className="px-4 py-3 text-right tabular-nums">Score</th>
           </tr>
@@ -151,6 +169,54 @@ export default function SoldadosTable({ soldados }: { soldados: Soldado[] }) {
                   {s.projects.length}
                 </td>
                 <td className="px-4 py-3 align-middle text-right">
+                  {(() => {
+                    const m = medalCounts(s);
+                    if (m.total === 0)
+                      return (
+                        <span className="text-foreground-subtle text-xs">
+                          —
+                        </span>
+                      );
+                    return (
+                      <span className="inline-flex items-center justify-end gap-2 text-sm">
+                        {m.gold > 0 && (
+                          <span
+                            className="inline-flex items-center gap-0.5"
+                            title={`${m.gold} oro`}
+                          >
+                            <span aria-hidden>🥇</span>
+                            <span className="font-mono font-semibold tabular-nums text-foreground">
+                              {m.gold}
+                            </span>
+                          </span>
+                        )}
+                        {m.silver > 0 && (
+                          <span
+                            className="inline-flex items-center gap-0.5"
+                            title={`${m.silver} plata`}
+                          >
+                            <span aria-hidden>🥈</span>
+                            <span className="font-mono font-semibold tabular-nums text-foreground">
+                              {m.silver}
+                            </span>
+                          </span>
+                        )}
+                        {m.bronze > 0 && (
+                          <span
+                            className="inline-flex items-center gap-0.5"
+                            title={`${m.bronze} bronce`}
+                          >
+                            <span aria-hidden>🥉</span>
+                            <span className="font-mono font-semibold tabular-nums text-foreground">
+                              {m.bronze}
+                            </span>
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })()}
+                </td>
+                <td className="px-4 py-3 align-middle text-right">
                   {bp ? (
                     <span className="inline-flex items-center gap-1 text-sm tabular-nums text-foreground">
                       {medal(bp) || (
@@ -162,21 +228,21 @@ export default function SoldadosTable({ soldados }: { soldados: Soldado[] }) {
                     <span className="text-foreground-subtle text-xs">—</span>
                   )}
                 </td>
-                <td
-                  className="px-4 py-3 align-middle text-right"
-                  title={`${s.scoreBreakdown.hackathons} hackatones · ${s.scoreBreakdown.projects} proyectos · ${s.scoreBreakdown.positions} posiciones`}
-                >
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-lg px-3 py-1 font-display font-black text-base tabular-nums",
-                      rank === 1
-                        ? "bg-bitcoin/15 text-bitcoin ring-1 ring-bitcoin/40"
-                        : rank <= 3
-                          ? "bg-bitcoin/[0.06] text-foreground"
-                          : "text-foreground",
-                    )}
-                  >
-                    {s.score}
+                <td className="px-4 py-3 align-middle text-right">
+                  <span className="group/score relative inline-block">
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1 font-display font-black text-base tabular-nums cursor-default",
+                        rank === 1
+                          ? "bg-bitcoin/15 text-bitcoin ring-1 ring-bitcoin/40"
+                          : rank <= 3
+                            ? "bg-bitcoin/[0.06] text-foreground"
+                            : "text-foreground",
+                      )}
+                    >
+                      {s.score}
+                    </span>
+                    <ScoreBreakdownTooltip soldier={s} />
                   </span>
                 </td>
               </tr>
@@ -262,5 +328,62 @@ export default function SoldadosTable({ soldados }: { soldados: Soldado[] }) {
         })}
       </ul>
     </div>
+  );
+}
+
+function ScoreBreakdownTooltip({ soldier }: { soldier: Soldier }) {
+  const { scoreBreakdown: b, projects } = soldier;
+  const hackathonsCount = new Set(
+    projects.filter((p) => p.hackathonId).map((p) => p.hackathonId),
+  ).size;
+  return (
+    <span
+      role="tooltip"
+      className={cn(
+        "pointer-events-none absolute right-0 top-full mt-2 z-30",
+        "min-w-[14rem] rounded-xl border border-border bg-background-card/95 backdrop-blur-md shadow-2xl",
+        "px-3.5 py-3 text-left",
+        "opacity-0 translate-y-1 group-hover/score:opacity-100 group-hover/score:translate-y-0",
+        "transition-all duration-150",
+      )}
+    >
+      <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-foreground-subtle">
+        Composición del score
+      </div>
+      <ul className="mt-2 space-y-1.5 text-xs font-mono">
+        <li className="flex items-baseline justify-between gap-4">
+          <span className="text-foreground-muted">
+            Hackatones <span className="text-foreground-subtle">·</span>{" "}
+            {hackathonsCount} × 3
+          </span>
+          <span className="font-bold text-foreground tabular-nums">
+            +{b.hackathons}
+          </span>
+        </li>
+        <li className="flex items-baseline justify-between gap-4">
+          <span className="text-foreground-muted">
+            Proyectos <span className="text-foreground-subtle">·</span>{" "}
+            {projects.length} × 2
+          </span>
+          <span className="font-bold text-foreground tabular-nums">
+            +{b.projects}
+          </span>
+        </li>
+        <li className="flex items-baseline justify-between gap-4">
+          <span className="text-foreground-muted">Posiciones</span>
+          <span className="font-bold text-foreground tabular-nums">
+            +{b.positions}
+          </span>
+        </li>
+      </ul>
+      <div className="mt-2 pt-2 border-t border-border flex items-baseline justify-between gap-4">
+        <span className="text-[10px] font-mono uppercase tracking-widest text-foreground-subtle">
+          Total
+        </span>
+        <span className="font-display font-black text-base text-bitcoin tabular-nums">
+          {b.total}
+        </span>
+      </div>
+    </span>
   );
 }

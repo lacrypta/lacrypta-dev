@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Users } from "lucide-react";
 import PageHero from "@/components/ui/PageHero";
-import { getSoldados } from "@/lib/soldados";
-import SoldadosClient from "./SoldadosClient";
+import { getSoldiers } from "@/lib/soldiers";
+import SoldiersClient from "./SoldiersClient";
 
 export const metadata: Metadata = {
   title: "Soldados",
@@ -10,8 +10,8 @@ export const metadata: Metadata = {
     "La gente detrás de los proyectos de La Crypta Dev — builders que armaron, presentaron y ganaron en cada hackatón.",
 };
 
-export default async function SoldadosPage() {
-  const soldados = await getSoldados();
+export default async function SoldiersPage() {
+  const soldiers = await getSoldiers();
   return (
     <>
       <PageHero
@@ -24,7 +24,7 @@ export default async function SoldadosPage() {
         }
         description="Builders, devs y diseñadores que armaron, presentaron y ganaron en cada hackatón. Curados de los proyectos oficiales y de la red Nostr."
       />
-      <SoldadosClient soldados={soldados} />
+      <SoldiersClient soldiers={soldiers} />
     </>
   );
 }
