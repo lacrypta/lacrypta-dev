@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Next.js **16** with `cacheComponents: true` (see `next.config.ts`), React 19, Tailwind 4, TypeScript strict. The `cacheComponents` flag and the `"use cache"` directive used in `lib/nostrCache.ts` are Next 16-only — do not "fix" them with older patterns. When unsure about Next API surface, read `node_modules/next/dist/docs/01-app/**/*.md` (the AGENTS.md note above is real — APIs differ from earlier versions).
 
-There is no test runner, linter, or CI script wired up. Only `npm run dev`, `npm run build`, `npm start`.
+There is no test runner, linter, or CI script wired up. Only `pnpm dev`, `pnpm build`, `pnpm start`. Package manager is pinned via `packageManager` in `package.json` — use pnpm, not npm; there is no `package-lock.json`.
 
 ## Hackathon reports pipeline
 
