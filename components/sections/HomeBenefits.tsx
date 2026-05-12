@@ -272,7 +272,7 @@ function BenefitExperience() {
             <span className="text-gradient-nostr">experiencia real</span>
           </h3>
           <p className="mt-4 text-sm sm:text-[15px] text-foreground-muted leading-relaxed">
-            Aprendé construyendo participando en hackatons
+            Aprendé construyendo y participando en hackatons
           </p>
         </div>
 
@@ -480,7 +480,7 @@ function BenefitJobs() {
             </span>
           </h3>
           <p className="mt-4 text-sm sm:text-[15px] text-foreground-muted leading-relaxed">
-            Se buscan builders que tenga experiencia en Bitcoin.
+            Se buscan builders que tengan experiencia en Bitcoin.
           </p>
           <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/[0.07] px-3 py-1.5">
             <span className="relative flex h-2 w-2">

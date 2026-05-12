@@ -45,7 +45,13 @@ export default function HackathonInscripcionButton({
       </button>
       <LoginModal
         open={loginOpen}
-        onClose={() => setLoginOpen(false)}
+        onClose={() => {
+          setLoginOpen(false);
+          // Drop the deferred inscription intent so a later auth recovery
+          // (signer revival, other-tab login) doesn't pop NewProjectModal
+          // out of nowhere.
+          setPendingInscription(false);
+        }}
         redirectTo={`/hackathons/${hackathonId}`}
       />
       <NewProjectModal

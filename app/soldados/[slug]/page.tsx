@@ -396,10 +396,22 @@ function Card({
   );
 }
 
+function projectHref(project: SoldierProjectRef): string {
+  // 1. Hackathon-scoped project → /hackathons/<h>/<projectId>
+  if (project.hackathonId) {
+    return `/hackathons/${project.hackathonId}/${project.projectId}`;
+  }
+  // 2. Nostr-only project with known author → /projects/<author>/<projectId>
+  if (project.source === "nostr" && project.authorPubkey) {
+    return `/projects/${project.authorPubkey}/${project.projectId}`;
+  }
+  // 3. Curated non-hackathon project → /projects/<projectId> (dispatched
+  //    by /projects/[pubkey]/page.tsx, which detects curated ids).
+  return `/projects/${project.projectId}`;
+}
+
 function ProjectRow({ project }: { project: SoldierProjectRef }) {
-  const href = project.hackathonId
-    ? `/hackathons/${project.hackathonId}/${project.projectId}`
-    : `/projects#${project.projectId}`;
+  const href = projectHref(project);
   return (
     <li className="py-2.5">
       <Link

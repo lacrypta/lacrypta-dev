@@ -85,7 +85,6 @@ const SECTIONS: Section[] = [
       { icon: Sparkles, title: "Sin experiencia técnica" },
       { icon: Award, title: "Ganá premios por participar" },
     ],
-    techTags: ["Lightning", "Nostr", "NWC"],
     stats: [
       { value: 26, label: "Proyectos concursados" },
       { value: 2, label: "Hackatones" },
@@ -287,7 +286,7 @@ export default function HomeScroll() {
                   })}
                 </ul>
               )}
-              {s.id !== "hackathons" && s.techTags && (
+              {s.techTags && (
                 <TechChips
                   tags={s.techTags}
                   colorClass={s.colorClass}

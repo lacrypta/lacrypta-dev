@@ -48,6 +48,12 @@ export type SoldierProjectRef = {
    * Empanadas Detector" vs "NOSTR identity hub") but the same repo URL.
    */
   repo?: string;
+  /**
+   * Nostr author pubkey (hex). Only set when source === "nostr"; used to
+   * build the per-project page link `/projects/<author>/<projectId>` when
+   * the project isn't tied to a hackathon.
+   */
+  authorPubkey?: string;
 };
 
 export type SoldierScoreBreakdown = {
@@ -144,6 +150,8 @@ function mergeRefs(
     merged.positionPoints = other.positionPoints;
   }
   if (!merged.repo && other.repo) merged.repo = other.repo;
+  if (!merged.authorPubkey && other.authorPubkey)
+    merged.authorPubkey = other.authorPubkey;
   return merged;
 }
 
@@ -213,7 +221,12 @@ function keyFor(opts: {
   if (opts.pubkey) return `pk:${opts.pubkey.toLowerCase()}`;
   if (opts.nip05) return `nip05:${opts.nip05.toLowerCase()}`;
   if (opts.name) return `name:${slugify(opts.name)}`;
-  return `anon:${Math.random().toString(36).slice(2)}`;
+  // Unreachable in practice — parseTeam (lib/nostrCache.ts) drops members
+  // with no name/nip05/pubkey, and curated TeamMember requires `name`. Keep
+  // a deterministic sentinel so any future regression collapses anon
+  // entries into a single soldier instead of generating a new slug per
+  // cache cycle (Math.random would 404 external links after revalidation).
+  return "anon:_";
 }
 
 function pushUnique<T>(arr: T[], item: T) {
@@ -370,6 +383,7 @@ async function buildSoldiers(): Promise<Soldier[]> {
         position,
         positionPoints: pointsForPosition(position),
         repo: project.repo,
+        authorPubkey: project.author,
       };
 
       if (resolvedKey) {

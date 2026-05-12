@@ -156,7 +156,9 @@ function SoldierCard({ soldier }: { soldier: Soldier }) {
         {soldier.projects.slice(0, 4).map((p, i) => {
           const href = p.hackathonId
             ? `/hackathons/${p.hackathonId}/${p.projectId}`
-            : `/projects#${p.projectId}`;
+            : p.source === "nostr" && p.authorPubkey
+              ? `/projects/${p.authorPubkey}/${p.projectId}`
+              : `/projects/${p.projectId}`;
           return (
             <li key={`${p.projectId}-${i}`}>
               <Link
