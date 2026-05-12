@@ -1347,11 +1347,13 @@ function NeuronPulse({
   delay: number;
   reverse: boolean;
 }) {
+  const reduced = useReducedMotion();
   const t = useMotionValue(0);
   const a = reverse ? to : from;
   const b = reverse ? from : to;
 
   useEffect(() => {
+    if (reduced) return;
     const controls = animate(t, 1, {
       duration: 1.8,
       delay,
@@ -1360,11 +1362,16 @@ function NeuronPulse({
       repeatDelay: 4 + (delay % 3),
     });
     return () => controls.stop();
-  }, [t, delay]);
+  }, [t, delay, reduced]);
 
   const cx = useTransform(t, (v) => `${a.x + (b.x - a.x) * v}%`);
   const cy = useTransform(t, (v) => `${a.y + (b.y - a.y) * v}%`);
   const opacity = useTransform(t, [0, 0.1, 0.85, 1], [0, 1, 1, 0]);
+
+  // Reduced motion: render the pulse at rest on its midpoint, faded
+  // out, so the SVG composition stays balanced without continuous
+  // motion.
+  if (reduced) return null;
 
   return (
     <motion.circle
