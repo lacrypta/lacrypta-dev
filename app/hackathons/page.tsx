@@ -444,7 +444,7 @@ function FeaturedHackathon({
                     key={s.name}
                     src={s.logo}
                     alt={s.name}
-                    className="h-7 sm:h-8 w-auto object-contain"
+                    className="h-14 sm:h-16 w-auto object-contain"
                     loading="lazy"
                   />
                 ))}

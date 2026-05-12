@@ -36,7 +36,8 @@ type NavLink = {
 const NAV_LINKS: NavLink[] = [
   { href: "/hackathons", label: "Hackatones" },
   { href: "/projects", label: "Proyectos" },
-  { href: "/infrastructure", label: "Infra pública" },
+  { href: "/soldados", label: "Soldados" },
+  { href: "/infrastructure", label: "Infra propia" },
 ];
 
 export default function Navbar() {
@@ -253,7 +254,7 @@ export default function Navbar() {
                 onClick={() => setLoginOpen(true)}
                 className="relative inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-bitcoin to-bitcoin/80 text-black hover:from-bitcoin hover:to-yellow-500 transition-all shadow-lg shadow-bitcoin/20 hover:shadow-bitcoin/40 hover:scale-[1.02] active:scale-[0.98]"
               >
-                <Zap className="h-4 w-4" strokeWidth={2.5} />
+                <LogIn className="h-4 w-4" strokeWidth={2.5} />
                 <span>Ingresar</span>
               </button>
             )}

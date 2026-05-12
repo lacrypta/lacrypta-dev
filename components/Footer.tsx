@@ -6,14 +6,6 @@ import { version as appVersion } from "@/package.json";
 
 const COLS = [
   {
-    title: "Dev",
-    links: [
-      { href: "/", label: "Inicio" },
-      { href: "/infrastructure", label: "Infraestructura" },
-      { href: "/projects", label: "Proyectos" },
-    ],
-  },
-  {
     title: "Comunidad",
     links: [
       { href: "/hackathons", label: "Hackatones" },
