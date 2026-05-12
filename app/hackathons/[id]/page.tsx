@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
@@ -533,8 +534,17 @@ export default async function HackathonPage({
         </div>
       </section>
 
-      {/* Projects / leaderboard (curated + Nostr submissions) */}
-      <HackathonProjectsList hackathon={hackathon} />
+      {/* Projects / leaderboard (curated + Nostr submissions).
+       *
+       * Wrapped in <Suspense> so the parent `"use cache"` prerender doesn't
+       * try to resolve this client component inline. On Vercel, omitting the
+       * boundary truncates the RSC stream right at this slot — the page
+       * comes back missing the entire projects section. The fallback renders
+       * the SSR skeleton; client takes over on hydration.
+       */}
+      <Suspense fallback={null}>
+        <HackathonProjectsList hackathon={hackathon} />
+      </Suspense>
     </div>
   );
 }
