@@ -24,7 +24,7 @@ import {
   type ProjectStatus,
 } from "@/lib/projects";
 import {
-  fetchCommunityProjects,
+  fetchCommunityProjectsSnapshot,
   getCachedCommunityProjects,
   fetchAuthorPictures,
   TOP10_RELAYS,
@@ -176,17 +176,23 @@ function nostrToDisplay(np: CommunityProject): DisplayProject {
   };
 }
 
-export default function ProjectsGrid() {
+export default function ProjectsGrid({
+  initialNostrProjects = [],
+}: {
+  initialNostrProjects?: CommunityProject[];
+}) {
   const [filter, setFilter] = useState<FilterId>("all");
   const [query, setQuery] = useState("");
-  const [authorPictures, setAuthorPictures] = useState<Map<string, string>>(new Map());
+  const [authorPictures, setAuthorPictures] = useState<Map<string, string>>(
+    () => picturesFromCommunityProjects(initialNostrProjects),
+  );
   const {
     projects: nostrProjects,
     scanning,
     progress,
     error: scanError,
     rescan,
-  } = useNostrCommunityProjects();
+  } = useNostrCommunityProjects(initialNostrProjects);
 
   useEffect(() => {
     if (nostrProjects.length === 0) return;
@@ -326,7 +332,11 @@ export default function ProjectsGrid() {
               <ProjectCard
                 key={project.id}
                 project={project}
-                authorPicture={project.author ? authorPictures.get(project.author) : undefined}
+                authorPicture={
+                  project.author
+                    ? authorPictures.get(project.author)
+                    : undefined
+                }
               />
             ))}
           </AnimatePresence>
@@ -349,28 +359,28 @@ export default function ProjectsGrid() {
 
 /* ─────────────────────────── Nostr scan hook ───────────────────────────── */
 
-function useNostrCommunityProjects() {
-  const [projects, setProjects] = useState<CommunityProject[]>([]);
+function useNostrCommunityProjects(initialProjects: CommunityProject[]) {
+  const [projects, setProjects] = useState<CommunityProject[]>(initialProjects);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState<CommunityScanProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  async function scan() {
+  async function scan(revalidate = false) {
     if (scanning) return;
     setScanning(true);
     setError(null);
+    setProgress(null);
     const abort = new AbortController();
     abortRef.current = abort;
     try {
-      const result = await fetchCommunityProjects(TOP10_RELAYS, {
+      const snapshot = await fetchCommunityProjectsSnapshot({
+        revalidate,
         signal: abort.signal,
-        onProgress: (p) => {
-          setProgress(p);
-        },
       });
-      setProjects(result);
+      setProjects(snapshot.projects);
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setScanning(false);
@@ -379,8 +389,10 @@ function useNostrCommunityProjects() {
 
   useEffect(() => {
     // Hydrate cache + kick off scan
-    const cached = getCachedCommunityProjects();
-    if (cached) setProjects(cached);
+    if (initialProjects.length === 0) {
+      const cached = getCachedCommunityProjects();
+      if (cached) setProjects(cached);
+    }
     scan();
     return () => {
       abortRef.current?.abort();
@@ -388,10 +400,19 @@ function useNostrCommunityProjects() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { projects, scanning, progress, error, rescan: scan };
+  return { projects, scanning, progress, error, rescan: () => scan(true) };
 }
 
 /* ─────────────────────── Nostr scan progress panel ─────────────────────── */
+
+function picturesFromCommunityProjects(projects: CommunityProject[]) {
+  const pics = new Map<string, string>();
+  for (const p of projects) {
+    const pic = p.team[0]?.picture;
+    if (pic) pics.set(p.author, pic);
+  }
+  return pics;
+}
 
 function NostrScanPanel({
   scanning,
@@ -411,6 +432,9 @@ function NostrScanPanel({
   const total = progress?.totalRelays ?? TOP10_RELAYS.length;
   const completed = progress?.completedRelays ?? 0;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const scanningLabel = progress
+    ? `Escaneando ${total} relays…`
+    : "Sincronizando snapshot Nostr…";
 
   return (
     <div className="mb-8 rounded-2xl border border-nostr/20 bg-gradient-to-br from-nostr/5 to-transparent overflow-hidden">
@@ -435,25 +459,27 @@ function NostrScanPanel({
           </div>
           <div className="font-display font-bold text-sm truncate">
             {scanning
-              ? `Escaneando ${total} relays…`
+              ? scanningLabel
               : error
-                ? "Error escaneando relays"
+                ? "Error sincronizando Nostr"
                 : projectCount > 0
                   ? `${projectCount} proyecto${projectCount !== 1 ? "s" : ""} encontrados en Nostr`
                   : "No se encontraron proyectos en Nostr todavía"}
           </div>
         </div>
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="hidden sm:inline-flex items-center text-[10px] font-mono uppercase tracking-widest text-foreground-subtle hover:text-foreground transition-colors"
-        >
-          {expanded ? "ocultar" : "detalles"}
-        </button>
+        {progress && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="hidden sm:inline-flex items-center text-[10px] font-mono uppercase tracking-widest text-foreground-subtle hover:text-foreground transition-colors"
+          >
+            {expanded ? "ocultar" : "detalles"}
+          </button>
+        )}
         <button
           onClick={onRescan}
           disabled={scanning}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-progress"
-          aria-label="Rescanear"
+          aria-label="Rescanear Nostr"
         >
           <RefreshCw
             className={cn("h-3.5 w-3.5", scanning && "animate-spin")}
@@ -538,7 +564,13 @@ function RelayRow({ status }: { status: RelayScanStatus }) {
 
 /* ─────────────────────────── card ──────────────────────────────────────── */
 
-function ProjectCard({ project, authorPicture }: { project: DisplayProject; authorPicture?: string }) {
+function ProjectCard({
+  project,
+  authorPicture,
+}: {
+  project: DisplayProject;
+  authorPicture?: string;
+}) {
   const status = getBadge(project);
 
   const nostrProjectId =
@@ -550,7 +582,11 @@ function ProjectCard({ project, authorPicture }: { project: DisplayProject; auth
     : null;
   const externalHref = project.demo || project.website || project.repo;
 
-  const Wrapper: React.ElementType = internalHref ? Link : externalHref ? "a" : "div";
+  const Wrapper: React.ElementType = internalHref
+    ? Link
+    : externalHref
+      ? "a"
+      : "div";
   const wrapperProps = internalHref
     ? { href: internalHref }
     : externalHref
@@ -582,7 +618,9 @@ function ProjectCard({ project, authorPicture }: { project: DisplayProject; auth
                   status.text,
                 )}
               >
-                {project.source === "nostr" && <Radio className="h-2.5 w-2.5" />}
+                {project.source === "nostr" && (
+                  <Radio className="h-2.5 w-2.5" />
+                )}
                 {status.label}
               </span>
               {project.hackathon && (
@@ -606,7 +644,9 @@ function ProjectCard({ project, authorPicture }: { project: DisplayProject; auth
                 src={authorPicture}
                 alt=""
                 className="h-12 w-12 rounded-full object-cover ring-2 ring-nostr/50 shrink-0"
-                onError={(e) => { e.currentTarget.style.display = "none"; }}
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
               />
             )}
           </div>
@@ -643,23 +683,25 @@ function ProjectCard({ project, authorPicture }: { project: DisplayProject; auth
             </div>
           )}
 
-          {project.tech && project.tech.length > 0 && project.source !== "nostr" && (
-            <div className="mt-3 flex flex-wrap gap-1">
-              {project.tech.slice(0, 5).map((t) => (
-                <span
-                  key={t}
-                  className="px-1.5 py-0.5 rounded text-[10px] font-mono text-foreground-subtle bg-white/[0.03] border border-border"
-                >
-                  {t}
-                </span>
-              ))}
-              {project.tech.length > 5 && (
-                <span className="px-1.5 py-0.5 text-[10px] font-mono text-foreground-subtle">
-                  +{project.tech.length - 5}
-                </span>
-              )}
-            </div>
-          )}
+          {project.tech &&
+            project.tech.length > 0 &&
+            project.source !== "nostr" && (
+              <div className="mt-3 flex flex-wrap gap-1">
+                {project.tech.slice(0, 5).map((t) => (
+                  <span
+                    key={t}
+                    className="px-1.5 py-0.5 rounded text-[10px] font-mono text-foreground-subtle bg-white/[0.03] border border-border"
+                  >
+                    {t}
+                  </span>
+                ))}
+                {project.tech.length > 5 && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-mono text-foreground-subtle">
+                    +{project.tech.length - 5}
+                  </span>
+                )}
+              </div>
+            )}
 
           <div className="mt-auto pt-5 border-t border-border flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 text-foreground-muted">

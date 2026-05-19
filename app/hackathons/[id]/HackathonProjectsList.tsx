@@ -23,7 +23,7 @@ import {
 import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
 import {
   fetchAuthorPictures,
-  fetchCommunityProjects,
+  fetchCommunityProjectsSnapshot,
   getCachedCommunityProjects,
   TOP10_RELAYS,
   type CommunityProject,
@@ -60,15 +60,17 @@ function fromCommunity(np: CommunityProject): HackathonSubmission {
 
 export default function HackathonProjectsList({
   hackathon,
+  initialNostrSubmissions = [],
 }: {
   hackathon: Hackathon;
+  initialNostrSubmissions?: HackathonSubmission[];
 }) {
   const [nostrSubmissions, setNostrSubmissions] = useState<
     HackathonSubmission[]
-  >([]);
+  >(initialNostrSubmissions);
   const [scanning, setScanning] = useState(false);
   const [authorPictures, setAuthorPictures] = useState<Map<string, string>>(
-    new Map(),
+    () => picturesFromSubmissions(initialNostrSubmissions),
   );
   const sectionRef = useRef<HTMLElement>(null);
 
@@ -95,13 +97,17 @@ export default function HackathonProjectsList({
     [hackathon.id, nostrSubmissions],
   );
 
-  async function scan() {
+  async function scan(revalidate = false) {
     if (scanning) return;
     setScanning(true);
     try {
-      const all = await fetchCommunityProjects(TOP10_RELAYS);
-      const filtered = all.filter((p) => p.hackathon === hackathon.id);
+      const snapshot = await fetchCommunityProjectsSnapshot({ revalidate });
+      const filtered = snapshot.projects.filter(
+        (p) => p.hackathon === hackathon.id,
+      );
       setNostrSubmissions(filtered.map(fromCommunity));
+      const seeded = picturesFromCommunityProjects(filtered);
+      if (seeded.size > 0) setAuthorPictures(seeded);
       const pubkeys = [...new Set(filtered.map((p) => p.author))];
       if (pubkeys.length > 0) {
         fetchAuthorPictures(pubkeys, TOP10_RELAYS).then(setAuthorPictures);
@@ -114,18 +120,15 @@ export default function HackathonProjectsList({
   }
 
   useEffect(() => {
-    // Read cache after hydration to avoid server/client mismatch
-    const cached = getCachedCommunityProjects();
+    const cached =
+      initialNostrSubmissions.length === 0
+        ? getCachedCommunityProjects()
+        : null;
     if (cached) {
       const filtered = cached.filter((p) => p.hackathon === hackathon.id);
       if (filtered.length > 0) {
         setNostrSubmissions(filtered.map(fromCommunity));
-        // Seed pictures from whatever the project event stored in team members
-        const pics = new Map<string, string>();
-        for (const p of filtered) {
-          const pic = p.team[0]?.picture;
-          if (pic) pics.set(p.author, pic);
-        }
+        const pics = picturesFromCommunityProjects(filtered);
         if (pics.size > 0) setAuthorPictures(pics);
       }
     }
@@ -135,13 +138,18 @@ export default function HackathonProjectsList({
 
   useEffect(() => {
     function onPublished(e: Event) {
-      const { hackathonId } = (e as CustomEvent<{ hackathonId: string }>).detail;
+      const { hackathonId } = (e as CustomEvent<{ hackathonId: string }>)
+        .detail;
       if (hackathonId !== hackathon.id) return;
-      sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      scan();
+      sectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      scan(true);
     }
     window.addEventListener("labs:project-published", onPublished);
-    return () => window.removeEventListener("labs:project-published", onPublished);
+    return () =>
+      window.removeEventListener("labs:project-published", onPublished);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hackathon.id]);
 
@@ -185,8 +193,9 @@ export default function HackathonProjectsList({
               <HackathonInscripcionButton hackathonId={hackathon.id} />
             )}
             <button
-              onClick={scan}
+              onClick={() => scan(true)}
               disabled={scanning}
+              aria-label="Rescanear Nostr"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-progress"
             >
               <RefreshCw
@@ -222,6 +231,25 @@ export default function HackathonProjectsList({
       </div>
     </section>
   );
+}
+
+function picturesFromSubmissions(projects: HackathonSubmission[]) {
+  const pics = new Map<string, string>();
+  for (const p of projects) {
+    const author = p.nostrAuthor;
+    const pic = p.team[0]?.picture;
+    if (author && pic) pics.set(author, pic);
+  }
+  return pics;
+}
+
+function picturesFromCommunityProjects(projects: CommunityProject[]) {
+  const pics = new Map<string, string>();
+  for (const p of projects) {
+    const pic = p.team[0]?.picture;
+    if (pic) pics.set(p.author, pic);
+  }
+  return pics;
 }
 
 function ProjectRow({

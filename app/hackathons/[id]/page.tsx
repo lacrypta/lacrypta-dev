@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cacheTag } from "next/cache";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -23,10 +24,15 @@ import {
   prizedProjects,
   programRules,
   rankedProjects,
+  type HackathonSubmission,
   type Sponsor,
 } from "@/lib/hackathons";
 import { cn } from "@/lib/cn";
 import { breadcrumbLd, eventLd, jsonLdScript } from "@/lib/jsonld";
+import {
+  getNostrHackathonSubmissions,
+  NOSTR_SUBMISSIONS_TAG,
+} from "@/lib/nostrCache";
 import HackathonProjectsList from "./HackathonProjectsList";
 import HackathonResultsClient from "./HackathonResultsClient";
 import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
@@ -102,6 +108,21 @@ function medal(position: number | null): string {
   if (position === 3) return "🥉";
   if (!position) return "";
   return `#${position}`;
+}
+
+type CachedHackathonSubmission = Awaited<
+  ReturnType<typeof getNostrHackathonSubmissions>
+>[number];
+
+function fromCachedNostrSubmission(
+  project: CachedHackathonSubmission,
+): HackathonSubmission {
+  return {
+    ...project,
+    nostrAuthor: project.author,
+    nostrEventId: project.eventId,
+    nostrCreatedAt: project.eventCreatedAt,
+  };
 }
 
 function SponsorStrip({ sponsors }: { sponsors: Sponsor[] }) {
@@ -283,6 +304,7 @@ export default async function HackathonPage({
   params: Promise<{ id: string }>;
 }) {
   "use cache";
+  cacheTag(NOSTR_SUBMISSIONS_TAG);
   const { id } = await params;
   const hackathon = getHackathon(id);
   if (!hackathon) notFound();
@@ -294,6 +316,9 @@ export default async function HackathonPage({
   const awards = prizedProjects(id);
   const prizeByProjectId = new Map(
     awards.map((a) => [a.project.id, a] as const),
+  );
+  const nostrSubmissions = (await getNostrHackathonSubmissions(id)).map(
+    fromCachedNostrSubmission,
   );
 
   return (
@@ -543,7 +568,10 @@ export default async function HackathonPage({
        * the SSR skeleton; client takes over on hydration.
        */}
       <Suspense fallback={null}>
-        <HackathonProjectsList hackathon={hackathon} />
+        <HackathonProjectsList
+          hackathon={hackathon}
+          initialNostrSubmissions={nostrSubmissions}
+        />
       </Suspense>
     </div>
   );

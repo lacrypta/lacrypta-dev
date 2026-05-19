@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import ProjectsGrid from "./ProjectsGrid";
 import PageHero from "@/components/ui/PageHero";
 import { Code2 } from "lucide-react";
+import { getNostrSubmissionsSnapshot } from "@/lib/nostrCache";
 
 export const metadata: Metadata = {
   title: "Proyectos",
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
     "Proyectos open source construidos por y con la comunidad de La Crypta — Bitcoin, Lightning, Nostr y más.",
 };
 
-export default function ProjectsPage() {
+export default async function ProjectsPage() {
+  const initialNostrProjects = (await getNostrSubmissionsSnapshot()).projects;
+
   return (
     <>
       <PageHero
@@ -24,7 +27,7 @@ export default function ProjectsPage() {
         }
         description="Proyectos grandes y chicos, lanzados y en progreso, todos open source. Construidos por la comunidad de La Crypta en Buenos Aires y más allá."
       />
-      <ProjectsGrid />
+      <ProjectsGrid initialNostrProjects={initialNostrProjects} />
     </>
   );
 }

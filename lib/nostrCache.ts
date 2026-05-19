@@ -10,10 +10,12 @@
 
 import { cacheLife, cacheTag } from "next/cache";
 import { DEFAULT_RELAYS } from "./nostrRelayConfig";
+import type { ProjectStatus } from "./hackathons";
 
 const PROJECT_KIND = 30078;
 const PROJECT_TAG = "lacrypta-dev-project";
 const PROJECT_D_PREFIX = "lacrypta.dev:project:";
+export const NOSTR_SUBMISSIONS_TAG = "nostr:hackathon-submissions";
 
 const TOP10_RELAYS = DEFAULT_RELAYS;
 
@@ -39,15 +41,23 @@ export type CachedNostrProject = {
   name: string;
   description: string;
   hackathon: string | null;
-  status: string;
+  status: ProjectStatus;
   team: CachedNostrTeamMember[];
   repo?: string;
   demo?: string;
   tech?: string[];
+  createdAt: number;
+  updatedAt: number;
   author: string;
   eventId: string;
   eventCreatedAt: number;
   submittedAt?: string;
+};
+
+export type CachedNostrSubmissionsSnapshot = {
+  projects: CachedNostrProject[];
+  generatedAt: string;
+  relays: string[];
 };
 
 function parseTeam(raw: unknown): CachedNostrTeamMember[] {
@@ -109,7 +119,23 @@ function parseEvent(ev: IncomingEvent): CachedNostrProject | null {
     ev.tags.find((t) => t[0] === "h")?.[1] ??
     null;
 
-  const status = str(parsed.status) ?? (hackathon ? "submitted" : "building");
+  const allowedStatuses: ProjectStatus[] = [
+    "idea",
+    "building",
+    "submitted",
+    "finalist",
+    "winner",
+    "official",
+    "archived",
+  ];
+  const rawStatus = str(parsed.status);
+  const status: ProjectStatus = allowedStatuses.includes(
+    rawStatus as ProjectStatus,
+  )
+    ? (rawStatus as ProjectStatus)
+    : hackathon
+      ? "submitted"
+      : "building";
 
   return {
     id,
@@ -121,6 +147,8 @@ function parseEvent(ev: IncomingEvent): CachedNostrProject | null {
     repo: str(parsed.repo),
     demo: str(parsed.demo) ?? str(parsed.url),
     tech: arr(parsed.tech) ?? arr(parsed.tags),
+    createdAt: Number(parsed.createdAt ?? ev.created_at),
+    updatedAt: Number(parsed.updatedAt ?? ev.created_at),
     author: ev.pubkey,
     eventId: ev.id,
     eventCreatedAt: ev.created_at,
@@ -128,7 +156,9 @@ function parseEvent(ev: IncomingEvent): CachedNostrProject | null {
   };
 }
 
-async function rawFetchAllProjects(timeoutMs = 6000): Promise<CachedNostrProject[]> {
+async function rawFetchAllProjects(
+  timeoutMs = 6000,
+): Promise<CachedNostrProject[]> {
   const { SimplePool } = await import("nostr-tools/pool");
   const pool = new SimplePool();
   const events = new Map<string, IncomingEvent>();
@@ -174,15 +204,36 @@ async function rawFetchAllProjects(timeoutMs = 6000): Promise<CachedNostrProject
  * Single source of truth — every consumer below filters this list.
  * Caching once here means N consumers share a single relay round-trip.
  */
-async function getAllSubmissionsCached(): Promise<CachedNostrProject[]> {
+async function getSubmissionsSnapshotCached(): Promise<
+  CachedNostrSubmissionsSnapshot
+> {
   "use cache";
   cacheLife("hours");
-  cacheTag("nostr:hackathon-submissions");
+  cacheTag(NOSTR_SUBMISSIONS_TAG);
   try {
-    return await rawFetchAllProjects();
+    return {
+      projects: await rawFetchAllProjects(),
+      generatedAt: new Date().toISOString(),
+      relays: TOP10_RELAYS,
+    };
   } catch {
-    return [];
+    return {
+      projects: [],
+      generatedAt: new Date().toISOString(),
+      relays: TOP10_RELAYS,
+    };
   }
+}
+
+export async function getNostrSubmissionsSnapshot(): Promise<
+  CachedNostrSubmissionsSnapshot
+> {
+  return getSubmissionsSnapshotCached();
+}
+
+async function getAllSubmissionsCached(): Promise<CachedNostrProject[]> {
+  const snapshot = await getSubmissionsSnapshotCached();
+  return snapshot.projects;
 }
 
 export async function getNostrHackathonSubmissions(

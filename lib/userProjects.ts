@@ -108,7 +108,7 @@ export function getCachedCommunityProjects(): CommunityProject[] | null {
   }
 }
 
-function setCachedCommunityProjects(projects: CommunityProject[]) {
+export function setCachedCommunityProjects(projects: CommunityProject[]) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(COMMUNITY_CACHE_KEY, JSON.stringify(projects));
@@ -120,10 +120,35 @@ function setCachedCommunityProjects(projects: CommunityProject[]) {
 export function patchCachedCommunityProject(project: CommunityProject) {
   const cached = getCachedCommunityProjects();
   if (!cached) return;
-  const idx = cached.findIndex((p) => p.id === project.id && p.author === project.author);
+  const idx = cached.findIndex(
+    (p) => p.id === project.id && p.author === project.author,
+  );
   if (idx === -1) return;
   cached[idx] = project;
   setCachedCommunityProjects(cached);
+}
+
+export type CommunityProjectsSnapshot = {
+  projects: CommunityProject[];
+  generatedAt: string;
+  relays: string[];
+};
+
+export async function fetchCommunityProjectsSnapshot(opts?: {
+  revalidate?: boolean;
+  signal?: AbortSignal;
+}): Promise<CommunityProjectsSnapshot> {
+  const res = await fetch("/api/nostr-projects", {
+    method: opts?.revalidate ? "POST" : "GET",
+    cache: "no-store",
+    signal: opts?.signal,
+  });
+  if (!res.ok) {
+    throw new Error(`Nostr project snapshot failed (${res.status})`);
+  }
+  const snapshot = (await res.json()) as CommunityProjectsSnapshot;
+  setCachedCommunityProjects(snapshot.projects);
+  return snapshot;
 }
 
 /* ────────────────────────────── parsers ────────────────────────────────── */
