@@ -29,11 +29,14 @@ import { useAuth } from "@/lib/auth";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { getSigner } from "@/lib/nostrSigner";
 import {
+  communityProjectFromSignedEvent,
   DEFAULT_USER_RELAYS,
   archiveUserProject,
   fetchUserProjects,
   getCachedUserProjects,
   publishUserProject,
+  removeCachedCommunityProject,
+  upsertCachedCommunityProject,
   type ProjectsDoc,
   type TeamMember,
   type UserProject,
@@ -419,6 +422,9 @@ export default function UserProjectsClient() {
           }),
       );
       setPublishProgress((prev) => (prev ? { ...prev, phase: "done" } : null));
+      upsertCachedCommunityProject(
+        communityProjectFromSignedEvent(project, result.signed),
+      );
       setTimeout(() => setPublishProgress(null), 3500);
       return result;
     } catch (e) {
@@ -447,6 +453,10 @@ export default function UserProjectsClient() {
           }),
       );
       setPublishProgress((prev) => (prev ? { ...prev, phase: "done" } : null));
+      removeCachedCommunityProject({
+        author: result.signed.pubkey,
+        id: project.id,
+      });
       setTimeout(() => setPublishProgress(null), 3500);
       return result;
     } catch (e) {

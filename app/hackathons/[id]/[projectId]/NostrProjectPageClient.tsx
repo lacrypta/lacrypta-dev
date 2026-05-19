@@ -14,12 +14,13 @@ import {
   CircleDashed,
 } from "lucide-react";
 import {
+  fetchCommunityProjectsSnapshot,
   getCachedCommunityProjects,
-  fetchCommunityProjects,
   refetchCommunityProjectById,
   fetchAuthorPictures,
   archiveUserProject,
-  patchCachedCommunityProject,
+  removeCachedCommunityProject,
+  upsertCachedCommunityProject,
   TOP10_RELAYS,
   DEFAULT_USER_RELAYS,
   type CommunityProject,
@@ -70,49 +71,72 @@ export default function NostrProjectPage({
 
   useEffect(() => {
     let cancelled = false;
+    const snapshotAbort = new AbortController();
+
+    function showProject(next: CommunityProject) {
+      setProject(next);
+      upsertCachedCommunityProject(next);
+      fetchAuthorPictures([next.author], TOP10_RELAYS).then((pics) => {
+        if (!cancelled) setAuthorPicture(pics.get(next.author));
+      });
+    }
 
     async function load() {
-      // 1. Show cached version immediately for instant render
+      // 1. Show cached version immediately for instant render.
       const cached = getCachedCommunityProjects();
-      const fromCache = cached?.find(
+      let latest = cached?.find(
         (p) => p.id === projectId && p.hackathon === hackathonId,
-      );
-      if (fromCache && !cancelled) {
-        setProject(fromCache);
-        fetchAuthorPictures([fromCache.author], TOP10_RELAYS).then((pics) => {
-          if (!cancelled) setAuthorPicture(pics.get(fromCache.author));
-        });
+      ) ?? null;
+      if (latest && !cancelled) {
+        showProject(latest);
       }
 
-      // 2. Always revalidate from relays
+      // 2. Pull the server snapshot quickly, then refresh this d-tag from relays.
       if (!cancelled) setRevalidating(true);
       try {
-        const fresh = fromCache
-          ? await refetchCommunityProjectById(projectId, TOP10_RELAYS, 5000, fromCache.author)
-          : await fetchCommunityProjects(TOP10_RELAYS).then((all) =>
-              all.find((p) => p.id === projectId && p.hackathon === hackathonId) ?? null,
-            );
+        try {
+          const snapshot = await fetchCommunityProjectsSnapshot({
+            signal: snapshotAbort.signal,
+          });
+          const fromSnapshot =
+            snapshot.projects.find(
+              (p) => p.id === projectId && p.hackathon === hackathonId,
+            ) ?? null;
+          if (fromSnapshot && !cancelled) {
+            latest = fromSnapshot;
+            showProject(fromSnapshot);
+          }
+        } catch (e) {
+          if (e instanceof DOMException && e.name === "AbortError") return;
+        }
+
+        const fresh = await refetchCommunityProjectById(
+          projectId,
+          TOP10_RELAYS,
+          5000,
+          latest?.author,
+        );
 
         if (cancelled) return;
 
         if (fresh && fresh.hackathon === hackathonId) {
-          setProject(fresh);
-          patchCachedCommunityProject(fresh);
-          if (fresh.author !== fromCache?.author) {
-            fetchAuthorPictures([fresh.author], TOP10_RELAYS).then((pics) => {
-              if (!cancelled) setAuthorPicture(pics.get(fresh.author));
-            });
-          }
-        } else if (!fromCache) {
+          showProject(fresh);
+        } else if (!latest) {
           setProject(null);
         }
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        if (!latest) setProject(null);
       } finally {
         if (!cancelled) setRevalidating(false);
       }
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      snapshotAbort.abort();
+    };
   }, [hackathonId, projectId]);
 
   async function handleArchive() {
@@ -126,6 +150,7 @@ export default function NostrProjectPage({
         },
       });
       await archiveUserProject(signer, project, relays);
+      removeCachedCommunityProject(project);
       signer.close?.().catch(() => {});
       router.back();
     } catch (e) {
@@ -264,7 +289,7 @@ export default function NostrProjectPage({
               onSaved={(updated) => setProject((prev) => {
                 if (!prev) return prev;
                 const merged: CommunityProject = { ...prev, ...updated };
-                patchCachedCommunityProject(merged);
+                upsertCachedCommunityProject(merged);
                 return merged;
               })}
             />

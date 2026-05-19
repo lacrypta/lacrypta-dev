@@ -25,6 +25,7 @@ import {
   fetchAuthorPictures,
   fetchCommunityProjectsSnapshot,
   getCachedCommunityProjects,
+  refreshCommunityProjectsFromRelays,
   TOP10_RELAYS,
   type CommunityProject,
 } from "@/lib/userProjects";
@@ -73,6 +74,7 @@ export default function HackathonProjectsList({
     () => picturesFromSubmissions(initialNostrSubmissions),
   );
   const sectionRef = useRef<HTMLElement>(null);
+  const relayAbortRef = useRef<AbortController | null>(null);
 
   const awards = useMemo<PrizedProject[]>(
     () => prizedProjects(hackathon.id),
@@ -97,22 +99,58 @@ export default function HackathonProjectsList({
     [hackathon.id, nostrSubmissions],
   );
 
-  async function scan(revalidate = false) {
+  function applyCommunityProjects(projects: CommunityProject[]) {
+    const filtered = projects.filter((p) => p.hackathon === hackathon.id);
+    setNostrSubmissions(filtered.map(fromCommunity));
+    const seeded = picturesFromCommunityProjects(filtered);
+    if (seeded.size > 0) {
+      setAuthorPictures((prev) => new Map([...prev, ...seeded]));
+    }
+    const pubkeys = [...new Set(filtered.map((p) => p.author))];
+    if (pubkeys.length > 0) {
+      fetchAuthorPictures(pubkeys, TOP10_RELAYS).then(setAuthorPictures);
+    }
+  }
+
+  function upsertCommunityProject(project: CommunityProject) {
+    if (project.hackathon !== hackathon.id) return;
+    const next = fromCommunity(project);
+    setNostrSubmissions((prev) => {
+      const idx = prev.findIndex(
+        (p) => p.id === next.id && p.nostrAuthor === next.nostrAuthor,
+      );
+      const merged =
+        idx === -1
+          ? [next, ...prev]
+          : prev.map((p, i) => (i === idx ? next : p));
+      return [...merged].sort(
+        (a, b) => (b.nostrCreatedAt ?? 0) - (a.nostrCreatedAt ?? 0),
+      );
+    });
+    const pics = picturesFromCommunityProjects([project]);
+    if (pics.size > 0) {
+      setAuthorPictures((prev) => new Map([...prev, ...pics]));
+    }
+  }
+
+  async function syncServerSnapshot(signal?: AbortSignal) {
+    const snapshot = await fetchCommunityProjectsSnapshot({ signal });
+    applyCommunityProjects(snapshot.projects);
+  }
+
+  async function refreshFromRelays() {
     if (scanning) return;
     setScanning(true);
+    relayAbortRef.current?.abort();
+    const abort = new AbortController();
+    relayAbortRef.current = abort;
     try {
-      const snapshot = await fetchCommunityProjectsSnapshot({ revalidate });
-      const filtered = snapshot.projects.filter(
-        (p) => p.hackathon === hackathon.id,
-      );
-      setNostrSubmissions(filtered.map(fromCommunity));
-      const seeded = picturesFromCommunityProjects(filtered);
-      if (seeded.size > 0) setAuthorPictures(seeded);
-      const pubkeys = [...new Set(filtered.map((p) => p.author))];
-      if (pubkeys.length > 0) {
-        fetchAuthorPictures(pubkeys, TOP10_RELAYS).then(setAuthorPictures);
-      }
+      const snapshot = await refreshCommunityProjectsFromRelays({
+        signal: abort.signal,
+      });
+      applyCommunityProjects(snapshot.projects);
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       console.warn("[labs] hackathon scan failed", e);
     } finally {
       setScanning(false);
@@ -120,6 +158,7 @@ export default function HackathonProjectsList({
   }
 
   useEffect(() => {
+    const snapshotAbort = new AbortController();
     const cached =
       initialNostrSubmissions.length === 0
         ? getCachedCommunityProjects()
@@ -132,20 +171,38 @@ export default function HackathonProjectsList({
         if (pics.size > 0) setAuthorPictures(pics);
       }
     }
-    scan();
+    syncServerSnapshot(snapshotAbort.signal)
+      .catch((e) => {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        console.warn("[labs] cached hackathon snapshot failed", e);
+      })
+      .finally(() => {
+        if (!snapshotAbort.signal.aborted) {
+          refreshFromRelays();
+        }
+      });
+    return () => {
+      snapshotAbort.abort();
+      relayAbortRef.current?.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hackathon.id]);
 
   useEffect(() => {
     function onPublished(e: Event) {
-      const { hackathonId } = (e as CustomEvent<{ hackathonId: string }>)
-        .detail;
+      const { hackathonId, project } = (
+        e as CustomEvent<{
+          hackathonId: string;
+          project?: CommunityProject;
+        }>
+      ).detail;
       if (hackathonId !== hackathon.id) return;
       sectionRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
-      scan(true);
+      if (project) upsertCommunityProject(project);
+      refreshFromRelays();
     }
     window.addEventListener("labs:project-published", onPublished);
     return () =>
@@ -193,7 +250,7 @@ export default function HackathonProjectsList({
               <HackathonInscripcionButton hackathonId={hackathon.id} />
             )}
             <button
-              onClick={() => scan(true)}
+              onClick={refreshFromRelays}
               disabled={scanning}
               aria-label="Rescanear Nostr"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-progress"

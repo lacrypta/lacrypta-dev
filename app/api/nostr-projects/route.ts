@@ -11,7 +11,6 @@ export async function GET() {
 }
 
 export async function POST() {
-  revalidateTag(NOSTR_SUBMISSIONS_TAG, { expire: 0 });
-  const snapshot = await getNostrSubmissionsSnapshot();
-  return NextResponse.json({ ok: true, ...snapshot });
+  revalidateTag(NOSTR_SUBMISSIONS_TAG, "max");
+  return NextResponse.json({ ok: true, revalidated: NOSTR_SUBMISSIONS_TAG });
 }

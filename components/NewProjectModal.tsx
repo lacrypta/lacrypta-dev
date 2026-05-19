@@ -18,8 +18,11 @@ import { useAuth } from "@/lib/auth";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { getSigner } from "@/lib/nostrSigner";
 import {
+  communityProjectFromSignedEvent,
   DEFAULT_USER_RELAYS,
   publishUserProject,
+  upsertCachedCommunityProject,
+  type CommunityProject,
   type TeamMember,
   type UserProject,
 } from "@/lib/userProjects";
@@ -367,10 +370,22 @@ export default function NewProjectModal({
         onRelayResult: (r) => setRelayResults((prev) => [...prev, r]),
       });
       const okCount = result.relays.filter((r) => r.ok).length;
+      const communityProject = communityProjectFromSignedEvent(
+        project,
+        result.signed,
+      );
+      upsertCachedCommunityProject(communityProject);
       setPhase("done");
       pushToast({ kind: "success", title: isEdit ? "Proyecto actualizado" : "Proyecto creado", description: `Publicado en ${okCount}/${result.relays.length} relays.` });
       if (form.hackathon) {
-        window.dispatchEvent(new CustomEvent("labs:project-published", { detail: { hackathonId: form.hackathon } }));
+        window.dispatchEvent(
+          new CustomEvent<{
+            hackathonId: string;
+            project: CommunityProject;
+          }>("labs:project-published", {
+            detail: { hackathonId: form.hackathon, project: communityProject },
+          }),
+        );
       }
       onClose();
     } catch (e) {

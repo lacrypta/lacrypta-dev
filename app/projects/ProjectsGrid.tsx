@@ -27,6 +27,7 @@ import {
   fetchCommunityProjectsSnapshot,
   getCachedCommunityProjects,
   fetchAuthorPictures,
+  refreshCommunityProjectsFromRelays,
   TOP10_RELAYS,
   type CommunityProject,
   type CommunityScanProgress,
@@ -366,17 +367,23 @@ function useNostrCommunityProjects(initialProjects: CommunityProject[]) {
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  async function scan(revalidate = false) {
+  async function syncServerSnapshot(signal?: AbortSignal) {
+    const snapshot = await fetchCommunityProjectsSnapshot({ signal });
+    setProjects(snapshot.projects);
+  }
+
+  async function refreshFromRelays() {
     if (scanning) return;
     setScanning(true);
     setError(null);
     setProgress(null);
+    abortRef.current?.abort();
     const abort = new AbortController();
     abortRef.current = abort;
     try {
-      const snapshot = await fetchCommunityProjectsSnapshot({
-        revalidate,
+      const snapshot = await refreshCommunityProjectsFromRelays({
         signal: abort.signal,
+        onProgress: setProgress,
       });
       setProjects(snapshot.projects);
     } catch (e) {
@@ -388,19 +395,29 @@ function useNostrCommunityProjects(initialProjects: CommunityProject[]) {
   }
 
   useEffect(() => {
-    // Hydrate cache + kick off scan
+    const snapshotAbort = new AbortController();
     if (initialProjects.length === 0) {
       const cached = getCachedCommunityProjects();
       if (cached) setProjects(cached);
     }
-    scan();
+    syncServerSnapshot(snapshotAbort.signal)
+      .catch((e) => {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!snapshotAbort.signal.aborted) {
+          refreshFromRelays();
+        }
+      });
     return () => {
+      snapshotAbort.abort();
       abortRef.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { projects, scanning, progress, error, rescan: () => scan(true) };
+  return { projects, scanning, progress, error, rescan: refreshFromRelays };
 }
 
 /* ─────────────────────── Nostr scan progress panel ─────────────────────── */
@@ -434,7 +451,7 @@ function NostrScanPanel({
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
   const scanningLabel = progress
     ? `Escaneando ${total} relays…`
-    : "Sincronizando snapshot Nostr…";
+    : "Buscando nueva versión en Nostr…";
 
   return (
     <div className="mb-8 rounded-2xl border border-nostr/20 bg-gradient-to-br from-nostr/5 to-transparent overflow-hidden">
