@@ -24,17 +24,34 @@ import {
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
 import { breadcrumbLd, creativeWorkLd, jsonLdScript } from "@/lib/jsonld";
-import { getNostrProject } from "@/lib/nostrCache";
+import {
+  getNostrProject,
+  getNostrSubmissionsSnapshot,
+} from "@/lib/nostrCache";
 import { soldierProfileHref } from "@/lib/soldierProfileLinks";
 import NostrProjectServer from "./NostrProjectServer";
 
-export function generateStaticParams() {
-  return HACKATHONS.flatMap((h) =>
+export async function generateStaticParams() {
+  const curated = HACKATHONS.flatMap((h) =>
     getHackathonProjects(h.id).map((p) => ({
       id: h.id,
       projectId: p.id,
     })),
   );
+
+  const hackathonIds = new Set(HACKATHONS.map((h) => h.id));
+  const seen = new Set(curated.map((p) => `${p.id}/${p.projectId}`));
+
+  // Prerender every Nostr-submitted project visible at build time. Without
+  // this, community-only projects (no curated JSON entry) 404 in production
+  // because the dynamic fallback never gets a chance to run.
+  const { projects } = await getNostrSubmissionsSnapshot();
+  const community = projects
+    .filter((p) => p.hackathon && hackathonIds.has(p.hackathon))
+    .filter((p) => !seen.has(`${p.hackathon}/${p.id}`))
+    .map((p) => ({ id: p.hackathon as string, projectId: p.id }));
+
+  return [...curated, ...community];
 }
 
 function truncate(s: string, max = 155): string {
