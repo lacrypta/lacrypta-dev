@@ -327,6 +327,9 @@ function ProjectRow({
   const prize = award?.prize ?? nostrWinner?.sats ?? null;
   const isNostr = !!project.nostrEventId;
   const href = `/hackathons/${hackathonId}/${project.id}`;
+  const authorDisplayName = isNostr
+    ? displayNameForNostrProject(project)
+    : null;
 
   const Wrapper: React.ElementType = Link;
   const wrapperProps = { href };
@@ -372,8 +375,11 @@ function ProjectRow({
                 authorPicture && "hidden",
               )}
             />
-            <div className="mt-1 text-[9px] font-mono uppercase tracking-widest text-nostr">
-              NOSTR
+            <div
+              className="mt-1 max-w-[3.75rem] truncate px-1 text-center text-[10px] font-mono font-semibold leading-tight text-nostr sm:max-w-[4.5rem]"
+              title={authorDisplayName ?? undefined}
+            >
+              {authorDisplayName}
             </div>
           </>
         ) : (
@@ -437,5 +443,18 @@ function ProjectRow({
         <ArrowRight className="h-4 w-4 text-foreground-muted group-hover:text-bitcoin group-hover:translate-x-0.5 transition-all" />
       </div>
     </Wrapper>
+  );
+}
+
+function displayNameForNostrProject(project: HackathonSubmission): string {
+  const author = project.nostrAuthor;
+  const authorMember = author
+    ? project.team.find((m) => m.pubkey === author)
+    : null;
+  const namedMember = project.team.find((m) => m.name.trim().length > 0);
+  return (
+    authorMember?.name.trim() ||
+    namedMember?.name.trim() ||
+    (author ? `${author.slice(0, 8)}…` : "Nostr")
   );
 }
