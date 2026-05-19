@@ -773,10 +773,18 @@ export async function refetchCommunityProjectById(
   relays: string[] = TOP10_RELAYS,
   timeoutMs = 5000,
   authorHint?: string,
+  opts?: {
+    onProgress?: (p: CommunityScanProgress) => void;
+    signal?: AbortSignal;
+  },
 ): Promise<CommunityProject | null> {
   const { SimplePool } = await import("nostr-tools/pool");
-  const pool = new SimplePool();
   let found: CommunityProject | null = null;
+  const relayStates: RelayScanStatus[] = relays.map((relay) => ({
+    relay,
+    state: "pending",
+    events: 0,
+  }));
 
   const filter: { kinds: number[]; "#d": string[]; authors?: string[] } = {
     kinds: [PROJECT_KIND],
@@ -784,28 +792,85 @@ export async function refetchCommunityProjectById(
   };
   if (authorHint) filter.authors = [authorHint];
 
-  const closer = pool.subscribe(relays, filter, {
-    onevent(ev: IncomingEvent) {
-      const base = parseProjectContent(ev);
-      if (!base) return;
-      const candidate: CommunityProject = {
-        ...base,
-        author: ev.pubkey,
-        eventId: ev.id,
-        eventCreatedAt: ev.created_at,
-      };
-      if (!found || ev.created_at > found.eventCreatedAt) {
-        found = candidate;
-      }
-    },
-    oneose() {
-      closer.close();
-    },
-  });
+  const emit = () => {
+    const completed = relayStates.filter(
+      (r) => r.state === "done" || r.state === "error",
+    ).length;
+    opts?.onProgress?.({
+      totalRelays: relays.length,
+      completedRelays: completed,
+      relays: [...relayStates],
+      projectsSoFar: found ? 1 : 0,
+    });
+  };
 
-  await new Promise((r) => setTimeout(r, timeoutMs));
-  closer.close();
-  try { pool.close(relays); } catch {}
+  emit();
+
+  await Promise.all(
+    relays.map(async (relay, i) => {
+      if (opts?.signal?.aborted) return;
+      const state = relayStates[i];
+      state.state = "connecting";
+      emit();
+      const pool = new SimplePool();
+      let closer: { close: () => void } | null = null;
+      try {
+        closer = pool.subscribe([relay], filter, {
+          onevent(ev: IncomingEvent) {
+            if (state.state === "connecting") {
+              state.state = "receiving";
+            }
+            state.events += 1;
+            const base = parseProjectContent(ev);
+            if (!base || base.status === "archived") {
+              emit();
+              return;
+            }
+            const candidate: CommunityProject = {
+              ...base,
+              author: ev.pubkey,
+              eventId: ev.id,
+              eventCreatedAt: ev.created_at,
+            };
+            if (!found || ev.created_at > found.eventCreatedAt) {
+              found = candidate;
+            }
+            emit();
+          },
+          oneose() {
+            /* timeout-driven */
+          },
+        });
+        await new Promise((resolve) => {
+          const t = setTimeout(resolve, timeoutMs);
+          opts?.signal?.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(t);
+              resolve(null);
+            },
+            { once: true },
+          );
+        });
+        state.state = "done";
+      } catch (e) {
+        state.state = "error";
+        state.error = e instanceof Error ? e.message : String(e);
+      } finally {
+        try {
+          closer?.close();
+        } catch {
+          /* noop */
+        }
+        try {
+          pool.close([relay]);
+        } catch {
+          /* noop */
+        }
+        emit();
+      }
+    }),
+  );
 
   return found;
 }

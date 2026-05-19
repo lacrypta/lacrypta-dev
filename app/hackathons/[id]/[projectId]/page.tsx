@@ -25,6 +25,7 @@ import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
 import { breadcrumbLd, creativeWorkLd, jsonLdScript } from "@/lib/jsonld";
 import { getNostrProject } from "@/lib/nostrCache";
+import { soldierProfileHref } from "@/lib/soldierProfileLinks";
 import NostrProjectServer from "./NostrProjectServer";
 
 export function generateStaticParams() {
@@ -461,45 +462,64 @@ function ProjectPageContent({ id, projectId }: ProjectPageParams) {
                 <p className="text-xs text-foreground-subtle">Sin equipo cargado.</p>
               ) : (
                 <ul className="space-y-2">
-                  {project.team.map((m) => (
-                    <li key={`${m.name}-${m.role}`} className="flex items-center gap-2.5">
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-bitcoin/30 to-nostr/30 ring-1 ring-border-strong flex items-center justify-center text-xs font-display font-bold shrink-0">
-                        {m.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold truncate">
-                          {m.name}
+                  {project.team.map((m) => {
+                    const profileHref = soldierProfileHref(m);
+                    const memberContent = (
+                      <>
+                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-bitcoin/30 to-nostr/30 ring-1 ring-border-strong flex items-center justify-center text-xs font-display font-bold shrink-0">
+                          {m.name.slice(0, 2).toUpperCase()}
                         </div>
-                        <div className="text-[10px] font-mono text-foreground-subtle">
-                          {m.role}
-                          {m.github && (
-                            <>
-                              {" · "}
-                              <a
-                                href={`https://github.com/${m.github}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-foreground-muted hover:text-foreground"
-                              >
-                                @{m.github}
-                              </a>
-                            </>
-                          )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold truncate transition-colors group-hover/member:text-nostr">
+                            {m.name}
+                          </div>
+                          <div className="text-[10px] font-mono text-foreground-subtle">
+                            {m.role}
+                            {m.github && (
+                              <>
+                                {" · "}
+                                <span className="text-foreground-muted">
+                                  @{m.github}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      {m.github && (
-                        <a
-                          href={`https://github.com/${m.github}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="shrink-0 text-foreground-subtle hover:text-foreground"
-                          aria-label={`GitHub de ${m.name}`}
-                        >
-                          <GithubIcon className="h-3.5 w-3.5" />
-                        </a>
-                      )}
-                    </li>
-                  ))}
+                      </>
+                    );
+
+                    return (
+                      <li
+                        key={`${m.name}-${m.role}`}
+                        className="flex items-center gap-2.5"
+                      >
+                        {profileHref ? (
+                          <Link
+                            href={profileHref}
+                            className="-m-1.5 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1.5 transition-colors hover:bg-white/[0.04] group/member"
+                            aria-label={`Ver perfil de ${m.name}`}
+                          >
+                            {memberContent}
+                          </Link>
+                        ) : (
+                          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                            {memberContent}
+                          </div>
+                        )}
+                        {m.github && (
+                          <a
+                            href={`https://github.com/${m.github}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 text-foreground-subtle hover:text-foreground"
+                            aria-label={`GitHub de ${m.name}`}
+                          >
+                            <GithubIcon className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>

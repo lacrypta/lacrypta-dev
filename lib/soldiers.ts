@@ -13,6 +13,7 @@ import {
   getAllNostrSubmissionsForSitemap,
   type CachedNostrTeamMember,
 } from "./nostrCache";
+import { soldierProfileSlugAliases } from "./soldierProfileLinks";
 import reportsData from "@/data/hackathons/reports.json";
 
 type ReportEntry = {
@@ -460,6 +461,20 @@ export async function getSoldiers(): Promise<Soldier[]> {
 
 export async function getSoldierBySlug(slug: string): Promise<Soldier | null> {
   const all = await getSoldiers();
-  const lc = slug.toLowerCase();
-  return all.find((s) => s.slug.toLowerCase() === lc) ?? null;
+  const lc = safeDecodeSlug(slug).toLowerCase();
+  return (
+    all.find(
+      (s) =>
+        s.slug.toLowerCase() === lc ||
+        soldierProfileSlugAliases(s).some((alias) => alias.toLowerCase() === lc),
+    ) ?? null
+  );
+}
+
+function safeDecodeSlug(slug: string): string {
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    return slug;
+  }
 }

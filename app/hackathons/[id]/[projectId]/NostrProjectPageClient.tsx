@@ -1,15 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Archive,
   ArrowLeft,
+  CheckCircle2,
   ExternalLink,
   Loader2,
   Pencil,
+  Radio,
+  Search,
   Users,
+  XCircle,
   Zap,
   CircleDashed,
 } from "lucide-react";
@@ -24,6 +29,8 @@ import {
   TOP10_RELAYS,
   DEFAULT_USER_RELAYS,
   type CommunityProject,
+  type CommunityScanProgress,
+  type RelayScanStatus,
 } from "@/lib/userProjects";
 import { getHackathon, type Hackathon } from "@/lib/hackathons";
 import { useProjectReport } from "@/lib/nostrReports";
@@ -32,6 +39,7 @@ import { getSigner } from "@/lib/nostrSigner";
 import { useToast } from "@/components/Toast";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
+import { soldierProfileHref } from "@/lib/soldierProfileLinks";
 import { Trophy, Lightbulb, AlertTriangle } from "lucide-react";
 import NewProjectModal from "@/components/NewProjectModal";
 
@@ -43,6 +51,244 @@ const STATUS_BADGE: Record<string, string> = {
   building: "bg-white/5 border-border text-foreground-muted",
   idea: "bg-white/5 border-border text-foreground-subtle",
 };
+
+type SearchPhase = "cache" | "snapshot" | "relays";
+
+function ProjectRelaySearchLoading({
+  hackathonId,
+  hackathonName,
+  projectId,
+  phase,
+  progress,
+}: {
+  hackathonId: string;
+  hackathonName: string;
+  projectId: string;
+  phase: SearchPhase;
+  progress: CommunityScanProgress | null;
+}) {
+  const total = progress?.totalRelays ?? TOP10_RELAYS.length;
+  const completed = progress?.completedRelays ?? 0;
+  const basePct =
+    phase === "cache" ? 14 : phase === "snapshot" ? 36 : progress ? 48 : 44;
+  const relayPct =
+    progress && total > 0 ? Math.round((completed / total) * 52) : 0;
+  const pct =
+    progress?.projectsSoFar && progress.projectsSoFar > 0
+      ? 96
+      : Math.min(96, basePct + relayPct);
+  const relayStates =
+    progress?.relays ??
+    TOP10_RELAYS.map((relay) => ({
+      relay,
+      state: "pending" as const,
+      events: 0,
+    }));
+  const headline =
+    phase === "cache"
+      ? "Revisando cache local"
+      : phase === "snapshot"
+        ? "Leyendo snapshot del servidor"
+        : progress?.projectsSoFar
+          ? "Evento encontrado"
+          : "Buscando evento en relays";
+
+  return (
+    <div className="relative min-h-[calc(100vh-5rem)] overflow-hidden pt-24 pb-16">
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute left-1/2 top-24 h-72 w-72 -translate-x-1/2 rounded-full bg-nostr/10 blur-[90px]" />
+        <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-bitcoin/10 blur-[110px]" />
+      </div>
+
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Link
+          href={`/hackathons/${hackathonId}`}
+          className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-foreground-muted hover:text-foreground transition-colors mb-6"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          {hackathonName}
+        </Link>
+
+        <motion.div
+          initial={{ opacity: 0, y: 18, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+          className="relative overflow-hidden rounded-3xl border border-nostr/25 bg-background-card/80 p-5 shadow-2xl shadow-nostr/10 backdrop-blur sm:p-7"
+        >
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-nostr/70 to-transparent" />
+          <div className="grid gap-7 lg:grid-cols-[260px_1fr] lg:items-center">
+            <div className="relative flex min-h-64 items-center justify-center">
+              <motion.div
+                className="absolute h-52 w-52 rounded-full border border-nostr/20"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 16, repeat: Infinity, ease: "linear" }}
+              >
+                {relayStates.slice(0, 6).map((relay, i) => (
+                  <span
+                    key={relay.relay}
+                    className={cn(
+                      "absolute h-2.5 w-2.5 rounded-full border",
+                      relay.state === "done"
+                        ? "border-success bg-success"
+                        : relay.state === "error"
+                          ? "border-danger bg-danger"
+                          : relay.state === "receiving"
+                            ? "border-nostr bg-nostr shadow-[0_0_18px_rgba(168,85,247,0.9)]"
+                            : "border-nostr/50 bg-background",
+                    )}
+                    style={{
+                      left: `${50 + 46 * Math.cos((i / 6) * Math.PI * 2)}%`,
+                      top: `${50 + 46 * Math.sin((i / 6) * Math.PI * 2)}%`,
+                    }}
+                  />
+                ))}
+              </motion.div>
+              <motion.div
+                className="absolute h-40 w-40 rounded-full border border-bitcoin/20"
+                animate={{ rotate: -360 }}
+                transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+              />
+              <motion.div
+                className="absolute h-28 w-28 rounded-full bg-nostr/10"
+                animate={{ scale: [1, 1.12, 1], opacity: [0.7, 1, 0.7] }}
+                transition={{ duration: 1.8, repeat: Infinity }}
+              />
+              <div className="relative flex h-24 w-24 items-center justify-center rounded-3xl border border-nostr/35 bg-black/50 shadow-xl shadow-nostr/20">
+                {phase === "relays" ? (
+                  <Radio className="h-8 w-8 text-nostr" />
+                ) : (
+                  <Search className="h-8 w-8 text-nostr" />
+                )}
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 rounded-full border border-nostr/25 bg-nostr/10 px-3 py-1 text-[10px] font-mono uppercase tracking-widest text-nostr">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                {headline}
+              </div>
+              <h1 className="mt-4 font-display text-3xl font-bold tracking-tight sm:text-5xl">
+                Cargando proyecto
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-foreground-muted">
+                Buscando el evento NIP-78 más nuevo para{" "}
+                <span className="font-mono text-foreground">
+                  {projectId.slice(0, 8)}…
+                </span>
+              </p>
+
+              <div className="mt-6">
+                <div className="mb-2 flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-foreground-subtle">
+                  <span>
+                    {phase === "relays"
+                      ? `${completed}/${total} relays`
+                      : "Preparando consulta"}
+                  </span>
+                  <span className="text-nostr">{pct}%</span>
+                </div>
+                <div className="relative h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
+                  <motion.div
+                    className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-nostr via-bitcoin to-nostr"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ duration: 0.35, ease: "easeOut" }}
+                  />
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                    animate={{ x: ["-100%", "100%"] }}
+                    transition={{ duration: 1.2, repeat: Infinity }}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                <SearchStage active={phase === "cache"} done={phase !== "cache"}>
+                  Cache local
+                </SearchStage>
+                <SearchStage
+                  active={phase === "snapshot"}
+                  done={phase === "relays"}
+                >
+                  Snapshot
+                </SearchStage>
+                <SearchStage active={phase === "relays"} done={false}>
+                  Relays
+                </SearchStage>
+              </div>
+
+              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                {relayStates.map((relay) => (
+                  <RelaySearchRow key={relay.relay} relay={relay} />
+                ))}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+function SearchStage({
+  active,
+  done,
+  children,
+}: {
+  active: boolean;
+  done: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-mono uppercase tracking-widest",
+        done
+          ? "border-success/25 bg-success/10 text-success"
+          : active
+            ? "border-nostr/35 bg-nostr/10 text-nostr"
+            : "border-border bg-white/[0.02] text-foreground-subtle",
+      )}
+    >
+      {done ? (
+        <CheckCircle2 className="h-3.5 w-3.5" />
+      ) : active ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <CircleDashed className="h-3.5 w-3.5" />
+      )}
+      {children}
+    </div>
+  );
+}
+
+function RelaySearchRow({ relay }: { relay: RelayScanStatus }) {
+  const icon =
+    relay.state === "done" ? (
+      <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+    ) : relay.state === "error" ? (
+      <XCircle className="h-3.5 w-3.5 text-danger" />
+    ) : relay.state === "receiving" ? (
+      <Radio className="h-3.5 w-3.5 text-nostr" />
+    ) : relay.state === "connecting" ? (
+      <Loader2 className="h-3.5 w-3.5 animate-spin text-foreground-muted" />
+    ) : (
+      <CircleDashed className="h-3.5 w-3.5 text-foreground-subtle" />
+    );
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-black/20 px-2.5 py-2 text-[11px] font-mono">
+      {icon}
+      <span className="min-w-0 flex-1 truncate text-foreground-muted">
+        {relay.relay.replace("wss://", "")}
+      </span>
+      {relay.events > 0 && (
+        <span className="shrink-0 tabular-nums text-nostr">
+          {relay.events} ev
+        </span>
+      )}
+    </div>
+  );
+}
 
 export default function NostrProjectPage({
   hackathonId,
@@ -63,6 +309,11 @@ export default function NostrProjectPage({
   const [editOpen, setEditOpen] = useState(false);
   const [archiveStep, setArchiveStep] = useState<"idle" | "confirm" | "archiving">("idle");
   const [revalidating, setRevalidating] = useState(false);
+  const [searchPhase, setSearchPhase] = useState<
+    "cache" | "snapshot" | "relays"
+  >("cache");
+  const [searchProgress, setSearchProgress] =
+    useState<CommunityScanProgress | null>(null);
   const relays = useMemo(() => {
     const out = new Set<string>(DEFAULT_USER_RELAYS);
     auth?.bunker?.relays?.forEach((r) => out.add(r));
@@ -83,6 +334,8 @@ export default function NostrProjectPage({
 
     async function load() {
       // 1. Show cached version immediately for instant render.
+      setSearchPhase("cache");
+      setSearchProgress(null);
       const cached = getCachedCommunityProjects();
       let latest = cached?.find(
         (p) => p.id === projectId && p.hackathon === hackathonId,
@@ -95,6 +348,7 @@ export default function NostrProjectPage({
       if (!cancelled) setRevalidating(true);
       try {
         try {
+          if (!cancelled) setSearchPhase("snapshot");
           const snapshot = await fetchCommunityProjectsSnapshot({
             signal: snapshotAbort.signal,
           });
@@ -110,11 +364,18 @@ export default function NostrProjectPage({
           if (e instanceof DOMException && e.name === "AbortError") return;
         }
 
+        if (!cancelled) setSearchPhase("relays");
         const fresh = await refetchCommunityProjectById(
           projectId,
           TOP10_RELAYS,
           5000,
           latest?.author,
+          {
+            signal: snapshotAbort.signal,
+            onProgress: (progress) => {
+              if (!cancelled) setSearchProgress(progress);
+            },
+          },
         );
 
         if (cancelled) return;
@@ -162,83 +423,13 @@ export default function NostrProjectPage({
 
   if (project === undefined) {
     return (
-      <div className="relative pt-24 pb-16">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Link
-            href={`/hackathons/${hackathonId}`}
-            className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-foreground-muted hover:text-foreground transition-colors mb-6"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            {hackathon?.name ?? "Hackatones"}
-          </Link>
-
-          {/* relay fetch indicator */}
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-nostr/10 border border-nostr/20 mb-8">
-            <Loader2 className="h-3 w-3 animate-spin text-nostr" />
-            <span className="text-[10px] font-mono text-nostr">obteniendo desde los relays…</span>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 animate-pulse">
-            {/* main column */}
-            <div className="min-w-0 space-y-6">
-              {/* badges */}
-              <div className="flex items-center gap-2">
-                <div className="h-4 w-28 rounded-full bg-white/5" />
-                <div className="h-4 w-16 rounded-full bg-white/5" />
-                <div className="h-4 w-14 rounded-full bg-nostr/10" />
-              </div>
-              {/* title */}
-              <div className="space-y-2">
-                <div className="h-10 w-3/4 rounded-lg bg-white/5" />
-                <div className="h-10 w-1/2 rounded-lg bg-white/5" />
-              </div>
-              {/* description */}
-              <div className="space-y-2">
-                <div className="h-4 w-full rounded bg-white/5" />
-                <div className="h-4 w-[92%] rounded bg-white/5" />
-                <div className="h-4 w-4/5 rounded bg-white/5" />
-              </div>
-              {/* action buttons */}
-              <div className="flex gap-2">
-                <div className="h-8 w-20 rounded-lg bg-white/5" />
-                <div className="h-8 w-20 rounded-lg bg-white/5" />
-              </div>
-              {/* nostr signature box */}
-              <div className="rounded-xl border border-nostr/10 bg-nostr/5 p-4 space-y-2">
-                <div className="h-3 w-36 rounded bg-nostr/10" />
-                <div className="h-3 w-full rounded bg-white/5" />
-                <div className="h-3 w-5/6 rounded bg-white/5" />
-              </div>
-            </div>
-
-            {/* sidebar */}
-            <aside className="space-y-4">
-              {/* stack card */}
-              <div className="rounded-2xl border border-border bg-background-card p-5 space-y-3">
-                <div className="h-3 w-10 rounded bg-white/5" />
-                <div className="flex flex-wrap gap-1.5">
-                  {[44, 60, 52, 36, 56].map((w) => (
-                    <div key={w} className="h-5 rounded-md bg-white/5" style={{ width: w }} />
-                  ))}
-                </div>
-              </div>
-              {/* team card */}
-              <div className="rounded-2xl border border-border bg-background-card p-5 space-y-4">
-                <div className="h-3 w-14 rounded bg-white/5" />
-                {[1, 2].map((i) => (
-                  <div key={i} className="flex items-center gap-2.5">
-                    <div className="h-8 w-8 rounded-full bg-white/5 shrink-0" />
-                    <div className="flex-1 space-y-1.5">
-                      <div className="h-3 w-24 rounded bg-white/5" />
-                      <div className="h-2.5 w-14 rounded bg-white/5" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </aside>
-          </div>
-        </div>
-      </div>
+      <ProjectRelaySearchLoading
+        hackathonId={hackathonId}
+        hackathonName={hackathon?.name ?? "Hackatones"}
+        projectId={projectId}
+        phase={searchPhase}
+        progress={searchProgress}
+      />
     );
   }
 
@@ -262,7 +453,12 @@ export default function NostrProjectPage({
   }
 
   return (
-    <div className="relative pt-24 pb-16">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: "easeOut" }}
+      className="relative pt-24 pb-16"
+    >
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3 mb-6">
           <Link
@@ -322,15 +518,15 @@ export default function NostrProjectPage({
               {project.description}
             </p>
 
-            <div className="mt-5 flex flex-wrap items-center gap-2">
+            <div className="mt-6 flex flex-wrap items-center gap-3">
               {project.repo && (
                 <a
                   href={project.repo}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold transition-colors"
+                  className="inline-flex min-h-12 items-center gap-3 rounded-xl border border-border bg-white/[0.03] px-6 py-3 text-base font-semibold transition-colors hover:bg-white/[0.06]"
                 >
-                  <GithubIcon className="h-3.5 w-3.5" />
+                  <GithubIcon className="h-5 w-5" />
                   Repo
                 </a>
               )}
@@ -339,9 +535,9 @@ export default function NostrProjectPage({
                   href={project.demo}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold transition-colors"
+                  className="inline-flex min-h-12 items-center gap-3 rounded-xl border border-border bg-white/[0.03] px-6 py-3 text-base font-semibold transition-colors hover:bg-white/[0.06]"
                 >
-                  <ExternalLink className="h-3.5 w-3.5" />
+                  <ExternalLink className="h-5 w-5" />
                   Demo
                 </a>
               )}
@@ -613,11 +809,10 @@ export default function NostrProjectPage({
                   {project.team.map((m, i) => {
                     const pic =
                       i === 0 ? (authorPicture ?? m.picture) : m.picture;
-                    return (
-                      <li
-                        key={`${m.name}-${m.role}`}
-                        className="flex items-center gap-2.5"
-                      >
+                    const displayName = m.name || m.nip05 || "Anónimo";
+                    const profileHref = soldierProfileHref(m);
+                    const memberContent = (
+                      <>
                         {pic ? (
                           <img
                             src={pic}
@@ -629,23 +824,44 @@ export default function NostrProjectPage({
                           />
                         ) : (
                           <div className="h-8 w-8 rounded-full bg-gradient-to-br from-nostr/30 to-bitcoin/30 ring-1 ring-border-strong flex items-center justify-center text-xs font-display font-bold shrink-0">
-                            {m.name.slice(0, 2).toUpperCase()}
+                            {displayName.slice(0, 2).toUpperCase()}
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold truncate">
-                            {m.name}
+                          <div className="text-sm font-semibold truncate transition-colors group-hover/member:text-nostr">
+                            {displayName}
                           </div>
                           <div className="text-[10px] font-mono text-foreground-subtle">
                             {m.role}
                           </div>
                         </div>
+                      </>
+                    );
+                    return (
+                      <li
+                        key={`${m.name}-${m.role}`}
+                        className="flex items-center gap-2.5"
+                      >
+                        {profileHref ? (
+                          <Link
+                            href={profileHref}
+                            className="-m-1.5 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1.5 transition-colors hover:bg-white/[0.04] group/member"
+                            aria-label={`Ver perfil de ${displayName}`}
+                          >
+                            {memberContent}
+                          </Link>
+                        ) : (
+                          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                            {memberContent}
+                          </div>
+                        )}
                         {m.github && (
                           <a
                             href={`https://github.com/${m.github}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="shrink-0 text-foreground-subtle hover:text-foreground"
+                            aria-label={`GitHub de ${displayName}`}
                           >
                             <GithubIcon className="h-3.5 w-3.5" />
                           </a>
@@ -659,6 +875,6 @@ export default function NostrProjectPage({
           </aside>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

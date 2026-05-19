@@ -466,6 +466,21 @@ export default async function HackathonPage({
         </div>
       </section>
 
+      {/* Projects / leaderboard (curated + Nostr submissions).
+       *
+       * Wrapped in <Suspense> so the parent `"use cache"` prerender doesn't
+       * try to resolve this client component inline. On Vercel, omitting the
+       * boundary truncates the RSC stream right at this slot — the page
+       * comes back missing the entire projects section. The fallback renders
+       * the SSR skeleton; client takes over on hydration.
+       */}
+      <Suspense fallback={null}>
+        <HackathonProjectsList
+          hackathon={hackathon}
+          initialNostrSubmissions={nostrSubmissions}
+        />
+      </Suspense>
+
       <section className="pb-12">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Dates timeline */}
@@ -559,20 +574,6 @@ export default async function HackathonPage({
         </div>
       </section>
 
-      {/* Projects / leaderboard (curated + Nostr submissions).
-       *
-       * Wrapped in <Suspense> so the parent `"use cache"` prerender doesn't
-       * try to resolve this client component inline. On Vercel, omitting the
-       * boundary truncates the RSC stream right at this slot — the page
-       * comes back missing the entire projects section. The fallback renders
-       * the SSR skeleton; client takes over on hydration.
-       */}
-      <Suspense fallback={null}>
-        <HackathonProjectsList
-          hackathon={hackathon}
-          initialNostrSubmissions={nostrSubmissions}
-        />
-      </Suspense>
     </div>
   );
 }
