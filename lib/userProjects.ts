@@ -108,22 +108,112 @@ export function getCachedCommunityProjects(): CommunityProject[] | null {
   }
 }
 
-function setCachedCommunityProjects(projects: CommunityProject[]) {
+export function setCachedCommunityProjects(projects: CommunityProject[]) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(COMMUNITY_CACHE_KEY, JSON.stringify(projects));
+    window.localStorage.setItem(
+      COMMUNITY_CACHE_KEY,
+      JSON.stringify(sortCommunityProjects(projects)),
+    );
   } catch {
     /* quota */
   }
 }
 
-export function patchCachedCommunityProject(project: CommunityProject) {
-  const cached = getCachedCommunityProjects();
-  if (!cached) return;
-  const idx = cached.findIndex((p) => p.id === project.id && p.author === project.author);
-  if (idx === -1) return;
+function communityProjectKey(project: Pick<CommunityProject, "author" | "id">) {
+  return `${project.author}:${project.id}`;
+}
+
+function sortCommunityProjects(projects: CommunityProject[]) {
+  return [...projects].sort((a, b) => b.eventCreatedAt - a.eventCreatedAt);
+}
+
+export function upsertCachedCommunityProject(project: CommunityProject) {
+  const cached = getCachedCommunityProjects() ?? [];
+  const idx = cached.findIndex(
+    (p) => communityProjectKey(p) === communityProjectKey(project),
+  );
+  if (idx === -1) {
+    setCachedCommunityProjects([project, ...cached]);
+    return;
+  }
   cached[idx] = project;
   setCachedCommunityProjects(cached);
+}
+
+export function removeCachedCommunityProject(
+  project: Pick<CommunityProject, "author" | "id">,
+) {
+  const cached = getCachedCommunityProjects();
+  if (!cached) return;
+  setCachedCommunityProjects(
+    cached.filter((p) => communityProjectKey(p) !== communityProjectKey(project)),
+  );
+}
+
+export function patchCachedCommunityProject(project: CommunityProject) {
+  upsertCachedCommunityProject(project);
+}
+
+export function communityProjectFromSignedEvent(
+  project: UserProject,
+  signed: SignedEvent,
+): CommunityProject {
+  return {
+    ...project,
+    author: signed.pubkey,
+    eventId: signed.id,
+    eventCreatedAt: signed.created_at,
+  };
+}
+
+export type CommunityProjectsSnapshot = {
+  projects: CommunityProject[];
+  generatedAt: string;
+  relays: string[];
+};
+
+export async function fetchCommunityProjectsSnapshot(opts?: {
+  revalidate?: boolean;
+  signal?: AbortSignal;
+}): Promise<CommunityProjectsSnapshot> {
+  if (opts?.revalidate) {
+    await fetch("/api/nostr-projects", {
+      method: "POST",
+      cache: "no-store",
+      signal: opts.signal,
+    });
+  }
+  const res = await fetch("/api/nostr-projects", {
+    method: "GET",
+    cache: "no-store",
+    signal: opts?.signal,
+  });
+  if (!res.ok) {
+    throw new Error(`Nostr project snapshot failed (${res.status})`);
+  }
+  const snapshot = (await res.json()) as CommunityProjectsSnapshot;
+  setCachedCommunityProjects(snapshot.projects);
+  return snapshot;
+}
+
+export async function refreshCommunityProjectsFromRelays(opts?: {
+  relays?: string[];
+  perRelayTimeoutMs?: number;
+  onProgress?: (p: CommunityScanProgress) => void;
+  signal?: AbortSignal;
+}): Promise<CommunityProjectsSnapshot> {
+  const relays = opts?.relays ?? TOP10_RELAYS;
+  const projects = await fetchCommunityProjects(relays, {
+    perRelayTimeoutMs: opts?.perRelayTimeoutMs,
+    onProgress: opts?.onProgress,
+    signal: opts?.signal,
+  });
+  return {
+    projects,
+    generatedAt: new Date().toISOString(),
+    relays,
+  };
 }
 
 /* ────────────────────────────── parsers ────────────────────────────────── */

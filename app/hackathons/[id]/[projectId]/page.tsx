@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
@@ -101,16 +102,86 @@ const STATUS_BADGE: Record<string, string> = {
   idea: "bg-white/5 border-border text-foreground-subtle",
 };
 
-export default async function ProjectPage({
+type ProjectPageParams = {
+  id: string;
+  projectId: string;
+};
+
+export default function ProjectPage({
   params,
 }: {
-  params: Promise<{ id: string; projectId: string }>;
+  params: Promise<ProjectPageParams>;
 }) {
-  const { id, projectId } = await params;
+  return (
+    <Suspense fallback={<ProjectPageFallback />}>
+      {/* Keep runtime params out of the Cache Components prerender shell. */}
+      {params.then((resolved) => (
+        <ProjectPageContent {...resolved} />
+      ))}
+    </Suspense>
+  );
+}
+
+function ProjectPageFallback() {
+  return (
+    <div className="relative pt-24 pb-16">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="h-4 w-36 rounded bg-white/5 mb-8" />
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 animate-pulse">
+          <div className="min-w-0 space-y-6">
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-28 rounded-full bg-white/5" />
+              <div className="h-4 w-16 rounded-full bg-white/5" />
+            </div>
+            <div className="space-y-2">
+              <div className="h-10 w-3/4 rounded-lg bg-white/5" />
+              <div className="h-10 w-1/2 rounded-lg bg-white/5" />
+            </div>
+            <div className="space-y-2">
+              <div className="h-4 w-full rounded bg-white/5" />
+              <div className="h-4 w-[92%] rounded bg-white/5" />
+              <div className="h-4 w-4/5 rounded bg-white/5" />
+            </div>
+          </div>
+          <aside className="space-y-4">
+            <div className="rounded-2xl border border-border bg-background-card p-5 space-y-3">
+              <div className="h-3 w-10 rounded bg-white/5" />
+              <div className="flex flex-wrap gap-1.5">
+                {[44, 60, 52, 36, 56].map((w) => (
+                  <div
+                    key={w}
+                    className="h-5 rounded-md bg-white/5"
+                    style={{ width: w }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border bg-background-card p-5 space-y-4">
+              <div className="h-3 w-14 rounded bg-white/5" />
+              {[1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-2.5">
+                  <div className="h-8 w-8 rounded-full bg-white/5 shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 w-24 rounded bg-white/5" />
+                    <div className="h-2.5 w-14 rounded bg-white/5" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProjectPageContent({ id, projectId }: ProjectPageParams) {
   const hackathon = getHackathon(id);
   if (!hackathon) notFound();
   const project = getProject(id, projectId);
-  if (!project) return <NostrProjectServer hackathonId={id} projectId={projectId} />;
+  if (!project) {
+    return <NostrProjectServer hackathonId={id} projectId={projectId} />;
+  }
 
   const report = project.report;
   const award = prizeForProject(id, projectId);

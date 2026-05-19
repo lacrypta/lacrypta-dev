@@ -23,8 +23,9 @@ import {
 import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
 import {
   fetchAuthorPictures,
-  fetchCommunityProjects,
+  fetchCommunityProjectsSnapshot,
   getCachedCommunityProjects,
+  refreshCommunityProjectsFromRelays,
   TOP10_RELAYS,
   type CommunityProject,
 } from "@/lib/userProjects";
@@ -60,17 +61,20 @@ function fromCommunity(np: CommunityProject): HackathonSubmission {
 
 export default function HackathonProjectsList({
   hackathon,
+  initialNostrSubmissions = [],
 }: {
   hackathon: Hackathon;
+  initialNostrSubmissions?: HackathonSubmission[];
 }) {
   const [nostrSubmissions, setNostrSubmissions] = useState<
     HackathonSubmission[]
-  >([]);
+  >(initialNostrSubmissions);
   const [scanning, setScanning] = useState(false);
   const [authorPictures, setAuthorPictures] = useState<Map<string, string>>(
-    new Map(),
+    () => picturesFromSubmissions(initialNostrSubmissions),
   );
   const sectionRef = useRef<HTMLElement>(null);
+  const relayAbortRef = useRef<AbortController | null>(null);
 
   const awards = useMemo<PrizedProject[]>(
     () => prizedProjects(hackathon.id),
@@ -95,18 +99,58 @@ export default function HackathonProjectsList({
     [hackathon.id, nostrSubmissions],
   );
 
-  async function scan() {
+  function applyCommunityProjects(projects: CommunityProject[]) {
+    const filtered = projects.filter((p) => p.hackathon === hackathon.id);
+    setNostrSubmissions(filtered.map(fromCommunity));
+    const seeded = picturesFromCommunityProjects(filtered);
+    if (seeded.size > 0) {
+      setAuthorPictures((prev) => new Map([...prev, ...seeded]));
+    }
+    const pubkeys = [...new Set(filtered.map((p) => p.author))];
+    if (pubkeys.length > 0) {
+      fetchAuthorPictures(pubkeys, TOP10_RELAYS).then(setAuthorPictures);
+    }
+  }
+
+  function upsertCommunityProject(project: CommunityProject) {
+    if (project.hackathon !== hackathon.id) return;
+    const next = fromCommunity(project);
+    setNostrSubmissions((prev) => {
+      const idx = prev.findIndex(
+        (p) => p.id === next.id && p.nostrAuthor === next.nostrAuthor,
+      );
+      const merged =
+        idx === -1
+          ? [next, ...prev]
+          : prev.map((p, i) => (i === idx ? next : p));
+      return [...merged].sort(
+        (a, b) => (b.nostrCreatedAt ?? 0) - (a.nostrCreatedAt ?? 0),
+      );
+    });
+    const pics = picturesFromCommunityProjects([project]);
+    if (pics.size > 0) {
+      setAuthorPictures((prev) => new Map([...prev, ...pics]));
+    }
+  }
+
+  async function syncServerSnapshot(signal?: AbortSignal) {
+    const snapshot = await fetchCommunityProjectsSnapshot({ signal });
+    applyCommunityProjects(snapshot.projects);
+  }
+
+  async function refreshFromRelays() {
     if (scanning) return;
     setScanning(true);
+    relayAbortRef.current?.abort();
+    const abort = new AbortController();
+    relayAbortRef.current = abort;
     try {
-      const all = await fetchCommunityProjects(TOP10_RELAYS);
-      const filtered = all.filter((p) => p.hackathon === hackathon.id);
-      setNostrSubmissions(filtered.map(fromCommunity));
-      const pubkeys = [...new Set(filtered.map((p) => p.author))];
-      if (pubkeys.length > 0) {
-        fetchAuthorPictures(pubkeys, TOP10_RELAYS).then(setAuthorPictures);
-      }
+      const snapshot = await refreshCommunityProjectsFromRelays({
+        signal: abort.signal,
+      });
+      applyCommunityProjects(snapshot.projects);
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       console.warn("[labs] hackathon scan failed", e);
     } finally {
       setScanning(false);
@@ -114,34 +158,55 @@ export default function HackathonProjectsList({
   }
 
   useEffect(() => {
-    // Read cache after hydration to avoid server/client mismatch
-    const cached = getCachedCommunityProjects();
+    const snapshotAbort = new AbortController();
+    const cached =
+      initialNostrSubmissions.length === 0
+        ? getCachedCommunityProjects()
+        : null;
     if (cached) {
       const filtered = cached.filter((p) => p.hackathon === hackathon.id);
       if (filtered.length > 0) {
         setNostrSubmissions(filtered.map(fromCommunity));
-        // Seed pictures from whatever the project event stored in team members
-        const pics = new Map<string, string>();
-        for (const p of filtered) {
-          const pic = p.team[0]?.picture;
-          if (pic) pics.set(p.author, pic);
-        }
+        const pics = picturesFromCommunityProjects(filtered);
         if (pics.size > 0) setAuthorPictures(pics);
       }
     }
-    scan();
+    syncServerSnapshot(snapshotAbort.signal)
+      .catch((e) => {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        console.warn("[labs] cached hackathon snapshot failed", e);
+      })
+      .finally(() => {
+        if (!snapshotAbort.signal.aborted) {
+          refreshFromRelays();
+        }
+      });
+    return () => {
+      snapshotAbort.abort();
+      relayAbortRef.current?.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hackathon.id]);
 
   useEffect(() => {
     function onPublished(e: Event) {
-      const { hackathonId } = (e as CustomEvent<{ hackathonId: string }>).detail;
+      const { hackathonId, project } = (
+        e as CustomEvent<{
+          hackathonId: string;
+          project?: CommunityProject;
+        }>
+      ).detail;
       if (hackathonId !== hackathon.id) return;
-      sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      scan();
+      sectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      if (project) upsertCommunityProject(project);
+      refreshFromRelays();
     }
     window.addEventListener("labs:project-published", onPublished);
-    return () => window.removeEventListener("labs:project-published", onPublished);
+    return () =>
+      window.removeEventListener("labs:project-published", onPublished);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hackathon.id]);
 
@@ -185,8 +250,9 @@ export default function HackathonProjectsList({
               <HackathonInscripcionButton hackathonId={hackathon.id} />
             )}
             <button
-              onClick={scan}
+              onClick={refreshFromRelays}
               disabled={scanning}
+              aria-label="Rescanear Nostr"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-progress"
             >
               <RefreshCw
@@ -224,6 +290,25 @@ export default function HackathonProjectsList({
   );
 }
 
+function picturesFromSubmissions(projects: HackathonSubmission[]) {
+  const pics = new Map<string, string>();
+  for (const p of projects) {
+    const author = p.nostrAuthor;
+    const pic = p.team[0]?.picture;
+    if (author && pic) pics.set(author, pic);
+  }
+  return pics;
+}
+
+function picturesFromCommunityProjects(projects: CommunityProject[]) {
+  const pics = new Map<string, string>();
+  for (const p of projects) {
+    const pic = p.team[0]?.picture;
+    if (pic) pics.set(p.author, pic);
+  }
+  return pics;
+}
+
 function ProjectRow({
   project,
   hackathonId,
@@ -242,6 +327,9 @@ function ProjectRow({
   const prize = award?.prize ?? nostrWinner?.sats ?? null;
   const isNostr = !!project.nostrEventId;
   const href = `/hackathons/${hackathonId}/${project.id}`;
+  const authorDisplayName = isNostr
+    ? displayNameForNostrProject(project)
+    : null;
 
   const Wrapper: React.ElementType = Link;
   const wrapperProps = { href };
@@ -287,8 +375,11 @@ function ProjectRow({
                 authorPicture && "hidden",
               )}
             />
-            <div className="mt-1 text-[9px] font-mono uppercase tracking-widest text-nostr">
-              NOSTR
+            <div
+              className="mt-1 max-w-[3.75rem] truncate px-1 text-center text-[10px] font-mono font-semibold leading-tight text-nostr sm:max-w-[4.5rem]"
+              title={authorDisplayName ?? undefined}
+            >
+              {authorDisplayName}
             </div>
           </>
         ) : (
@@ -352,5 +443,18 @@ function ProjectRow({
         <ArrowRight className="h-4 w-4 text-foreground-muted group-hover:text-bitcoin group-hover:translate-x-0.5 transition-all" />
       </div>
     </Wrapper>
+  );
+}
+
+function displayNameForNostrProject(project: HackathonSubmission): string {
+  const author = project.nostrAuthor;
+  const authorMember = author
+    ? project.team.find((m) => m.pubkey === author)
+    : null;
+  const namedMember = project.team.find((m) => m.name.trim().length > 0);
+  return (
+    authorMember?.name.trim() ||
+    namedMember?.name.trim() ||
+    (author ? `${author.slice(0, 8)}…` : "Nostr")
   );
 }
