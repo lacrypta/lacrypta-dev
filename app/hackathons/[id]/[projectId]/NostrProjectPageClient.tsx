@@ -39,6 +39,7 @@ import { getSigner } from "@/lib/nostrSigner";
 import { useToast } from "@/components/Toast";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
+import { soldierProfileHref } from "@/lib/soldierProfileLinks";
 import { Trophy, Lightbulb, AlertTriangle } from "lucide-react";
 import NewProjectModal from "@/components/NewProjectModal";
 
@@ -808,11 +809,10 @@ export default function NostrProjectPage({
                   {project.team.map((m, i) => {
                     const pic =
                       i === 0 ? (authorPicture ?? m.picture) : m.picture;
-                    return (
-                      <li
-                        key={`${m.name}-${m.role}`}
-                        className="flex items-center gap-2.5"
-                      >
+                    const displayName = m.name || m.nip05 || "Anónimo";
+                    const profileHref = soldierProfileHref(m);
+                    const memberContent = (
+                      <>
                         {pic ? (
                           <img
                             src={pic}
@@ -824,23 +824,44 @@ export default function NostrProjectPage({
                           />
                         ) : (
                           <div className="h-8 w-8 rounded-full bg-gradient-to-br from-nostr/30 to-bitcoin/30 ring-1 ring-border-strong flex items-center justify-center text-xs font-display font-bold shrink-0">
-                            {m.name.slice(0, 2).toUpperCase()}
+                            {displayName.slice(0, 2).toUpperCase()}
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold truncate">
-                            {m.name}
+                          <div className="text-sm font-semibold truncate transition-colors group-hover/member:text-nostr">
+                            {displayName}
                           </div>
                           <div className="text-[10px] font-mono text-foreground-subtle">
                             {m.role}
                           </div>
                         </div>
+                      </>
+                    );
+                    return (
+                      <li
+                        key={`${m.name}-${m.role}`}
+                        className="flex items-center gap-2.5"
+                      >
+                        {profileHref ? (
+                          <Link
+                            href={profileHref}
+                            className="-m-1.5 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1.5 transition-colors hover:bg-white/[0.04] group/member"
+                            aria-label={`Ver perfil de ${displayName}`}
+                          >
+                            {memberContent}
+                          </Link>
+                        ) : (
+                          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                            {memberContent}
+                          </div>
+                        )}
                         {m.github && (
                           <a
                             href={`https://github.com/${m.github}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="shrink-0 text-foreground-subtle hover:text-foreground"
+                            aria-label={`GitHub de ${displayName}`}
                           >
                             <GithubIcon className="h-3.5 w-3.5" />
                           </a>
