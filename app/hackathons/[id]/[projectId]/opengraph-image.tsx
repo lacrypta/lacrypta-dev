@@ -7,16 +7,30 @@ import {
   getProject,
   prizeForProject,
 } from "@/lib/hackathons";
-import { getNostrProject } from "@/lib/nostrCache";
+import {
+  getNostrProject,
+  getNostrSubmissionsSnapshot,
+} from "@/lib/nostrCache";
 
 export const alt = "Proyecto · Hackatón · La Crypta Dev";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export function generateStaticParams() {
-  return HACKATHONS.flatMap((h) =>
+export async function generateStaticParams() {
+  const curated = HACKATHONS.flatMap((h) =>
     getHackathonProjects(h.id).map((p) => ({ id: h.id, projectId: p.id })),
   );
+
+  const hackathonIds = new Set(HACKATHONS.map((h) => h.id));
+  const seen = new Set(curated.map((p) => `${p.id}/${p.projectId}`));
+
+  const { projects } = await getNostrSubmissionsSnapshot();
+  const community = projects
+    .filter((p) => p.hackathon && hackathonIds.has(p.hackathon))
+    .filter((p) => !seen.has(`${p.hackathon}/${p.id}`))
+    .map((p) => ({ id: p.hackathon as string, projectId: p.id }));
+
+  return [...curated, ...community];
 }
 
 const STATUS_COLOR: Record<string, string> = {

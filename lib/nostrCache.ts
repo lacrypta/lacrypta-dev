@@ -208,7 +208,7 @@ async function getSubmissionsSnapshotCached(): Promise<
   CachedNostrSubmissionsSnapshot
 > {
   "use cache";
-  cacheLife("hours");
+  cacheLife("days");
   cacheTag(NOSTR_SUBMISSIONS_TAG);
   try {
     return {
