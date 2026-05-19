@@ -517,15 +517,15 @@ export default function NostrProjectPage({
               {project.description}
             </p>
 
-            <div className="mt-5 flex flex-wrap items-center gap-2">
+            <div className="mt-6 flex flex-wrap items-center gap-3">
               {project.repo && (
                 <a
                   href={project.repo}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold transition-colors"
+                  className="inline-flex min-h-12 items-center gap-3 rounded-xl border border-border bg-white/[0.03] px-6 py-3 text-base font-semibold transition-colors hover:bg-white/[0.06]"
                 >
-                  <GithubIcon className="h-3.5 w-3.5" />
+                  <GithubIcon className="h-5 w-5" />
                   Repo
                 </a>
               )}
@@ -534,9 +534,9 @@ export default function NostrProjectPage({
                   href={project.demo}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold transition-colors"
+                  className="inline-flex min-h-12 items-center gap-3 rounded-xl border border-border bg-white/[0.03] px-6 py-3 text-base font-semibold transition-colors hover:bg-white/[0.06]"
                 >
-                  <ExternalLink className="h-3.5 w-3.5" />
+                  <ExternalLink className="h-5 w-5" />
                   Demo
                 </a>
               )}
