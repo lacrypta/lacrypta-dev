@@ -251,7 +251,7 @@ function curatedHackathonId(p: (typeof PROJECTS)[number]): string | null {
 
 async function buildSoldiers(): Promise<Soldier[]> {
   "use cache";
-  cacheLife("hours");
+  cacheLife("days");
   cacheTag("nostr:hackathon-submissions");
 
   const map = new Map<string, Soldier>();

@@ -89,7 +89,7 @@ export async function getCachedNostrProfile(
   pubkey: string,
 ): Promise<CachedNostrProfile | null> {
   "use cache";
-  cacheLife("hours");
+  cacheLife("days");
   cacheTag(`nostr:profile:${pubkey}`);
   try {
     return await rawFetchProfile(pubkey);

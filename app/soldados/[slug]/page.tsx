@@ -24,6 +24,11 @@ import { cn } from "@/lib/cn";
 
 type RouteParams = { slug: string };
 
+export async function generateStaticParams() {
+  const soldiers = await getSoldiers();
+  return soldiers.map((s) => ({ slug: s.slug }));
+}
+
 export async function generateMetadata({
   params,
 }: {
