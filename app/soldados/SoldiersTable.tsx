@@ -7,12 +7,12 @@ import type { Soldier } from "@/lib/soldiers";
 
 // Mirrors the scoring constants in lib/soldiers.ts. Kept local to render
 // the per-cell breakdown without re-exporting internals from that module.
-const POINTS_PER_HACKATHON = 3;
-const POINTS_PER_PROJECT = 2;
+const POINTS_PER_HACKATHON = 1;
+const POINTS_PER_PROJECT = 0;
 const POSITION_POINTS: Record<number, number> = {
-  1: 6,
-  2: 5,
-  3: 4,
+  1: 10,
+  2: 7,
+  3: 5,
   4: 3,
   5: 2,
   6: 1,
@@ -479,7 +479,7 @@ function ScoreBreakdownTooltip({ soldier }: { soldier: Soldier }) {
         <li className="flex items-baseline justify-between gap-4">
           <span className="text-foreground-muted">
             Hackatones <span className="text-foreground-subtle">·</span>{" "}
-            {hackathonsCount} × 3
+            {hackathonsCount} × {POINTS_PER_HACKATHON}
           </span>
           <span className="font-bold text-foreground tabular-nums">
             +{b.hackathons}{" "}
@@ -489,7 +489,7 @@ function ScoreBreakdownTooltip({ soldier }: { soldier: Soldier }) {
         <li className="flex items-baseline justify-between gap-4">
           <span className="text-foreground-muted">
             Proyectos <span className="text-foreground-subtle">·</span>{" "}
-            {projects.length} × 2
+            {projects.length} × {POINTS_PER_PROJECT}
           </span>
           <span className="font-bold text-foreground tabular-nums">
             +{b.projects}{" "}
