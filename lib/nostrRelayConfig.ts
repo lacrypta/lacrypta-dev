@@ -22,12 +22,51 @@ export const LACRYPTA_FAST_USER_RELAYS = [
 ] as const;
 
 /** NIP-46 login needs relay.nsec.app even though it does not accept kind 1. */
+export const LACRYPTA_LOGIN_ONLY_RELAYS = ["wss://relay.nsec.app"] as const;
+
 export const LACRYPTA_NIP46_LOGIN_RELAYS = [
   "wss://relay.masize.com",
-  "wss://relay.nsec.app",
+  ...LACRYPTA_LOGIN_ONLY_RELAYS,
   "wss://nos.lol",
 ] as const;
 
 export const DEFAULT_RELAYS = [...LACRYPTA_DEFAULT_RELAYS];
 export const FAST_USER_RELAYS = [...LACRYPTA_FAST_USER_RELAYS];
 export const NIP46_LOGIN_RELAYS = [...LACRYPTA_NIP46_LOGIN_RELAYS];
+
+function normalizeRelayForPolicy(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const withScheme = /^wss?:\/\//i.test(trimmed) ? trimmed : `wss://${trimmed}`;
+  try {
+    const url = new URL(withScheme);
+    if (url.protocol !== "ws:" && url.protocol !== "wss:") return null;
+    const path = url.pathname === "/" ? "" : url.pathname;
+    return `${url.protocol}//${url.host}${path}${url.search}`.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+const LOGIN_ONLY_RELAY_SET = new Set(
+  LACRYPTA_LOGIN_ONLY_RELAYS.map((relay) => normalizeRelayForPolicy(relay)),
+);
+
+export function isLoginOnlyRelay(raw: string): boolean {
+  const normalized = normalizeRelayForPolicy(raw);
+  return normalized ? LOGIN_ONLY_RELAY_SET.has(normalized) : false;
+}
+
+export function mergeDataRelays(
+  ...groups: Array<readonly string[] | null | undefined>
+): string[] {
+  const relays = new Map<string, string>();
+  for (const group of groups) {
+    for (const relay of group ?? []) {
+      const normalized = normalizeRelayForPolicy(relay);
+      if (!normalized || LOGIN_ONLY_RELAY_SET.has(normalized)) continue;
+      relays.set(normalized, normalized);
+    }
+  }
+  return [...relays.values()];
+}

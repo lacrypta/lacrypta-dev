@@ -40,6 +40,7 @@ import { useToast } from "@/components/Toast";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
 import { soldierProfileHref } from "@/lib/soldierProfileLinks";
+import { mergeDataRelays } from "@/lib/nostrRelayConfig";
 import { Trophy, Lightbulb, AlertTriangle } from "lucide-react";
 import NewProjectModal from "@/components/NewProjectModal";
 
@@ -315,9 +316,7 @@ export default function NostrProjectPage({
   const [searchProgress, setSearchProgress] =
     useState<CommunityScanProgress | null>(null);
   const relays = useMemo(() => {
-    const out = new Set<string>(DEFAULT_USER_RELAYS);
-    auth?.bunker?.relays?.forEach((r) => out.add(r));
-    return [...out];
+    return mergeDataRelays(DEFAULT_USER_RELAYS, auth?.bunker?.relays);
   }, [auth]);
 
   useEffect(() => {
