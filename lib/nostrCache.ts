@@ -43,6 +43,11 @@ export type CachedNostrProject = {
   hackathon: string | null;
   status: ProjectStatus;
   team: CachedNostrTeamMember[];
+  logo?: string;
+  cover?: string;
+  images?: string[];
+  thumbs?: string[];
+  videos?: string[];
   repo?: string;
   demo?: string;
   tech?: string[];
@@ -144,6 +149,11 @@ function parseEvent(ev: IncomingEvent): CachedNostrProject | null {
     hackathon,
     status,
     team: parseTeam(parsed.team),
+    logo: str(parsed.logo) ?? str(parsed.picture),
+    cover: str(parsed.cover) ?? str(parsed.banner),
+    images: arr(parsed.images) ?? arr(parsed.screenshots),
+    thumbs: arr(parsed.thumbs) ?? arr(parsed.thumbnails),
+    videos: arr(parsed.videos),
     repo: str(parsed.repo),
     demo: str(parsed.demo) ?? str(parsed.url),
     tech: arr(parsed.tech) ?? arr(parsed.tags),

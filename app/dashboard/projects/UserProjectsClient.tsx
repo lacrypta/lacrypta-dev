@@ -43,6 +43,7 @@ import {
 } from "@/lib/userProjects";
 import { HACKATHONS } from "@/lib/hackathons";
 import { useNostrProfile } from "@/lib/nostrProfile";
+import { mergeDataRelays } from "@/lib/nostrRelayConfig";
 
 type RelayResult = { relay: string; ok: boolean; error?: string };
 type Phase = "signing" | "publishing" | "done";
@@ -70,6 +71,11 @@ type FormState = {
   id: string | null;
   name: string;
   description: string;
+  logo: string;
+  cover: string;
+  images: string[];
+  thumbs: string[];
+  videos: string[];
   demo: string;
   repo: string;
   tech: string[];
@@ -90,6 +96,11 @@ function emptyForm(): FormState {
     id: null,
     name: "",
     description: "",
+    logo: "",
+    cover: "",
+    images: [],
+    thumbs: [],
+    videos: [],
     demo: "",
     repo: "",
     tech: [],
@@ -248,9 +259,7 @@ export default function UserProjectsClient() {
   }, [ownerRow, formOpen, form.id]);
 
   const relays = useMemo(() => {
-    const out = new Set<string>(DEFAULT_USER_RELAYS);
-    auth?.bunker?.relays?.forEach((r) => out.add(r));
-    return [...out];
+    return mergeDataRelays(DEFAULT_USER_RELAYS, auth?.bunker?.relays);
   }, [auth]);
 
   useEffect(() => {
@@ -505,6 +514,11 @@ export default function UserProjectsClient() {
       id: p.id,
       name: p.name,
       description: p.description ?? "",
+      logo: p.logo ?? "",
+      cover: p.cover ?? "",
+      images: p.images ?? [],
+      thumbs: p.thumbs ?? [],
+      videos: p.videos ?? [],
       demo: p.demo ?? "",
       repo: p.repo ?? "",
       tech: p.tech ?? [],
@@ -519,8 +533,13 @@ export default function UserProjectsClient() {
     if (!doc || !auth) return;
     const now = Math.floor(Date.now() / 1000);
     const today = new Date().toISOString().slice(0, 10);
-    const clean = (s: string) => s.trim();
-    const tech = form.tech.map((t) => t.trim()).filter(Boolean);
+    const clean = (s?: string | null) =>
+      typeof s === "string" ? s.trim() : "";
+    const tech = form.tech.map((t) => clean(t)).filter(Boolean);
+    const cleanList = (items: string[]) => items.map(clean).filter(Boolean);
+    const images = cleanList(form.images);
+    const thumbs = cleanList(form.thumbs);
+    const videos = cleanList(form.videos);
 
     const team: TeamMember[] = form.team
       .map((row) => {
@@ -551,6 +570,11 @@ export default function UserProjectsClient() {
       id: form.id ?? crypto.randomUUID(),
       name: clean(form.name),
       description: clean(form.description) || "",
+      logo: clean(form.logo) || undefined,
+      cover: clean(form.cover) || undefined,
+      images: images.length ? images : undefined,
+      thumbs: thumbs.length ? thumbs : undefined,
+      videos: videos.length ? videos : undefined,
       team,
       repo: clean(form.repo) || undefined,
       demo: clean(form.demo) || undefined,
