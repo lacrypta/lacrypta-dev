@@ -211,7 +211,7 @@ export default async function SoldierProfilePage({
           <ScoreCell
             label="Posiciones"
             value={`+${soldier.scoreBreakdown.positions}`}
-            sub="podio"
+            sub="top 6"
           />
         </div>
 

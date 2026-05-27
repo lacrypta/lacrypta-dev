@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Trophy, Zap } from "lucide-react";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
+import { HACKATHON_LABELS } from "@/lib/projects";
 import type { Soldier } from "@/lib/soldiers";
 
 // Mirrors the scoring constants in lib/soldiers.ts. Kept local to render
@@ -61,21 +62,47 @@ function medal(position: number | null): string {
   return "";
 }
 
-function medalCounts(s: Soldier): {
-  gold: number;
-  silver: number;
-  bronze: number;
-  total: number;
-} {
-  let gold = 0;
-  let silver = 0;
-  let bronze = 0;
-  for (const p of s.projects) {
-    if (p.position === 1) gold++;
-    else if (p.position === 2) silver++;
-    else if (p.position === 3) bronze++;
+type ScoredPositionEntry = {
+  position: number;
+  hackathonId: string | null;
+  hackathonLabel: string;
+  projectId: string;
+  points: number;
+};
+
+function scoredPositionEntries(projects: Soldier["projects"]): ScoredPositionEntry[] {
+  return projects
+    .filter((p) => p.positionPoints > 0 && p.position != null)
+    .map((p) => ({
+      position: p.position!,
+      hackathonId: p.hackathonId,
+      hackathonLabel: p.hackathonId ? hackathonLabel(p.hackathonId) : "Sin hackatón",
+      projectId: p.projectId,
+      points: p.positionPoints,
+    }))
+    .sort((a, b) => {
+      if (a.position !== b.position) return a.position - b.position;
+      return a.hackathonLabel.localeCompare(b.hackathonLabel, undefined, {
+        sensitivity: "base",
+      });
+    });
+}
+
+function positionLabel(position: number): string {
+  if (position === 1) return "1er puesto 🥇";
+  if (position === 2) return "2do puesto 🥈";
+  if (position === 3) return "3er puesto 🥉";
+  if (position === 4) return "4to puesto";
+  if (position === 5) return "5to puesto";
+  if (position === 6) return "6to puesto";
+  return `${position}° puesto`;
+}
+
+function hackathonLabel(id: string): string {
+  if (id in HACKATHON_LABELS) {
+    return HACKATHON_LABELS[id as keyof typeof HACKATHON_LABELS];
   }
-  return { gold, silver, bronze, total: gold + silver + bronze };
+  return id;
 }
 
 export default function SoldiersTable({ soldiers }: { soldiers: Soldier[] }) {
@@ -95,7 +122,7 @@ export default function SoldiersTable({ soldiers }: { soldiers: Soldier[] }) {
             <th className="px-4 py-3 text-left">Builder</th>
             <th className="px-4 py-3 text-right tabular-nums">Hackatones</th>
             <th className="px-4 py-3 text-right tabular-nums">Proyectos</th>
-            <th className="px-4 py-3 text-right tabular-nums">Medallas</th>
+            <th className="px-4 py-3 text-right tabular-nums">Puestos</th>
             <th className="px-4 py-3 text-right tabular-nums">Mejor</th>
             <th className="px-4 py-3 text-right tabular-nums">Score</th>
           </tr>
@@ -217,63 +244,38 @@ export default function SoldiersTable({ soldiers }: { soldiers: Soldier[] }) {
                 </td>
                 <td className="px-4 py-3 align-middle text-right">
                   {(() => {
-                    const m = medalCounts(s);
-                    if (m.total === 0)
+                    const entries = scoredPositionEntries(s.projects);
+                    if (entries.length === 0)
                       return (
                         <span className="text-foreground-subtle text-xs">
                           —
                         </span>
                       );
-                    const goldPts = m.gold * POSITION_POINTS[1]!;
-                    const silverPts = m.silver * POSITION_POINTS[2]!;
-                    const bronzePts = m.bronze * POSITION_POINTS[3]!;
-                    const medalsTotal = goldPts + silverPts + bronzePts;
-                    const rows: TooltipRow[] = [];
-                    if (m.gold > 0)
-                      rows.push({
-                        left: `🥇 ${m.gold} × ${POSITION_POINTS[1]}`,
-                      });
-                    if (m.silver > 0)
-                      rows.push({
-                        left: `🥈 ${m.silver} × ${POSITION_POINTS[2]}`,
-                      });
-                    if (m.bronze > 0)
-                      rows.push({
-                        left: `🥉 ${m.bronze} × ${POSITION_POINTS[3]}`,
-                      });
+                    const rows = entries.map(({ position, hackathonLabel }) => ({
+                      left: `${positionLabel(position)} · ${hackathonLabel} · ${POSITION_POINTS[position]} pts`,
+                    }));
+                    const positionsTotal = entries.reduce(
+                      (sum, entry) => sum + entry.points,
+                      0,
+                    );
                     return (
-                      <span className="group/medals relative inline-block cursor-help">
-                        <span className="inline-flex items-center justify-end gap-2 text-sm">
-                          {m.gold > 0 && (
-                            <span className="inline-flex items-center gap-0.5">
-                              <span aria-hidden>🥇</span>
-                              <span className="font-mono font-semibold tabular-nums text-foreground">
-                                {m.gold}
-                              </span>
+                      <span className="group/positions relative inline-block cursor-help">
+                        <span className="inline-flex max-w-44 flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs">
+                          {entries.map(({ position, hackathonLabel, projectId }) => (
+                            <span
+                              key={`${projectId}-${position}`}
+                              title={hackathonLabel}
+                              className="inline-flex items-center gap-1 rounded-full border border-border bg-white/[0.03] px-2 py-0.5 text-foreground-muted"
+                            >
+                              <span>{positionLabel(position)}</span>
                             </span>
-                          )}
-                          {m.silver > 0 && (
-                            <span className="inline-flex items-center gap-0.5">
-                              <span aria-hidden>🥈</span>
-                              <span className="font-mono font-semibold tabular-nums text-foreground">
-                                {m.silver}
-                              </span>
-                            </span>
-                          )}
-                          {m.bronze > 0 && (
-                            <span className="inline-flex items-center gap-0.5">
-                              <span aria-hidden>🥉</span>
-                              <span className="font-mono font-semibold tabular-nums text-foreground">
-                                {m.bronze}
-                              </span>
-                            </span>
-                          )}
+                          ))}
                         </span>
                         <StatTooltip
-                          hoverClass="group-hover/medals:opacity-100 group-hover/medals:translate-y-0"
-                          title="Medallas"
+                          hoverClass="group-hover/positions:opacity-100 group-hover/positions:translate-y-0"
+                          title="Puestos puntuables"
                           rows={rows}
-                          total={medalsTotal}
+                          total={positionsTotal}
                         />
                       </span>
                     );
@@ -422,8 +424,8 @@ function StatTooltip({
       role="tooltip"
       className={cn(
         "pointer-events-none absolute right-0 top-full mt-2 z-30",
-        "min-w-[13rem] max-w-xs rounded-xl border border-border bg-background-card/95 backdrop-blur-md shadow-2xl",
-        "px-3.5 py-2.5 text-left whitespace-nowrap",
+        "min-w-[18rem] max-w-md rounded-xl border border-border bg-background-card/95 backdrop-blur-md shadow-2xl",
+        "px-3.5 py-2.5 text-left whitespace-normal",
         "opacity-0 translate-y-1",
         hoverClass,
         "transition-all duration-150",
@@ -497,7 +499,7 @@ function ScoreBreakdownTooltip({ soldier }: { soldier: Soldier }) {
           </span>
         </li>
         <li className="flex items-baseline justify-between gap-4">
-          <span className="text-foreground-muted">Posiciones</span>
+          <span className="text-foreground-muted">Puestos</span>
           <span className="font-bold text-foreground tabular-nums">
             +{b.positions}{" "}
             <span className="font-normal text-foreground-subtle">puntos</span>
