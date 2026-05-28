@@ -9,6 +9,7 @@ import {
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
 import type { Project } from "@/lib/projects";
+import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
 
 const STATUS_BADGE: Record<string, string> = {
   official: "bg-bitcoin/10 border-bitcoin/40 text-bitcoin",
@@ -22,6 +23,8 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 export default function CuratedProjectPage({ project }: { project: Project }) {
+  const team = dedupeSoldierProfileMembers(project.team);
+
   return (
     <div className="relative pt-24 pb-16">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -100,13 +103,13 @@ export default function CuratedProjectPage({ project }: { project: Project }) {
                   Equipo
                 </h2>
               </div>
-              {project.team.length === 0 ? (
+              {team.length === 0 ? (
                 <p className="text-xs text-foreground-subtle">
                   Sin equipo cargado.
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {project.team.map((m) => (
+                  {team.map((m) => (
                     <li
                       key={`${m.name}-${m.role}`}
                       className="flex items-center gap-2.5"

@@ -43,6 +43,7 @@ import {
 } from "@/lib/userProjects";
 import { HACKATHONS } from "@/lib/hackathons";
 import { useNostrProfile } from "@/lib/nostrProfile";
+import { mergeNonAuthRelays } from "@/lib/nostrRelayConfig";
 
 type RelayResult = { relay: string; ok: boolean; error?: string };
 type Phase = "signing" | "publishing" | "done";
@@ -79,10 +80,41 @@ type FormState = {
   submittedAt?: string;
 };
 
+type GitHubRepoSuggestion = {
+  id: number;
+  name: string;
+  fullName: string;
+  htmlUrl: string;
+  description: string | null;
+  language: string | null;
+  topics: string[];
+  homepage: string | null;
+  pushedAt: string | null;
+  archived: boolean;
+  fork: boolean;
+};
+
 function newRowKey() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
+}
+
+function githubUsernameFromProfile(
+  profile: ReturnType<typeof useNostrProfile>["profile"],
+): string | null {
+  const direct = profile?.github?.trim().replace(/^@+/, "");
+  if (direct && /^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/i.test(direct)) {
+    return direct;
+  }
+
+  const website = profile?.website?.trim();
+  if (!website) return null;
+
+  const match = website.match(
+    /^(?:https?:\/\/)?(?:www\.)?github\.com\/([a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?)(?:\/)?(?:[?#].*)?$/i,
+  );
+  return match?.[1] ?? null;
 }
 
 function emptyForm(): FormState {
@@ -214,6 +246,10 @@ export default function UserProjectsClient() {
   // Profile for the currently-authenticated user — used to pre-fill the
   // owner row in the team editor (avatar + nip05 + display name).
   const { profile: ownerProfile } = useNostrProfile(auth?.pubkey);
+  const ownerGithub = useMemo(
+    () => githubUsernameFromProfile(ownerProfile),
+    [ownerProfile],
+  );
 
   const ownerRow = useCallback((): TeamRow => {
     return {
@@ -248,9 +284,7 @@ export default function UserProjectsClient() {
   }, [ownerRow, formOpen, form.id]);
 
   const relays = useMemo(() => {
-    const out = new Set<string>(DEFAULT_USER_RELAYS);
-    auth?.bunker?.relays?.forEach((r) => out.add(r));
-    return [...out];
+    return mergeNonAuthRelays(DEFAULT_USER_RELAYS, auth?.bunker?.relays);
   }, [auth]);
 
   useEffect(() => {
@@ -519,8 +553,8 @@ export default function UserProjectsClient() {
     if (!doc || !auth) return;
     const now = Math.floor(Date.now() / 1000);
     const today = new Date().toISOString().slice(0, 10);
-    const clean = (s: string) => s.trim();
-    const tech = form.tech.map((t) => t.trim()).filter(Boolean);
+    const clean = (s?: string | null) => s?.trim() ?? "";
+    const tech = form.tech.map((t) => clean(t)).filter(Boolean);
 
     const team: TeamMember[] = form.team
       .map((row) => {
@@ -744,6 +778,7 @@ export default function UserProjectsClient() {
         open={formOpen}
         form={form}
         setForm={setForm}
+        githubUsername={ownerGithub}
         onSave={handleSave}
         onClose={() => {
           setFormOpen(false);
@@ -1084,6 +1119,52 @@ async function fetchGitHubMeta(repoUrl: string): Promise<{
   };
 }
 
+async function fetchGitHubUserRepos(
+  username: string,
+): Promise<GitHubRepoSuggestion[]> {
+  const res = await fetch(
+    `https://api.github.com/users/${encodeURIComponent(username)}/repos?sort=pushed&direction=desc&per_page=100&type=owner`,
+    { headers: { Accept: "application/vnd.github+json" } },
+  );
+
+  if (!res.ok) {
+    if (res.status === 404) throw new Error("Usuario de GitHub no encontrado");
+    if (res.status === 403) throw new Error("GitHub limitó la consulta");
+    throw new Error("No se pudieron cargar repos de GitHub");
+  }
+
+  const repos = (await res.json()) as Array<{
+    id: number;
+    name: string;
+    full_name: string;
+    html_url: string;
+    description: string | null;
+    language: string | null;
+    topics?: string[];
+    homepage: string | null;
+    pushed_at: string | null;
+    archived?: boolean;
+    fork?: boolean;
+    private?: boolean;
+  }>;
+
+  return repos
+    .filter((repo) => !repo.private)
+    .map((repo) => ({
+      id: repo.id,
+      name: repo.name,
+      fullName: repo.full_name,
+      htmlUrl: repo.html_url,
+      description: repo.description,
+      language: repo.language,
+      topics: repo.topics ?? [],
+      homepage: repo.homepage,
+      pushedAt: repo.pushed_at,
+      archived: !!repo.archived,
+      fork: !!repo.fork,
+    }));
+}
+
 function RelayPublishProgress({
   relays,
   results,
@@ -1222,6 +1303,7 @@ function ProjectFormModal({
   open,
   form,
   setForm,
+  githubUsername,
   onSave,
   onClose,
   publishing,
@@ -1231,6 +1313,7 @@ function ProjectFormModal({
   open: boolean;
   form: FormState;
   setForm: (f: FormState) => void;
+  githubUsername: string | null;
   onSave: () => void;
   onClose: () => void;
   publishing: boolean;
@@ -1239,14 +1322,105 @@ function ProjectFormModal({
 }) {
   const [step, setStep] = useState<"repo" | "fetching" | "form">("repo");
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [githubRepos, setGithubRepos] = useState<GitHubRepoSuggestion[]>([]);
+  const [githubReposLoading, setGithubReposLoading] = useState(false);
+  const [githubReposError, setGithubReposError] = useState<string | null>(null);
+  const repoQuery = form.repo.trim();
+  const repoQueryUrl = repoQuery.match(
+    /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^/]+?)\/([^/?#]+?)(?:\.git)?\/?(?:[?#].*)?$/i,
+  );
+  const normalizedRepoQueryUrl = repoQueryUrl
+    ? `https://github.com/${repoQueryUrl[1]}/${repoQueryUrl[2].replace(/\.git$/i, "")}`
+    : null;
+  const filteredRepos = useMemo(() => {
+    const query = repoQuery.toLowerCase();
+    const base = normalizedRepoQueryUrl
+      ? githubRepos.filter(
+          (repo) =>
+            repo.htmlUrl.toLowerCase() === normalizedRepoQueryUrl.toLowerCase(),
+        )
+      : !query
+      ? githubRepos
+      : githubRepos.filter((repo) =>
+          [
+            repo.name,
+            repo.fullName,
+            repo.description ?? "",
+            repo.language ?? "",
+            ...repo.topics,
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(query),
+        );
+
+    if (
+      !normalizedRepoQueryUrl ||
+      base.some(
+        (repo) =>
+          repo.htmlUrl.toLowerCase() === normalizedRepoQueryUrl.toLowerCase(),
+      )
+    ) {
+      return base;
+    }
+
+    if (!repoQueryUrl) return base;
+
+    const [, owner, rawRepo] = repoQueryUrl;
+    const repoName = rawRepo.replace(/\.git$/i, "");
+    return [
+      {
+        id: -1,
+        name: repoName,
+        fullName: `${owner}/${repoName}`,
+        htmlUrl: normalizedRepoQueryUrl,
+        description: "Usar esta URL de GitHub",
+        language: null,
+        topics: [],
+        homepage: null,
+        pushedAt: null,
+        archived: false,
+        fork: false,
+      },
+      ...base,
+    ];
+  }, [githubRepos, normalizedRepoQueryUrl, repoQuery, repoQueryUrl]);
 
   useEffect(() => {
     if (open) {
       setStep(form.id ? "form" : "repo");
       setFetchError(null);
+      setGithubReposError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  useEffect(() => {
+    if (!open || form.id || step !== "repo" || !githubUsername) return;
+    let cancelled = false;
+
+    setGithubReposLoading(true);
+    setGithubReposError(null);
+    fetchGitHubUserRepos(githubUsername)
+      .then((repos) => {
+        if (cancelled) return;
+        setGithubRepos(repos);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setGithubRepos([]);
+        setGithubReposError(
+          e instanceof Error ? e.message : "No se pudieron cargar repos",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setGithubReposLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, form.id, step, githubUsername]);
 
   const phaseLabel =
     phase === "signing"
@@ -1267,13 +1441,14 @@ function ProjectFormModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose, publishing]);
 
-  async function handleFetch() {
+  async function handleFetch(repoUrl = form.repo.trim()) {
     setFetchError(null);
     setStep("fetching");
     try {
-      const meta = await fetchGitHubMeta(form.repo.trim());
+      const meta = await fetchGitHubMeta(repoUrl);
       setForm({
         ...form,
+        repo: repoUrl,
         name: meta.name.replace(/-/g, " "),
         description: meta.readmeDescription || meta.description || "",
         demo: meta.homepage ?? "",
@@ -1355,22 +1530,97 @@ function ProjectFormModal({
                 <p className="text-sm text-foreground-muted">
                   Ingresá la URL del repositorio en GitHub para autocompletar nombre, descripción y stack.
                 </p>
+                <Field label="Buscar repositorio">
+                  <input
+                    type="search"
+                    autoFocus
+                    value={form.repo}
+                    onChange={(e) => setForm({ ...form, repo: e.target.value })}
+                    placeholder="Buscar por nombre o pegar https://github.com/owner/repo"
+                    className="w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm font-mono placeholder:text-foreground-subtle"
+                  />
+                </Field>
                 {fetchError && (
                   <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-danger/10 border border-danger/30 text-sm text-danger">
                     <X className="h-4 w-4 shrink-0" />
                     {fetchError}
                   </div>
                 )}
-                <Field label="Repositorio de GitHub">
-                  <input
-                    type="url"
-                    autoFocus
-                    value={form.repo}
-                    onChange={(e) => setForm({ ...form, repo: e.target.value })}
-                    placeholder="https://github.com/owner/repo"
-                    className="w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm font-mono placeholder:text-foreground-subtle"
-                  />
-                </Field>
+                {githubUsername && (
+                  <div className="rounded-xl border border-border bg-white/[0.03] overflow-hidden">
+                    <div className="flex items-center justify-between gap-3 px-3 py-2.5 border-b border-border">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                          <GithubIcon className="h-3.5 w-3.5" />
+                          <span className="truncate">@{githubUsername}</span>
+                        </div>
+                        <div className="text-[10px] text-foreground-subtle mt-0.5">
+                          {repoQuery
+                            ? `${filteredRepos.length} resultado${filteredRepos.length === 1 ? "" : "s"}`
+                            : githubRepos.length > 0
+                              ? `${githubRepos.length} repos públicos`
+                              : "Repos públicos"}
+                        </div>
+                      </div>
+                      {githubReposLoading && (
+                        <Loader2 className="h-4 w-4 animate-spin text-foreground-subtle shrink-0" />
+                      )}
+                    </div>
+                    {githubReposError ? (
+                      <div className="px-3 py-2.5 text-xs text-danger">
+                        {githubReposError}
+                      </div>
+                    ) : filteredRepos.length > 0 ? (
+                      <div className="max-h-64 overflow-y-auto divide-y divide-border">
+                        {filteredRepos.map((repo) => (
+                          <button
+                            key={`${repo.id}-${repo.htmlUrl}`}
+                            type="button"
+                            onClick={() => handleFetch(repo.htmlUrl)}
+                            disabled={githubReposLoading}
+                            className={cn(
+                              "w-full px-3 py-2.5 text-left hover:bg-white/[0.04] transition-colors disabled:opacity-60",
+                              repo.htmlUrl === normalizedRepoQueryUrl &&
+                                "bg-bitcoin/10",
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="min-w-0 truncate text-sm font-semibold text-foreground">
+                                {repo.name}
+                              </span>
+                              {repo.language && (
+                                <span className="shrink-0 text-[10px] font-mono text-foreground-subtle">
+                                  {repo.language}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-foreground-muted">
+                              {repo.description && (
+                                <span className="min-w-0 max-w-full truncate">
+                                  {repo.description}
+                                </span>
+                              )}
+                              {repo.fork && (
+                                <span className="shrink-0 text-[10px] font-mono text-foreground-subtle">
+                                  fork
+                                </span>
+                              )}
+                              {repo.archived && (
+                                <span className="shrink-0 text-[10px] font-mono text-foreground-subtle">
+                                  archivado
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : githubReposLoading ? null : (
+                      <div className="px-3 py-2.5 text-xs text-foreground-subtle">
+                        No encontré repos para esa búsqueda.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="relative px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
@@ -1404,7 +1654,7 @@ function ProjectFormModal({
                     action={
                       <button
                         type="button"
-                        onClick={handleFetch}
+                        onClick={() => handleFetch()}
                         disabled={publishing || !form.repo.trim()}
                         title="Recargar desde GitHub"
                         className="p-0.5 rounded text-foreground-subtle hover:text-bitcoin disabled:opacity-40 transition-colors"

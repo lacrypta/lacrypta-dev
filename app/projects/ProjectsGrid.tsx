@@ -35,6 +35,7 @@ import {
 } from "@/lib/userProjects";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
+import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
 
 type ProjectSource = "builtin" | "nostr";
 
@@ -145,7 +146,7 @@ function toDisplay(p: Project): DisplayProject {
 function nostrToDisplay(np: CommunityProject): DisplayProject {
   const team =
     np.team && np.team.length > 0
-      ? np.team.map((m) => ({
+      ? dedupeSoldierProfileMembers(np.team).map((m) => ({
           name: m.name,
           github: m.github ?? "",
           role: m.role,
@@ -589,6 +590,7 @@ function ProjectCard({
   authorPicture?: string;
 }) {
   const status = getBadge(project);
+  const team = dedupeSoldierProfileMembers(project.team);
 
   const nostrProjectId =
     project.source === "nostr" && project.author
@@ -675,11 +677,11 @@ function ProjectCard({
             {project.description}
           </p>
 
-          {project.team.length > 0 && (
+          {team.length > 0 && (
             <div className="mt-4 flex items-center gap-1.5 text-xs text-foreground-muted">
               <Users className="h-3.5 w-3.5 opacity-60" />
               <span className="truncate">
-                {project.team.map((m) => m.name).join(" · ")}
+                {team.map((m) => m.name).join(" · ")}
               </span>
             </div>
           )}

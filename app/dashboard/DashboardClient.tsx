@@ -36,6 +36,7 @@ import {
   DEFAULT_PROFILE_RELAYS,
   type NostrProfile as BaseNostrProfile,
 } from "@/lib/nostrProfile";
+import { mergeNonAuthRelays } from "@/lib/nostrRelayConfig";
 import {
   useRelayList,
   publishRelayList,
@@ -80,11 +81,7 @@ export default function DashboardClient() {
   const [error, setError] = useState<string | null>(null);
 
   const relays = useMemo(() => {
-    const out = new Set<string>(DEFAULT_PROFILE_RELAYS);
-    if (auth?.bunker?.relays) {
-      auth.bunker.relays.forEach((r) => out.add(r));
-    }
-    return [...out];
+    return mergeNonAuthRelays(DEFAULT_PROFILE_RELAYS, auth?.bunker?.relays);
   }, [auth]);
 
   const {

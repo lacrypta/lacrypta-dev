@@ -36,10 +36,14 @@ import { getHackathon, type Hackathon } from "@/lib/hackathons";
 import { useProjectReport } from "@/lib/nostrReports";
 import { useAuth } from "@/lib/auth";
 import { getSigner } from "@/lib/nostrSigner";
+import { mergeNonAuthRelays } from "@/lib/nostrRelayConfig";
 import { useToast } from "@/components/Toast";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
-import { soldierProfileHref } from "@/lib/soldierProfileLinks";
+import {
+  dedupeSoldierProfileMembers,
+  soldierProfileHref,
+} from "@/lib/soldierProfileLinks";
 import { Trophy, Lightbulb, AlertTriangle } from "lucide-react";
 import NewProjectModal from "@/components/NewProjectModal";
 
@@ -315,9 +319,7 @@ export default function NostrProjectPage({
   const [searchProgress, setSearchProgress] =
     useState<CommunityScanProgress | null>(null);
   const relays = useMemo(() => {
-    const out = new Set<string>(DEFAULT_USER_RELAYS);
-    auth?.bunker?.relays?.forEach((r) => out.add(r));
-    return [...out];
+    return mergeNonAuthRelays(DEFAULT_USER_RELAYS, auth?.bunker?.relays);
   }, [auth]);
 
   useEffect(() => {
@@ -451,6 +453,8 @@ export default function NostrProjectPage({
       </div>
     );
   }
+
+  const team = dedupeSoldierProfileMembers(project.team);
 
   return (
     <motion.div
@@ -800,13 +804,13 @@ export default function NostrProjectPage({
                   Equipo
                 </h2>
               </div>
-              {project.team.length === 0 ? (
+              {team.length === 0 ? (
                 <p className="text-xs text-foreground-subtle">
                   Sin equipo cargado.
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {project.team.map((m, i) => {
+                  {team.map((m, i) => {
                     const pic =
                       i === 0 ? (authorPicture ?? m.picture) : m.picture;
                     const displayName = m.name || m.nip05 || "Anónimo";

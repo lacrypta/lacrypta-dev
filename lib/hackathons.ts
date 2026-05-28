@@ -1,6 +1,7 @@
 import hackathonsJson from "@/data/hackathons/hackathons.json";
 import foundationsProjectsJson from "@/data/hackathons/projects-foundations.json";
 import identityProjectsJson from "@/data/hackathons/projects-identity.json";
+import commerceProjectsJson from "@/data/hackathons/projects-commerce.json";
 import reportsJson from "@/data/hackathons/reports.json";
 
 export type HackathonDifficulty =
@@ -118,6 +119,10 @@ export type HackathonProject = {
   report?: ProjectReport;
 };
 
+export function primaryProjectPubkey(project: HackathonProject): string | null {
+  return project.team.find((m) => m.pubkey)?.pubkey ?? null;
+}
+
 export type JudgeCategory = {
   name: string;
   score: number;
@@ -178,6 +183,9 @@ const PROJECTS_BY_HACKATHON: Record<string, HackathonProject[]> = {
   identity: (identityProjectsJson as unknown as RawProjectsFile).projects.map(
     (p) => withReport(p as HackathonProject, "identity"),
   ),
+  commerce: (commerceProjectsJson as unknown as RawProjectsFile).projects.map(
+    (p) => withReport(p as HackathonProject, "commerce"),
+  ),
 };
 
 export function getHackathon(id: string): Hackathon | null {
@@ -210,6 +218,35 @@ export type HackathonSubmission = HackathonProject & {
   nostrCreatedAt?: number;
 };
 
+function comparableProjectName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function comparableRepo(repo?: string): string | null {
+  if (!repo) return null;
+  try {
+    const url = new URL(repo);
+    if (url.hostname.toLowerCase() !== "github.com") return repo.trim().toLowerCase();
+    const [owner, name] = url.pathname
+      .replace(/\.git$/i, "")
+      .split("/")
+      .filter(Boolean);
+    return owner && name ? `${owner.toLowerCase()}/${name.toLowerCase()}` : null;
+  } catch {
+    return repo
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\/github\.com\//, "")
+      .replace(/\.git$/i, "")
+      .replace(/\/+$/, "");
+  }
+}
+
 /**
  * Merges curated (JSON) projects with community-submitted (Nostr) projects
  * for a given hackathon. Curated wins on id collisions. Curated with reports
@@ -222,9 +259,18 @@ export function mergeWithSubmissions(
 ): HackathonSubmission[] {
   const curated = rankedProjects(hackathonId);
   const curatedIds = new Set(curated.map((p) => p.id));
+  const curatedRepos = new Set(
+    curated.map((p) => comparableRepo(p.repo)).filter((repo): repo is string => !!repo),
+  );
+  const curatedNames = new Set(curated.map((p) => comparableProjectName(p.name)));
   const uniqueNostr = nostrSubmissions
     .filter((s) => s.hackathon === hackathonId)
-    .filter((s) => !curatedIds.has(s.id));
+    .filter((s) => {
+      if (curatedIds.has(s.id)) return false;
+      const repo = comparableRepo(s.repo);
+      if (repo && curatedRepos.has(repo)) return false;
+      return !curatedNames.has(comparableProjectName(s.name));
+    });
 
   uniqueNostr.sort((a, b) => (b.nostrCreatedAt ?? 0) - (a.nostrCreatedAt ?? 0));
   return [...curated, ...uniqueNostr];

@@ -28,6 +28,7 @@ import {
 } from "@/lib/userProjects";
 import { HACKATHONS } from "@/lib/hackathons";
 import { useNostrProfile } from "@/lib/nostrProfile";
+import { mergeNonAuthRelays } from "@/lib/nostrRelayConfig";
 import { cn } from "@/lib/cn";
 
 type Phase = "signing" | "publishing" | "done";
@@ -244,9 +245,7 @@ export default function NewProjectModal({
   const [relayResults, setRelayResults] = useState<{ relay: string; ok: boolean; error?: string }[]>([]);
 
   const relays = useMemo(() => {
-    const out = new Set<string>(DEFAULT_USER_RELAYS);
-    auth?.bunker?.relays?.forEach((r) => out.add(r));
-    return [...out];
+    return mergeNonAuthRelays(DEFAULT_USER_RELAYS, auth?.bunker?.relays);
   }, [auth]);
 
   const ownerRow = useCallback((): TeamRow => ({

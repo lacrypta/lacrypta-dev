@@ -1,0 +1,148 @@
+{
+  "hackathon": "commerce",
+  "month": "Mayo 2026",
+  "projects": [
+    {
+      "id": "cursats",
+      "name": "Cursats",
+      "description": "Proyecto ganador de Commerce con score final 8.24 y pitch en el minuto 77:47 de la CC #161.",
+      "team": [
+        {
+          "name": "Anix",
+          "github": "analiaacostaok",
+          "role": "Dev",
+          "nip05": "anix@hodl.ar",
+          "pubkey": "507fc20a0a9c6c661b4b3a600ef4f2545359fa0425689991f8edebae74c0dd02"
+        },
+        {
+          "name": "Fred",
+          "role": "Dev",
+          "nip05": "fred@hodl.ar",
+          "pubkey": "4330e5b786c7899c19f55316eaa579496f3907c09d6d048cb8c0ef3d3bd5b257"
+        },
+        {
+          "name": "wder",
+          "github": "Pizza-Wder",
+          "role": "Dev"
+        }
+      ],
+      "repo": "https://github.com/bitbybit-ar/bitbybit-cursats",
+      "demo": "https://cursats.bitbybit.com.ar/",
+      "tech": [
+        "Lightning",
+        "E-commerce"
+      ],
+      "status": "winner",
+      "submittedAt": "2026-05-26"
+    },
+    {
+      "id": "qrwapu",
+      "name": "QRWapu",
+      "description": "Segundo puesto de Commerce con score final 7.80 y demo pública localizada.",
+      "team": [
+        {
+          "name": "CapScabio",
+          "github": "CapScabio",
+          "role": "Lead Dev",
+          "nip05": "Capscabio@hodl.ar",
+          "pubkey": "1e0746dbd6c2a06aa0399505e0830d2ee6f10f26c0831361156511709a183cba"
+        }
+      ],
+      "repo": "https://github.com/CapScabio/QRWapu",
+      "demo": "https://qr-wapu.vercel.app",
+      "tech": [
+        "Lightning",
+        "QR",
+        "Checkout"
+      ],
+      "status": "winner",
+      "submittedAt": "2026-05-26"
+    },
+    {
+      "id": "zaploop",
+      "name": "Zaploop",
+      "description": "Tercer puesto de Commerce con score final 7.52 y pitch en el minuto 86:38 de la CC #161.",
+      "team": [
+        {
+          "name": "Burgos",
+          "github": "Burgos247",
+          "role": "Lead Dev",
+          "nip05": "burgos@primal.net",
+          "pubkey": "afc8a6df0841909c981c7c5a5536e562cbd5ff5bb22beb8357f3f2798465e4dc"
+        }
+      ],
+      "repo": "https://github.com/Burgos247/Zaploop",
+      "demo": "https://zaploop.vercel.app",
+      "tech": [
+        "Lightning",
+        "Commerce"
+      ],
+      "status": "winner",
+      "submittedAt": "2026-05-26"
+    },
+    {
+      "id": "wapufy",
+      "name": "wapufy",
+      "description": "Cuarto puesto de Commerce con score final 7.42 y mención fuerte en los resultados finales.",
+      "team": [
+        {
+          "name": "Looker",
+          "github": "Lo0ker-Noma",
+          "role": "Lead Dev",
+          "pubkey": "51d31de55347780bb2aa36887142b46cb3e98eed2e5352adab5926168c307e90"
+        }
+      ],
+      "repo": "https://github.com/Lo0ker-Noma/wapify",
+      "demo": "https://wapify-seven.vercel.app",
+      "tech": [
+        "Lightning",
+        "Wapupay"
+      ],
+      "status": "winner",
+      "submittedAt": "2026-05-26"
+    },
+    {
+      "id": "tiendita",
+      "name": "tiendita",
+      "description": "Quinto puesto de Commerce con score final 5.36 luego de penalización por no pitch.",
+      "team": [
+        {
+          "name": "negr0",
+          "github": "Negr087",
+          "role": "Lead Dev",
+          "nip05": "negr0@hodl.ar",
+          "pubkey": "20d29810d6a5f92b045ade02ebbadc9036d741cc686b00415c42b4236fe4ad2f"
+        }
+      ],
+      "repo": "https://github.com/Negr087/tiendita",
+      "demo": "https://tienditawapu.vercel.app",
+      "tech": [
+        "Lightning",
+        "Storefront"
+      ],
+      "status": "winner",
+      "submittedAt": "2026-05-26"
+    },
+    {
+      "id": "hash-21",
+      "name": "hash 21",
+      "description": "Sexto puesto de Commerce con score final 4.95 luego de penalización por no pitch.",
+      "team": [
+        {
+          "name": "Lai",
+          "github": "warrior-lai",
+          "role": "Lead Dev",
+          "pubkey": "a78a391888c6a7a2e114ad66dc0e473b9f561734c7f098c9552b2e5bb840d26c"
+        }
+      ],
+      "repo": "https://github.com/warrior-lai/hash-21",
+      "demo": "https://hash21.studio/",
+      "tech": [
+        "Lightning",
+        "Commerce"
+      ],
+      "status": "winner",
+      "submittedAt": "2026-05-26"
+    }
+  ]
+}

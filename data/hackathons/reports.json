@@ -1708,5 +1708,93 @@
         "improvements": []
       }
     }
+  },
+  "commerce": {
+    "cursats": {
+      "title": "Cursats",
+      "position": 1,
+      "finalScore": 8.24,
+      "team": [
+        "Anix",
+        "Fred",
+        "wder"
+      ],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "qrwapu": {
+      "title": "QRWapu",
+      "position": 2,
+      "finalScore": 7.8,
+      "team": [
+        "CapScabio"
+      ],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "zaploop": {
+      "title": "Zaploop",
+      "position": 3,
+      "finalScore": 7.52,
+      "team": [
+        "Burgos"
+      ],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "wapufy": {
+      "title": "wapufy",
+      "position": 4,
+      "finalScore": 7.42,
+      "team": [
+        "Looker"
+      ],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "tiendita": {
+      "title": "tiendita",
+      "position": 5,
+      "finalScore": 5.36,
+      "team": [
+        "negr0"
+      ],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    },
+    "hash-21": {
+      "title": "hash 21",
+      "position": 6,
+      "finalScore": 4.95,
+      "team": [
+        "Lai"
+      ],
+      "stack": [],
+      "judges": [],
+      "feedback": {
+        "strengths": [],
+        "improvements": []
+      }
+    }
   }
 }

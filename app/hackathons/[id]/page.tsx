@@ -21,6 +21,7 @@ import {
   formatSats,
   getHackathon,
   hackathonStatus,
+  primaryProjectPubkey,
   prizedProjects,
   programRules,
   rankedProjects,
@@ -33,8 +34,10 @@ import {
   getNostrHackathonSubmissions,
   NOSTR_SUBMISSIONS_TAG,
 } from "@/lib/nostrCache";
+import { getCachedNostrProfile } from "@/lib/nostrProfileCache";
 import HackathonProjectsList from "./HackathonProjectsList";
 import HackathonResultsClient from "./HackathonResultsClient";
+import PrizeZapButton from "./PrizeZapButton";
 import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
 
 export function generateStaticParams() {
@@ -101,6 +104,13 @@ const STATUS_BADGE: Record<string, string> = {
   building: "bg-white/5 border-border text-foreground-muted",
   idea: "bg-white/5 border-border text-foreground-subtle",
 };
+
+function lightningAddressToLnurlpEndpoint(address?: string | null): string | null {
+  if (!address) return null;
+  const [name, domain] = address.split("@");
+  if (!name || !domain) return null;
+  return `https://${domain}/.well-known/lnurlp/${encodeURIComponent(name)}`;
+}
 
 function medal(position: number | null): string {
   if (position === 1) return "🥇";
@@ -314,6 +324,16 @@ export default async function HackathonPage({
   const total = projects.length;
   const hasReports = projects.some((p) => p.report);
   const awards = prizedProjects(id);
+  const prizePubkeys = [
+    ...new Set(awards.map((a) => primaryProjectPubkey(a.project)).filter((pubkey): pubkey is string => !!pubkey)),
+  ];
+  const prizeProfileEntries = await Promise.all(
+    prizePubkeys.map(async (pubkey) => [
+      pubkey,
+      await getCachedNostrProfile(pubkey),
+    ] as const),
+  );
+  const prizeProfiles = new Map(prizeProfileEntries);
   const prizeByProjectId = new Map(
     awards.map((a) => [a.project.id, a] as const),
   );
@@ -409,42 +429,68 @@ export default async function HackathonPage({
               {awards.length > 0 ? (
                 <>
                   <ol className="space-y-2">
-                    {awards.map((a) => (
-                      <li key={a.project.id}>
-                        <Link
-                          href={`/hackathons/${hackathon.id}/${a.project.id}`}
-                          className={cn(
-                            "group flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
-                            a.position === 1
-                              ? "bg-bitcoin/10 border-bitcoin/30 hover:bg-bitcoin/15"
-                              : "bg-white/[0.02] border-border hover:bg-white/[0.05]",
-                          )}
+                    {awards.map((a) => {
+                      const recipientPubkey = primaryProjectPubkey(a.project);
+                      const recipientLightningAddress = recipientPubkey
+                        ? prizeProfiles.get(recipientPubkey)?.lud16 ?? null
+                        : null;
+                      return (
+                        <li
+                          key={a.project.id}
+                          className="flex items-center gap-2"
                         >
-                          <span className="text-lg leading-none shrink-0 w-7 text-center">
-                            {medal(a.position) || (
-                              <span className="text-xs font-mono text-foreground-muted">
-                                #{a.position}
-                              </span>
+                          <Link
+                            href={`/hackathons/${hackathon.id}/${a.project.id}`}
+                            className={cn(
+                              "group flex min-w-0 flex-1 items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
+                              a.position === 1
+                                ? "bg-bitcoin/10 border-bitcoin/30 hover:bg-bitcoin/15"
+                                : "bg-white/[0.02] border-border hover:bg-white/[0.05]",
                             )}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[13px] font-semibold truncate group-hover:text-bitcoin transition-colors">
-                              {a.project.name}
-                            </div>
-                            <div className="text-[10px] font-mono text-foreground-subtle flex items-center gap-1.5">
-                              <span className="tabular-nums">
-                                {formatSats(a.prize)} sats
-                              </span>
-                              {a.tied && (
-                                <span className="px-1 rounded bg-lightning/10 text-lightning border border-lightning/30 text-[9px] tracking-widest uppercase">
-                                  empate
+                          >
+                            <span className="text-lg leading-none shrink-0 w-7 text-center">
+                              {medal(a.position) || (
+                                <span className="text-xs font-mono text-foreground-muted">
+                                  #{a.position}
                                 </span>
                               )}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[13px] font-semibold truncate group-hover:text-bitcoin transition-colors">
+                                {a.project.name}
+                              </div>
+                              <div className="text-[10px] font-mono text-foreground-subtle flex items-center gap-1.5">
+                                <span className="tabular-nums">
+                                  {formatSats(a.prize)} sats
+                                </span>
+                                {a.tied && (
+                                  <span className="px-1 rounded bg-lightning/10 text-lightning border border-lightning/30 text-[9px] tracking-widest uppercase">
+                                    empate
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </Link>
-                      </li>
-                    ))}
+                          </Link>
+                          {recipientPubkey && (
+                            <PrizeZapButton
+                              target={{
+                                hackathonId: hackathon.id,
+                                projectId: a.project.id,
+                                projectName: a.project.name,
+                                position: a.position,
+                                recipientPubkey,
+                                recipientLightningAddress,
+                                recipientZapEndpoint:
+                                  lightningAddressToLnurlpEndpoint(
+                                    recipientLightningAddress,
+                                  ),
+                                sats: a.prize,
+                              }}
+                            />
+                          )}
+                        </li>
+                      );
+                    })}
                   </ol>
                   {awards.some((a) => a.tied) && (
                     <p className="mt-3 text-[10px] font-mono text-foreground-subtle leading-relaxed">

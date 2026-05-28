@@ -11,8 +11,10 @@ export type NostrProfile = {
   banner?: string;
   about?: string;
   nip05?: string;
+  lud06?: string;
   lud16?: string;
   website?: string;
+  github?: string;
 };
 
 export type CachedProfile = {
@@ -100,8 +102,10 @@ export async function fetchNostrProfile(
         banner: parsed.banner,
         about: parsed.about,
         nip05: parsed.nip05,
+        lud06: parsed.lud06,
         lud16: parsed.lud16,
         website: parsed.website,
+        github: parsed.github,
       },
       fetchedAt: Date.now(),
       eventCreatedAt: latest.created_at,

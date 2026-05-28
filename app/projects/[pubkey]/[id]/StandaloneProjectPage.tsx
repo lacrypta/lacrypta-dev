@@ -11,6 +11,7 @@ import {
 } from "@/lib/userProjects";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
+import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
 
 const STATUS_BADGE: Record<string, string> = {
   official: "bg-bitcoin/10 border-bitcoin/40 text-bitcoin",
@@ -84,6 +85,8 @@ export default function StandaloneProjectPage({
       </div>
     );
   }
+
+  const team = dedupeSoldierProfileMembers(project.team);
 
   return (
     <div className="relative pt-24 pb-16">
@@ -195,11 +198,11 @@ export default function StandaloneProjectPage({
                 <Users className="h-4 w-4 text-foreground-muted" />
                 <h2 className="text-xs font-mono uppercase tracking-widest text-foreground-muted font-bold">Equipo</h2>
               </div>
-              {project.team.length === 0 ? (
+              {team.length === 0 ? (
                 <p className="text-xs text-foreground-subtle">Sin equipo cargado.</p>
               ) : (
                 <ul className="space-y-2">
-                  {project.team.map((m, i) => {
+                  {team.map((m, i) => {
                     const pic = i === 0 ? (authorPicture ?? m.picture) : m.picture;
                     return (
                       <li key={`${m.name}-${m.role}`} className="flex items-center gap-2.5">

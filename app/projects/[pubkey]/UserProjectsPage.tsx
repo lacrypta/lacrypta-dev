@@ -11,6 +11,7 @@ import {
 } from "@/lib/userProjects";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
+import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
 
 const STATUS_BADGE: Record<string, string> = {
   official:  "bg-bitcoin/10 border-bitcoin/40 text-bitcoin",
@@ -86,6 +87,7 @@ export default function UserProjectsPage({ pubkey }: { pubkey: string }) {
               const href = p.hackathon
                 ? `/hackathons/${p.hackathon}/${p.id}`
                 : `/projects/${pubkey}/${p.id}`;
+              const team = dedupeSoldierProfileMembers(p.team);
               return (
                 <Link
                   key={p.id}
@@ -117,9 +119,9 @@ export default function UserProjectsPage({ pubkey }: { pubkey: string }) {
                       </p>
                     )}
                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-foreground-subtle">
-                      {p.team.length > 0 && (
+                      {team.length > 0 && (
                         <span className="truncate">
-                          {p.team.map((t) => t.name).join(" · ")}
+                          {team.map((t) => t.name).join(" · ")}
                         </span>
                       )}
                       {p.repo && (

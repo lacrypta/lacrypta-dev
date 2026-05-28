@@ -1,6 +1,7 @@
 import { getNostrProject } from "@/lib/nostrCache";
 import { getHackathon } from "@/lib/hackathons";
 import { breadcrumbLd, jsonLdScript } from "@/lib/jsonld";
+import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
 import NostrProjectPageClient from "./NostrProjectPageClient";
 
 /**
@@ -36,6 +37,7 @@ export default async function NostrProjectServer({
 
   const hackathon = getHackathon(hackathonId);
   const url = `https://lacrypta.dev/hackathons/${hackathonId}/${projectId}`;
+  const team = dedupeSoldierProfileMembers(project.team);
 
   const projectLd = {
     "@context": "https://schema.org",
@@ -55,7 +57,7 @@ export default async function NostrProjectServer({
           url: `https://lacrypta.dev/hackathons/${hackathon.id}`,
         }
       : undefined,
-    author: project.team.map((m) => ({
+    author: team.map((m) => ({
       "@type": "Person",
       name: m.name || m.nip05 || "Anonymous",
       url: m.github ? `https://github.com/${m.github}` : undefined,
@@ -94,11 +96,11 @@ export default async function NostrProjectServer({
           </p>
         )}
         <p>Estado: {project.status}.</p>
-        {project.team.length > 0 && (
+        {team.length > 0 && (
           <>
             <h2>Equipo</h2>
             <ul>
-              {project.team.map((m) => (
+              {team.map((m) => (
                 <li key={`${m.name}-${m.role}`}>
                   {m.name} — {m.role}
                   {m.github ? ` (github.com/${m.github})` : ""}

@@ -1,4 +1,5 @@
 import type { Hackathon, HackathonProject } from "./hackathons";
+import { dedupeSoldierProfileMembers } from "./soldierProfileLinks";
 
 const BASE_URL = "https://lacrypta.dev";
 const ORG_ID = `${BASE_URL}/#organization`;
@@ -94,7 +95,7 @@ export function creativeWorkLd(
       name: `${hackathon.name} — Hackatón #${hackathon.number}`,
       url: `${BASE_URL}/hackathons/${hackathon.id}`,
     },
-    author: project.team.map((m) => ({
+    author: dedupeSoldierProfileMembers(project.team).map((m) => ({
       "@type": "Person",
       name: m.name || m.nip05 || "Anonymous",
       url: m.github ? `https://github.com/${m.github}` : undefined,
