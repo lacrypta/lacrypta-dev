@@ -22,6 +22,7 @@ import {
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/lib/auth";
+import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
 import NewProjectModal, {
   type ProjectEditField,
 } from "@/components/NewProjectModal";
@@ -141,6 +142,7 @@ export default function StandaloneProjectPage({
     galleryThumbs.length > 0 ||
     galleryVideos.length > 0;
   const showGallery = hasGallery || isAuthor;
+  const team = dedupeSoldierProfileMembers(project.team);
 
   return (
     <>
@@ -507,11 +509,11 @@ export default function StandaloneProjectPage({
                     />
                   )}
                 </div>
-                {project.team.length === 0 ? (
+                {team.length === 0 ? (
                   <p className="text-xs text-foreground-subtle">Sin equipo cargado.</p>
                 ) : (
                   <ul className="space-y-2">
-                    {project.team.map((m, i) => {
+                    {team.map((m, i) => {
                       const pic = i === 0 ? (authorPicture ?? m.picture) : m.picture;
                       return (
                         <li key={`${m.name}-${m.role}`} className="flex items-center gap-2.5">

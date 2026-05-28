@@ -1,7 +1,11 @@
 "use client";
 
 import type { SignedEvent, UnsignedEvent, UserSigner } from "./nostrSigner";
-import { DEFAULT_RELAYS, FAST_USER_RELAYS } from "./nostrRelayConfig";
+import {
+  DEFAULT_RELAYS,
+  FAST_USER_RELAYS,
+  withoutAuthOnlyRelays,
+} from "./nostrRelayConfig";
 import type {
   HackathonProject,
   ProjectStatus,
@@ -67,10 +71,10 @@ export type CommunityScanProgress = {
 const USER_CACHE_PREFIX = "labs:user-projects-v2:";
 const COMMUNITY_CACHE_KEY = "labs:community-projects:v1";
 
-export const DEFAULT_USER_RELAYS = FAST_USER_RELAYS;
+export const DEFAULT_USER_RELAYS = withoutAuthOnlyRelays(FAST_USER_RELAYS);
 
 /** Public relays used to index community projects. */
-export const TOP10_RELAYS = DEFAULT_RELAYS;
+export const TOP10_RELAYS = withoutAuthOnlyRelays(DEFAULT_RELAYS);
 
 /* ─────────────────────────── cache (localStorage) ──────────────────────── */
 

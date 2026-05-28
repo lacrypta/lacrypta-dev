@@ -33,6 +33,7 @@ import { formatSats } from "@/lib/hackathons";
 import { useHackathonResults, type WinnerEntry } from "@/lib/nostrReports";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
+import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
 
 function medal(position: number | null | undefined) {
   if (position === 1) return "🥇";
@@ -330,6 +331,7 @@ function ProjectRow({
   const authorDisplayName = isNostr
     ? displayNameForNostrProject(project)
     : null;
+  const team = dedupeSoldierProfileMembers(project.team);
 
   const Wrapper: React.ElementType = Link;
   const wrapperProps = { href };
@@ -413,9 +415,9 @@ function ProjectRow({
           )}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-foreground-subtle">
-          {project.team.length > 0 && (
+          {team.length > 0 && (
             <span className="truncate">
-              {project.team.map((t) => t.name).join(" · ")}
+              {team.map((t) => t.name).join(" · ")}
             </span>
           )}
           {project.repo && (

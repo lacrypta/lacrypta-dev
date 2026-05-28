@@ -11,6 +11,7 @@ import {
   formatSats,
 } from "@/lib/hackathons";
 import { PROJECTS } from "@/lib/projects";
+import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
 
 export default function Hero() {
   return (
@@ -143,7 +144,9 @@ function HeroStats() {
   const hackathonProjects = allProjects().length;
   const totalProjects = curatedCount + hackathonProjects;
   const buildersCount = new Set(
-    allProjects().flatMap((p) => p.team.map((m) => m.name.toLowerCase())),
+    allProjects().flatMap((p) =>
+      dedupeSoldierProfileMembers(p.team).map((m) => m.name.toLowerCase()),
+    ),
   ).size;
 
   const stats = [

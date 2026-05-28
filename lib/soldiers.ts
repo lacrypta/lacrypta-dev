@@ -35,6 +35,74 @@ const POSITION_POINTS: Record<number, number> = {
 const POINTS_PER_PROJECT = 0;
 const POINTS_PER_HACKATHON = 1;
 
+const SOLDIER_ALIAS_GROUPS: string[][] = [
+  [
+    "gh:analiaacostaok",
+    "pk:507fc20a0a9c6c661b4b3a600ef4f2545359fa0425689991f8edebae74c0dd02",
+    "nip05:anix@hodl.ar",
+    "name:anix",
+  ],
+  [
+    "gh:burgos247",
+    "pk:afc8a6df0841909c981c7c5a5536e562cbd5ff5bb22beb8357f3f2798465e4dc",
+    "nip05:burgos@primal.net",
+    "name:burgos",
+  ],
+  [
+    "gh:fchurca",
+    "pk:4330e5b786c7899c19f55316eaa579496f3907c09d6d048cb8c0ef3d3bd5b257",
+    "nip05:fred@hodl.ar",
+    "name:fred",
+  ],
+  [
+    "gh:warrior-lai",
+    "pk:a78a391888c6a7a2e114ad66dc0e473b9f561734c7f098c9552b2e5bb840d26c",
+    "name:abstract-lai",
+    "name:lai",
+  ],
+  [
+    "gh:lalo1821",
+    "pk:96709186f836c901525cac72773ece5e646efe72a26fbca2e73c49f9f5f91b7e",
+    "name:lalo",
+    "name:lalo1821",
+  ],
+  [
+    "gh:pizza-wder",
+    "nip05:wder@bitbybit.com.ar",
+    "name:wander",
+    "name:wder",
+  ],
+  [
+    "gh:lo0ker-noma",
+    "pk:51d31de55347780bb2aa36887142b46cb3e98eed2e5352adab5926168c307e90",
+    "name:lo0ker-noma",
+    "name:looker",
+  ],
+  [
+    "gh:negr087",
+    "pk:20d29810d6a5f92b045ade02ebbadc9036d741cc686b00415c42b4236fe4ad2f",
+    "nip05:negr0@hodl.ar",
+    "name:negr0",
+  ],
+  [
+    "gh:landaverdend",
+    "pk:f7672a4cc1bf23ebe9519f88e74b41aa4f648981bb1dbe918a2b00a9b1bc78de",
+    "name:landaverdend",
+    "name:nic-o",
+  ],
+  [
+    "gh:soyezequiel",
+    "pk:7c45dcfb2e93594ce43bc2b16fd29b3c38ba0daf42ae8561fe6f0353892b7df4",
+    "nip05:naranja@coinos.io",
+    "name:naranja",
+  ],
+  [
+    "gh:fabricio333",
+    "name:llopo",
+    "name:fabricio",
+  ],
+];
+
 export type SoldierProjectRef = {
   hackathonId: string | null;
   projectId: string;
@@ -242,6 +310,72 @@ function indexAliases(s: Soldier, map: Map<string, Soldier>) {
   if (s.github) map.set(`gh:${s.github.toLowerCase()}`, s);
   if (s.pubkey) map.set(`pk:${s.pubkey.toLowerCase()}`, s);
   if (s.nip05) map.set(`nip05:${s.nip05.toLowerCase()}`, s);
+  map.set(`name:${slugify(s.name)}`, s);
+}
+
+function mergeSoldierIdentity(primary: Soldier, secondary: Soldier): Soldier {
+  const nostrFirst = secondary.hasNostr && !primary.hasNostr;
+  const target = nostrFirst ? secondary : primary;
+  const source = nostrFirst ? primary : secondary;
+
+  target.projects.push(...source.projects);
+  for (const role of source.roles) pushUnique(target.roles, role);
+
+  if (source.hasNostr) target.hasNostr = true;
+  if (!target.pubkey && source.pubkey) target.pubkey = source.pubkey;
+  if (!target.nip05 && source.nip05) target.nip05 = source.nip05;
+  if (!target.picture && source.picture) target.picture = source.picture;
+  if (!target.github && source.github) target.github = source.github;
+
+  if (source.hasNostr && source.pubkey) {
+    target.id = `pk:${source.pubkey}`;
+    target.slug = toSlug(target.id);
+    target.name = source.name;
+    if (source.picture) target.picture = source.picture;
+    if (source.nip05) target.nip05 = source.nip05;
+  } else if (target.pubkey) {
+    target.id = `pk:${target.pubkey}`;
+    target.slug = toSlug(target.id);
+  }
+
+  return target;
+}
+
+function canonicalizeNostrSoldier(s: Soldier, name?: string) {
+  if (!s.pubkey) return;
+  s.id = `pk:${s.pubkey}`;
+  s.slug = toSlug(s.id);
+  if (name) s.name = name;
+}
+
+function mergeKnownAliases(map: Map<string, Soldier>) {
+  for (const group of SOLDIER_ALIAS_GROUPS) {
+    const members = [
+      ...new Set(group.map((key) => map.get(key)).filter(Boolean)),
+    ] as Soldier[];
+    if (members.length <= 1) {
+      const only = members[0];
+      if (only?.hasNostr) canonicalizeNostrSoldier(only);
+      if (only) {
+        for (const key of group) map.set(key, only);
+        indexAliases(only, map);
+      }
+      continue;
+    }
+
+    let primary =
+      members.find((s) => s.hasNostr && s.pubkey) ??
+      members.find((s) => s.pubkey) ??
+      members[0]!;
+
+    for (const member of members) {
+      if (member === primary) continue;
+      primary = mergeSoldierIdentity(primary, member);
+    }
+
+    for (const key of group) map.set(key, primary);
+    indexAliases(primary, map);
+  }
 }
 
 function curatedHackathonId(p: (typeof PROJECTS)[number]): string | null {
@@ -397,6 +531,7 @@ async function buildSoldiers(): Promise<Soldier[]> {
           const newGh = githubLc ?? inheritedGhLc;
           if (newGh) existing.github = newGh;
         }
+        if (pubkeyLc) canonicalizeNostrSoldier(existing, m.name);
         existing.projects.push(ref);
         pushUnique(existing.roles, m.role);
         // Re-index aliases: subsequent Nostr submissions for the same
@@ -429,6 +564,8 @@ async function buildSoldiers(): Promise<Soldier[]> {
       }
     }
   }
+
+  mergeKnownAliases(map);
 
   // Deduplicate — alias indexing means the same Soldier instance can be
   // reachable from multiple keys (gh / pk / nip05).

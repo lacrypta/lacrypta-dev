@@ -28,7 +28,10 @@ import {
   getNostrProject,
   getNostrSubmissionsSnapshot,
 } from "@/lib/nostrCache";
-import { soldierProfileHref } from "@/lib/soldierProfileLinks";
+import {
+  dedupeSoldierProfileMembers,
+  soldierProfileHref,
+} from "@/lib/soldierProfileLinks";
 import NostrProjectServer from "./NostrProjectServer";
 
 export async function generateStaticParams() {
@@ -204,6 +207,7 @@ function ProjectPageContent({ id, projectId }: ProjectPageParams) {
   const report = project.report;
   const award = prizeForProject(id, projectId);
   const prize = award?.prize ?? null;
+  const team = dedupeSoldierProfileMembers(project.team);
 
   return (
     <div className="relative pt-24 pb-16">
@@ -475,11 +479,11 @@ function ProjectPageContent({ id, projectId }: ProjectPageParams) {
                   Equipo
                 </h2>
               </div>
-              {project.team.length === 0 ? (
+              {team.length === 0 ? (
                 <p className="text-xs text-foreground-subtle">Sin equipo cargado.</p>
               ) : (
                 <ul className="space-y-2">
-                  {project.team.map((m) => {
+                  {team.map((m) => {
                     const profileHref = soldierProfileHref(m);
                     const memberContent = (
                       <>

@@ -39,7 +39,10 @@ import { getSigner } from "@/lib/nostrSigner";
 import { useToast } from "@/components/Toast";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
-import { soldierProfileHref } from "@/lib/soldierProfileLinks";
+import {
+  dedupeSoldierProfileMembers,
+  soldierProfileHref,
+} from "@/lib/soldierProfileLinks";
 import { mergeDataRelays } from "@/lib/nostrRelayConfig";
 import { Trophy, Lightbulb, AlertTriangle } from "lucide-react";
 import NewProjectModal from "@/components/NewProjectModal";
@@ -451,6 +454,8 @@ export default function NostrProjectPage({
     );
   }
 
+  const team = dedupeSoldierProfileMembers(project.team);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -799,13 +804,13 @@ export default function NostrProjectPage({
                   Equipo
                 </h2>
               </div>
-              {project.team.length === 0 ? (
+              {team.length === 0 ? (
                 <p className="text-xs text-foreground-subtle">
                   Sin equipo cargado.
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {project.team.map((m, i) => {
+                  {team.map((m, i) => {
                     const pic =
                       i === 0 ? (authorPicture ?? m.picture) : m.picture;
                     const displayName = m.name || m.nip05 || "Anónimo";
