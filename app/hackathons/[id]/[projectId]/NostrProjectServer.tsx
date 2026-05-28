@@ -45,7 +45,7 @@ export default async function NostrProjectServer({
     name: project.name,
     description: project.description,
     url,
-    image: `${url}/opengraph-image`,
+    image: project.cover ?? project.logo ?? `${url}/opengraph-image`,
     applicationCategory: "DeveloperApplication",
     operatingSystem: "Web",
     codeRepository: project.repo,

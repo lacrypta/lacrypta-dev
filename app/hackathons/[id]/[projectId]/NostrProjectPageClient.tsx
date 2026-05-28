@@ -36,7 +36,6 @@ import { getHackathon, type Hackathon } from "@/lib/hackathons";
 import { useProjectReport } from "@/lib/nostrReports";
 import { useAuth } from "@/lib/auth";
 import { getSigner } from "@/lib/nostrSigner";
-import { mergeNonAuthRelays } from "@/lib/nostrRelayConfig";
 import { useToast } from "@/components/Toast";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
@@ -44,6 +43,7 @@ import {
   dedupeSoldierProfileMembers,
   soldierProfileHref,
 } from "@/lib/soldierProfileLinks";
+import { mergeDataRelays } from "@/lib/nostrRelayConfig";
 import { Trophy, Lightbulb, AlertTriangle } from "lucide-react";
 import NewProjectModal from "@/components/NewProjectModal";
 
@@ -319,7 +319,7 @@ export default function NostrProjectPage({
   const [searchProgress, setSearchProgress] =
     useState<CommunityScanProgress | null>(null);
   const relays = useMemo(() => {
-    return mergeNonAuthRelays(DEFAULT_USER_RELAYS, auth?.bunker?.relays);
+    return mergeDataRelays(DEFAULT_USER_RELAYS, auth?.bunker?.relays);
   }, [auth]);
 
   useEffect(() => {

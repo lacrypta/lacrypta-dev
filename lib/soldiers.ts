@@ -23,17 +23,17 @@ type ReportEntry = {
 type ReportsByHackathon = Record<string, Record<string, ReportEntry>>;
 const REPORTS = reportsData as unknown as ReportsByHackathon;
 
-// Position → points (1° gives 6 down to 6° giving 1; 0 below).
+// Position → points (1° gives 10 down to 6° giving 1; 0 below).
 const POSITION_POINTS: Record<number, number> = {
-  1: 6,
-  2: 5,
-  3: 4,
+  1: 10,
+  2: 7,
+  3: 5,
   4: 3,
   5: 2,
   6: 1,
 };
-const POINTS_PER_PROJECT = 2;
-const POINTS_PER_HACKATHON = 3;
+const POINTS_PER_PROJECT = 0;
+const POINTS_PER_HACKATHON = 1;
 
 const SOLDIER_ALIAS_GROUPS: string[][] = [
   [

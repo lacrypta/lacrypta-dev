@@ -280,6 +280,11 @@ function parseProjectContent(
   // Retro-compat: old events stored `url` and `tags`; new ones store `demo`
   // and `tech`. Map both into the unified shape.
   const demo = asString(parsed.demo) ?? asString(parsed.url);
+  const logo = asString(parsed.logo) ?? asString(parsed.picture);
+  const cover = asString(parsed.cover) ?? asString(parsed.banner);
+  const images = asStringArray(parsed.images) ?? asStringArray(parsed.screenshots);
+  const thumbs = asStringArray(parsed.thumbs) ?? asStringArray(parsed.thumbnails);
+  const videos = asStringArray(parsed.videos);
   const tech = asStringArray(parsed.tech) ?? asStringArray(parsed.tags);
   const team = parseTeamArray(parsed.team);
   const hackathon = asString(parsed.hackathon) ??
@@ -312,6 +317,11 @@ function parseProjectContent(
     name,
     description,
     team,
+    logo,
+    cover,
+    images,
+    thumbs,
+    videos,
     repo: asString(parsed.repo),
     demo,
     tech,
@@ -455,6 +465,11 @@ function buildProjectEvent(
       id: project.id,
       name: project.name,
       description: project.description,
+      logo: project.logo,
+      cover: project.cover,
+      images: project.images,
+      thumbs: project.thumbs,
+      videos: project.videos,
       repo: project.repo,
       demo: project.demo,
       tech: project.tech,

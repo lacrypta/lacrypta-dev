@@ -22,6 +22,11 @@ export type Project = {
   description: string;
   status: ProjectStatus;
   team: TeamMember[];
+  logo?: string;
+  cover?: string;
+  images?: string[];
+  thumbs?: string[];
+  videos?: string[];
   repo?: string;
   demo?: string;
   tech?: string[];

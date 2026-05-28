@@ -105,6 +105,16 @@ export type HackathonProject = {
   name: string;
   description: string;
   team: TeamMember[];
+  /** Project logo/avatar URL. Nostr submissions can upload this via Blossom. */
+  logo?: string;
+  /** Project cover/banner URL. Nostr submissions can upload this via Blossom. */
+  cover?: string;
+  /** Gallery images uploaded by the project owner. */
+  images?: string[];
+  /** Thumbnail images uploaded by the project owner. */
+  thumbs?: string[];
+  /** Video URLs uploaded by the project owner. */
+  videos?: string[];
   repo?: string;
   demo?: string;
   tech?: string[];

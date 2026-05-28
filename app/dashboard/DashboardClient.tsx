@@ -36,7 +36,7 @@ import {
   DEFAULT_PROFILE_RELAYS,
   type NostrProfile as BaseNostrProfile,
 } from "@/lib/nostrProfile";
-import { mergeNonAuthRelays } from "@/lib/nostrRelayConfig";
+import { mergeDataRelays } from "@/lib/nostrRelayConfig";
 import {
   useRelayList,
   publishRelayList,
@@ -81,7 +81,7 @@ export default function DashboardClient() {
   const [error, setError] = useState<string | null>(null);
 
   const relays = useMemo(() => {
-    return mergeNonAuthRelays(DEFAULT_PROFILE_RELAYS, auth?.bunker?.relays);
+    return mergeDataRelays(DEFAULT_PROFILE_RELAYS, auth?.bunker?.relays);
   }, [auth]);
 
   const {
@@ -1885,9 +1885,7 @@ function RelaysEditorModal({
       const writeUrls = entries
         .filter((e) => e.marker !== "read")
         .map((e) => e.url);
-      const relaysToBroadcast = Array.from(
-        new Set([...publishRelays, ...writeUrls]),
-      );
+      const relaysToBroadcast = mergeDataRelays(publishRelays, writeUrls);
       setPhase("publishing");
       setPhaseDetail(`${relaysToBroadcast.length} relays`);
       const res = await publishRelayList(signer, entries, relaysToBroadcast);

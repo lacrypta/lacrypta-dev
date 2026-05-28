@@ -7,16 +7,26 @@ import {
   Plus,
   Save,
   X,
+  ImageIcon,
   BadgeCheck,
   AlertCircle,
   RefreshCw,
   Check,
+  Trash2,
+  Upload,
+  Video,
 } from "lucide-react";
 import { NIP05_REGEX, queryProfile } from "nostr-tools/nip05";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/auth";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { getSigner } from "@/lib/nostrSigner";
+import {
+  DEFAULT_BLOSSOM_SERVERS,
+  fetchBlobWithProgress,
+  uploadToBlossom,
+  type UploadProgress,
+} from "@/lib/blossom";
 import {
   communityProjectFromSignedEvent,
   DEFAULT_USER_RELAYS,
@@ -28,10 +38,27 @@ import {
 } from "@/lib/userProjects";
 import { HACKATHONS } from "@/lib/hackathons";
 import { useNostrProfile } from "@/lib/nostrProfile";
-import { mergeNonAuthRelays } from "@/lib/nostrRelayConfig";
+import { mergeDataRelays } from "@/lib/nostrRelayConfig";
 import { cn } from "@/lib/cn";
+import ImageCropModal, { type CropResult } from "@/components/ImageCropModal";
+import {
+  AvatarUploader,
+  BannerUploader,
+  type UploadReveal,
+} from "@/components/ImageUploader";
 
 type Phase = "signing" | "publishing" | "done";
+
+export type ProjectEditField =
+  | "all"
+  | "name"
+  | "description"
+  | "media"
+  | "gallery"
+  | "links"
+  | "tech"
+  | "hackathon"
+  | "team";
 
 type TeamRow = {
   key: string;
@@ -46,12 +73,40 @@ type TeamRow = {
 type FormState = {
   name: string;
   description: string;
+  logo: string;
+  cover: string;
+  images: string[];
+  thumbs: string[];
+  videos: string[];
   demo: string;
   repo: string;
   tech: string[];
   team: TeamRow[];
   hackathon: string;
 };
+
+type ProjectMediaTarget = "logo" | "cover" | "images" | "thumbs" | "videos";
+type ProjectCropTarget = Exclude<ProjectMediaTarget, "videos">;
+
+type ProjectUploadReveal = UploadReveal & {
+  target: ProjectCropTarget;
+};
+
+function uploadSuccessTitle(target: ProjectMediaTarget) {
+  if (target === "logo") return "Logo subido";
+  if (target === "cover") return "Cover subido";
+  if (target === "images") return "Imagen subida";
+  if (target === "thumbs") return "Thumb subido";
+  return "Video subido";
+}
+
+function uploadErrorTitle(target: ProjectMediaTarget) {
+  if (target === "logo") return "No se pudo subir el logo";
+  if (target === "cover") return "No se pudo subir el cover";
+  if (target === "images") return "No se pudo subir la imagen";
+  if (target === "thumbs") return "No se pudo subir el thumb";
+  return "No se pudo subir el video";
+}
 
 function newRowKey() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -221,19 +276,32 @@ export default function NewProjectModal({
   onClose,
   editProject,
   onSaved,
+  initialFocus = "all",
 }: {
   hackathonId?: string;
   open: boolean;
   onClose: () => void;
   editProject?: UserProject;
   onSaved?: (project: UserProject) => void;
+  initialFocus?: ProjectEditField;
 }) {
   const { auth } = useAuth();
   const { push: pushToast } = useToast();
   const { profile: ownerProfile } = useNostrProfile(auth?.pubkey);
 
   const [form, setForm] = useState<FormState>({
-    name: "", description: "", demo: "", repo: "", tech: [], team: [], hackathon: hackathonId ?? "",
+    name: "",
+    description: "",
+    logo: "",
+    cover: "",
+    images: [],
+    thumbs: [],
+    videos: [],
+    demo: "",
+    repo: "",
+    tech: [],
+    team: [],
+    hackathon: hackathonId ?? "",
   });
   const [step, setStep] = useState<"repo" | "fetching" | "form">("repo");
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -243,10 +311,49 @@ export default function NewProjectModal({
   const [phaseDetail, setPhaseDetail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [relayResults, setRelayResults] = useState<{ relay: string; ok: boolean; error?: string }[]>([]);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
+  const repoInputRef = useRef<HTMLInputElement>(null);
+  const techFieldRef = useRef<HTMLDivElement>(null);
+  const mediaFieldRef = useRef<HTMLDivElement>(null);
+  const galleryFieldRef = useRef<HTMLDivElement>(null);
+  const hackathonInputRef = useRef<HTMLSelectElement>(null);
+  const teamFieldRef = useRef<HTMLDivElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const imagesInputRef = useRef<HTMLInputElement>(null);
+  const thumbsInputRef = useRef<HTMLInputElement>(null);
+  const videosInputRef = useRef<HTMLInputElement>(null);
+  const [cropSource, setCropSource] = useState<{
+    target: ProjectCropTarget;
+    file: File;
+  } | null>(null);
+  const cropSourceRef = useRef(cropSource);
+  const [imageUpload, setImageUpload] = useState<{
+    target: ProjectMediaTarget | null;
+    server: string;
+    state: UploadProgress["state"];
+    error?: string;
+  }>({ target: null, server: "", state: "ok" });
+  const [uploadReveal, setUploadReveal] =
+    useState<ProjectUploadReveal | null>(null);
 
   const relays = useMemo(() => {
-    return mergeNonAuthRelays(DEFAULT_USER_RELAYS, auth?.bunker?.relays);
+    return mergeDataRelays(DEFAULT_USER_RELAYS, auth?.bunker?.relays);
   }, [auth]);
+
+  useEffect(() => {
+    cropSourceRef.current = cropSource;
+  }, [cropSource]);
+
+  useEffect(() => {
+    return () => {
+      setUploadReveal((prev) => {
+        if (prev) URL.revokeObjectURL(prev.localUrl);
+        return null;
+      });
+    };
+  }, []);
 
   const ownerRow = useCallback((): TeamRow => ({
     key: newRowKey(),
@@ -264,6 +371,11 @@ export default function NewProjectModal({
         setForm({
           name: editProject.name,
           description: editProject.description ?? "",
+          logo: editProject.logo ?? "",
+          cover: editProject.cover ?? "",
+          images: editProject.images ?? [],
+          thumbs: editProject.thumbs ?? [],
+          videos: editProject.videos ?? [],
           demo: editProject.demo ?? "",
           repo: editProject.repo ?? "",
           tech: editProject.tech ?? [],
@@ -280,11 +392,30 @@ export default function NewProjectModal({
         });
         setStep("form");
       } else {
-        setForm({ name: "", description: "", demo: "", repo: "", tech: [], team: [ownerRow()], hackathon: hackathonId ?? "" });
+        setForm({
+          name: "",
+          description: "",
+          logo: "",
+          cover: "",
+          images: [],
+          thumbs: [],
+          videos: [],
+          demo: "",
+          repo: "",
+          tech: [],
+          team: [ownerRow()],
+          hackathon: hackathonId ?? "",
+        });
         setStep("repo");
       }
       setError(null);
       setFetchError(null);
+      setCropSource(null);
+      setImageUpload({ target: null, server: "", state: "ok" });
+      setUploadReveal((prev) => {
+        if (prev) URL.revokeObjectURL(prev.localUrl);
+        return null;
+      });
       setOptimisticClosed(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -306,19 +437,242 @@ export default function NewProjectModal({
 
   useScrollLock(open);
 
+  const imageBusy = imageUpload.target !== null && imageUpload.state !== "ok";
+  const busy = publishing || imageBusy;
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !publishing) onClose();
+      if (e.key === "Escape" && !busy && step !== "fetching") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose, publishing]);
+  }, [open, onClose, busy, step]);
+
+  useEffect(() => {
+    if (!open || !editProject || step !== "form") return;
+    const target =
+      initialFocus === "description"
+        ? descriptionInputRef.current
+        : initialFocus === "media"
+          ? mediaFieldRef.current?.querySelector<HTMLButtonElement>("button")
+        : initialFocus === "gallery"
+          ? galleryFieldRef.current?.querySelector<HTMLButtonElement>("button")
+        : initialFocus === "links"
+          ? repoInputRef.current
+          : initialFocus === "tech"
+            ? techFieldRef.current?.querySelector<HTMLInputElement>("input")
+            : initialFocus === "hackathon"
+              ? hackathonInputRef.current
+              : initialFocus === "team"
+                ? teamFieldRef.current?.querySelector<HTMLInputElement>("input")
+                : nameInputRef.current;
+    window.setTimeout(() => {
+      target?.focus();
+      target?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 80);
+  }, [open, editProject, step, initialFocus]);
+
+  function pickFile(target: ProjectMediaTarget) {
+    if (busy) return;
+    if (target === "logo") logoInputRef.current?.click();
+    else if (target === "cover") coverInputRef.current?.click();
+    else if (target === "images") imagesInputRef.current?.click();
+    else if (target === "thumbs") thumbsInputRef.current?.click();
+    else videosInputRef.current?.click();
+  }
+
+  function pickedFile(target: ProjectMediaTarget, file: File) {
+    if (target === "videos") {
+      if (!file.type.startsWith("video/")) {
+        pushToast({
+          kind: "error",
+          title: "Archivo inválido",
+          description: "Solo videos.",
+        });
+        return;
+      }
+      void doUpload(target, file);
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      pushToast({
+        kind: "error",
+        title: "Archivo inválido",
+        description: "Solo imágenes (JPG, PNG, WebP, GIF).",
+      });
+      return;
+    }
+    setCropSource({ target, file });
+  }
+
+  function handleCropConfirm(result: CropResult) {
+    const current = cropSourceRef.current;
+    setCropSource(null);
+    if (!current) return;
+    const cropped = new File([result.blob], result.filename, {
+      type: result.type,
+    });
+    void doUpload(current.target, cropped);
+  }
+
+  async function doUpload(target: ProjectMediaTarget, file: File) {
+    if (!auth) {
+      setError("Necesitás iniciar sesión para subir archivos.");
+      return;
+    }
+    setError(null);
+    setImageUpload({
+      target,
+      server: DEFAULT_BLOSSOM_SERVERS[0],
+      state: "signing",
+    });
+
+    const revealTarget: ProjectCropTarget | null =
+      target === "videos" ? null : target;
+    if (revealTarget) {
+      const localUrl = URL.createObjectURL(file);
+      setUploadReveal((prev) => {
+        if (prev) URL.revokeObjectURL(prev.localUrl);
+        return { target: revealTarget, localUrl, percent: 0 };
+      });
+    }
+
+    let signer: Awaited<ReturnType<typeof getSigner>> | null = null;
+    try {
+      signer = await getSigner(auth, {
+        onAuthUrl: (url) => {
+          pushToast({
+            kind: "info",
+            title: "Autorizá la firma en tu bunker",
+            description: url,
+            duration: 20000,
+          });
+          try {
+            window.open(url, "_blank", "noopener,noreferrer");
+          } catch {
+            /* popup blocked */
+          }
+        },
+      });
+
+      const uploadShare = 65;
+      const desc = await uploadToBlossom(file, signer, {
+        onProgress: (p) => {
+          setImageUpload({ target, ...p });
+          if (revealTarget && p.state === "uploading" && typeof p.percent === "number") {
+            const uploaded = p.percent;
+            setUploadReveal((prev) =>
+              prev && prev.target === revealTarget
+                ? {
+                    ...prev,
+                    percent: Math.min(
+                      uploadShare,
+                      Math.round(uploaded * uploadShare),
+                    ),
+                  }
+                : prev,
+            );
+          }
+        },
+      });
+
+      if (revealTarget) {
+        setUploadReveal((prev) =>
+          prev && prev.target === revealTarget
+            ? { ...prev, percent: uploadShare }
+            : prev,
+        );
+      }
+      setImageUpload({ target, server: desc.server, state: "uploading" });
+
+      if (revealTarget) {
+        try {
+          await fetchBlobWithProgress(desc.url, (p) => {
+            if (typeof p.percent === "number") {
+              const percent =
+                uploadShare + Math.round(p.percent * (100 - uploadShare));
+              setUploadReveal((prev) =>
+                prev && prev.target === revealTarget ? { ...prev, percent } : prev,
+              );
+            }
+          });
+        } catch (e) {
+          console.warn("[labs] project image warmup failed", e);
+        }
+
+        setUploadReveal((prev) =>
+          prev && prev.target === revealTarget ? { ...prev, percent: 100 } : prev,
+        );
+
+        await new Promise<void>((resolve) => {
+          const pre = new Image();
+          let settled = false;
+          const done = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+          };
+          pre.onload = done;
+          pre.onerror = done;
+          window.setTimeout(done, 4000);
+          pre.src = desc.url;
+        });
+      }
+
+      setForm((prev) => {
+        if (target === "logo" || target === "cover") {
+          return { ...prev, [target]: desc.url };
+        }
+        return { ...prev, [target]: [...prev[target], desc.url] };
+      });
+      if (revealTarget) {
+        setUploadReveal((prev) =>
+          prev && prev.target === revealTarget ? { ...prev, percent: 100, fading: true } : prev,
+        );
+        window.setTimeout(() => {
+          setUploadReveal((prev) => {
+            if (!prev || prev.target !== revealTarget) return prev;
+            URL.revokeObjectURL(prev.localUrl);
+            return null;
+          });
+        }, 450);
+      }
+      pushToast({
+        kind: "success",
+        title: uploadSuccessTitle(target),
+        description: desc.server.replace("https://", ""),
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      setUploadReveal((prev) => {
+        if (revealTarget && prev?.target === revealTarget) {
+          URL.revokeObjectURL(prev.localUrl);
+          return null;
+        }
+        return prev;
+      });
+      pushToast({
+        kind: "error",
+        title: uploadErrorTitle(target),
+        description: msg.split("\n")[0],
+        duration: 12000,
+      });
+    } finally {
+      signer?.close?.().catch(() => {});
+      setImageUpload({ target: null, server: "", state: "ok" });
+    }
+  }
 
   async function handleSave() {
     if (!auth) return;
+    if (imageBusy) return;
     setError(null);
-    const name = form.name.trim();
+    const clean = (s?: string | null) =>
+      typeof s === "string" ? s.trim() : "";
+    const cleanList = (items: string[]) => items.map(clean).filter(Boolean);
+    const name = clean(form.name);
     if (!name) { setError("El nombre es obligatorio"); return; }
 
     const isEdit = !!editProject;
@@ -327,20 +681,28 @@ export default function NewProjectModal({
 
     const team: TeamMember[] = form.team
       .map((row) => {
-        const nip05 = row.nip05.trim();
-        const nm = (row.name?.trim() ?? "") || (nip05 ? nip05.split("@")[0] : "") || (row.pubkey ? `${row.pubkey.slice(0, 8)}…` : "");
-        return { name: nm, role: row.role.trim() || "Builder", nip05: nip05 || undefined, pubkey: row.pubkey, picture: row.picture };
+        const nip05 = clean(row.nip05);
+        const nm = clean(row.name) || (nip05 ? nip05.split("@")[0] : "") || (row.pubkey ? `${row.pubkey.slice(0, 8)}…` : "");
+        return { name: nm, role: clean(row.role) || "Builder", nip05: nip05 || undefined, pubkey: row.pubkey, picture: row.picture };
       })
       .filter((m) => m.name.length > 0 || m.nip05 || m.pubkey);
 
-    const hackathon = form.hackathon.trim() || null;
+    const hackathon = clean(form.hackathon) || null;
+    const images = cleanList(form.images);
+    const thumbs = cleanList(form.thumbs);
+    const videos = cleanList(form.videos);
     const project: UserProject = {
       id: editProject?.id ?? crypto.randomUUID(),
       name,
-      description: form.description.trim(),
+      description: clean(form.description),
+      logo: clean(form.logo) || undefined,
+      cover: clean(form.cover) || undefined,
+      images: images.length ? images : undefined,
+      thumbs: thumbs.length ? thumbs : undefined,
+      videos: videos.length ? videos : undefined,
       team,
-      repo: form.repo.trim() || undefined,
-      demo: form.demo.trim() || undefined,
+      repo: clean(form.repo) || undefined,
+      demo: clean(form.demo) || undefined,
       tech: form.tech.length ? form.tech : undefined,
       status: isEdit ? editProject!.status : (hackathon ? "submitted" : "building"),
       hackathon,
@@ -440,7 +802,7 @@ export default function NewProjectModal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => !publishing && step !== "fetching" && onClose()}
+            onClick={() => !busy && step !== "fetching" && onClose()}
             className="absolute inset-0 bg-black/80 backdrop-blur-md"
           />
           <motion.form
@@ -472,8 +834,8 @@ export default function NewProjectModal({
                 )}
                 <button
                   type="button"
-                  onClick={() => !publishing && step !== "fetching" && onClose()}
-                  disabled={publishing || step === "fetching"}
+                  onClick={() => !busy && step !== "fetching" && onClose()}
+                  disabled={busy || step === "fetching"}
                   className="p-2 rounded-lg text-foreground-muted hover:text-foreground hover:bg-white/5 transition-colors disabled:opacity-50"
                   aria-label="Cerrar"
                 >
@@ -517,23 +879,203 @@ export default function NewProjectModal({
                     {error}
                   </div>
                 )}
+                <div
+                  ref={mediaFieldRef}
+                  className="rounded-xl border border-border bg-white/[0.02] overflow-hidden"
+                >
+                  <BannerUploader
+                    src={form.cover}
+                    uploading={imageUpload.target === "cover" && imageBusy}
+                    disabled={busy}
+                    onPick={() => pickFile("cover")}
+                    reveal={
+                      uploadReveal?.target === "cover"
+                        ? {
+                            localUrl: uploadReveal.localUrl,
+                            percent: uploadReveal.percent,
+                            fading: uploadReveal.fading,
+                          }
+                        : null
+                    }
+                  />
+                  <input
+                    ref={coverInputRef}
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.currentTarget.value = "";
+                      if (file) pickedFile("cover", file);
+                    }}
+                  />
+                  <div className="px-4 py-4 flex items-start gap-4">
+                    <AvatarUploader
+                      src={form.logo}
+                      name={form.name || "Proyecto"}
+                      uploading={imageUpload.target === "logo" && imageBusy}
+                      disabled={busy}
+                      onPick={() => pickFile("logo")}
+                      reveal={
+                        uploadReveal?.target === "logo"
+                          ? {
+                              localUrl: uploadReveal.localUrl,
+                              percent: uploadReveal.percent,
+                              fading: uploadReveal.fading,
+                            }
+                          : null
+                      }
+                    />
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.currentTarget.value = "";
+                        if (file) pickedFile("logo", file);
+                      }}
+                    />
+                    <div className="min-w-0 flex-1 pt-1">
+                      <div className="text-xs font-semibold text-foreground">
+                        Logo y cover
+                      </div>
+                      {imageUpload.target && imageUpload.state !== "ok" && (
+                        <div className="mt-2 text-[10px] font-mono text-foreground-subtle">
+                          {imageUpload.state === "signing"
+                            ? "firmando autorización…"
+                            : imageUpload.state === "uploading"
+                              ? `subiendo a ${imageUpload.server.replace("https://", "")}`
+                              : imageUpload.state === "error"
+                                ? `✗ ${imageUpload.server.replace("https://", "")}: ${imageUpload.error?.slice(0, 80)}`
+                                : ""}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <details className="border-t border-border">
+                    <summary className="px-4 py-2 text-[10px] font-mono uppercase tracking-widest text-foreground-subtle cursor-pointer hover:bg-white/[0.04]">
+                      URLs avanzadas
+                    </summary>
+                    <div className="px-4 py-3 border-t border-border grid grid-cols-1 gap-3">
+                      <Field label="Logo (URL)">
+                        <input
+                          type="url"
+                          value={form.logo}
+                          onChange={(e) =>
+                            setForm({ ...form, logo: e.target.value })
+                          }
+                          disabled={busy}
+                          placeholder="https://…"
+                          className="w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm font-mono placeholder:text-foreground-subtle"
+                        />
+                      </Field>
+                      <Field label="Cover (URL)">
+                        <input
+                          type="url"
+                          value={form.cover}
+                          onChange={(e) =>
+                            setForm({ ...form, cover: e.target.value })
+                          }
+                          disabled={busy}
+                          placeholder="https://…"
+                          className="w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm font-mono placeholder:text-foreground-subtle"
+                        />
+                      </Field>
+                    </div>
+                  </details>
+                </div>
+                <div
+                  ref={galleryFieldRef}
+                  className="rounded-xl border border-border bg-white/[0.02] p-4 space-y-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4 text-foreground-muted" />
+                    <div className="text-xs font-semibold text-foreground">
+                      Imágenes y videos
+                    </div>
+                  </div>
+                  <input
+                    ref={imagesInputRef}
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.currentTarget.value = "";
+                      if (file) pickedFile("images", file);
+                    }}
+                  />
+                  <input
+                    ref={thumbsInputRef}
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.currentTarget.value = "";
+                      if (file) pickedFile("thumbs", file);
+                    }}
+                  />
+                  <input
+                    ref={videosInputRef}
+                    type="file"
+                    accept="video/*"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.currentTarget.value = "";
+                      if (file) pickedFile("videos", file);
+                    }}
+                  />
+                  <ProjectMediaList
+                    title="Imágenes"
+                    urls={form.images}
+                    kind="image"
+                    disabled={busy}
+                    uploading={imageUpload.target === "images" && imageBusy}
+                    onUpload={() => pickFile("images")}
+                    onChange={(images) => setForm({ ...form, images })}
+                  />
+                  <ProjectMediaList
+                    title="Thumbs"
+                    urls={form.thumbs}
+                    kind="thumb"
+                    disabled={busy}
+                    uploading={imageUpload.target === "thumbs" && imageBusy}
+                    onUpload={() => pickFile("thumbs")}
+                    onChange={(thumbs) => setForm({ ...form, thumbs })}
+                  />
+                  <ProjectMediaList
+                    title="Videos"
+                    urls={form.videos}
+                    kind="video"
+                    disabled={busy}
+                    uploading={imageUpload.target === "videos" && imageBusy}
+                    onUpload={() => pickFile("videos")}
+                    onChange={(videos) => setForm({ ...form, videos })}
+                  />
+                </div>
                 <Field label="Nombre" required>
                   <input
                     type="text"
-                    autoFocus
+                    ref={nameInputRef}
+                    autoFocus={!editProject || initialFocus === "all" || initialFocus === "name"}
                     required
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    disabled={publishing}
+                    disabled={busy}
                     placeholder="Mi proyecto genial"
                     className="w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm placeholder:text-foreground-subtle"
                   />
                 </Field>
                 <Field label="Descripción">
                   <textarea
+                    ref={descriptionInputRef}
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    disabled={publishing}
+                    disabled={busy}
                     rows={3}
                     placeholder="¿Qué hace? ¿Para quién?"
                     className="w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm placeholder:text-foreground-subtle resize-none"
@@ -546,7 +1088,7 @@ export default function NewProjectModal({
                       <button
                         type="button"
                         onClick={handleFetch}
-                        disabled={publishing || !form.repo.trim()}
+                        disabled={busy || !form.repo.trim()}
                         title="Recargar desde GitHub"
                         className="p-0.5 rounded text-foreground-subtle hover:text-bitcoin disabled:opacity-40 transition-colors"
                       >
@@ -554,11 +1096,12 @@ export default function NewProjectModal({
                       </button>
                     }
                   >
-                    <input
-                      type="url"
+                      <input
+                        type="url"
+                        ref={repoInputRef}
                       value={form.repo}
                       onChange={(e) => setForm({ ...form, repo: e.target.value })}
-                      disabled={publishing}
+                      disabled={busy}
                       placeholder="https://github.com/..."
                       className="w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm font-mono placeholder:text-foreground-subtle"
                     />
@@ -568,26 +1111,29 @@ export default function NewProjectModal({
                       type="url"
                       value={form.demo}
                       onChange={(e) => setForm({ ...form, demo: e.target.value })}
-                      disabled={publishing}
+                      disabled={busy}
                       placeholder="https://..."
                       className="w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm font-mono placeholder:text-foreground-subtle"
                     />
                   </Field>
                 </div>
                 <Field label="Stack" hint="enter o coma para sumar">
-                  <TagsInput
-                    value={form.tech}
-                    onChange={(tech) => setForm({ ...form, tech })}
-                    disabled={publishing}
-                    placeholder="Lightning, Nostr, NIP-01…"
-                    suggestions={STACK_SUGGESTIONS}
-                  />
+                  <div ref={techFieldRef}>
+                    <TagsInput
+                      value={form.tech}
+                      onChange={(tech) => setForm({ ...form, tech })}
+                      disabled={busy}
+                      placeholder="Lightning, Nostr, NIP-01…"
+                      suggestions={STACK_SUGGESTIONS}
+                    />
+                  </div>
                 </Field>
                 <Field label="Hackatón" hint={hackathonId ? undefined : "asignalo para que aparezca en /hackathons"}>
                   <select
+                    ref={hackathonInputRef}
                     value={form.hackathon}
                     onChange={(e) => setForm({ ...form, hackathon: e.target.value })}
-                    disabled={publishing || !!hackathonId}
+                    disabled={busy || !!hackathonId}
                     className={cn("w-full px-3 py-2.5 rounded-lg bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm", hackathonId && "opacity-60 cursor-not-allowed")}
                   >
                     <option value="">Sin hackatón asignado</option>
@@ -598,11 +1144,13 @@ export default function NewProjectModal({
                     ))}
                   </select>
                 </Field>
-                <TeamEditor
-                  team={form.team}
-                  onChange={(team) => setForm({ ...form, team })}
-                  disabled={publishing}
-                />
+                <div ref={teamFieldRef}>
+                  <TeamEditor
+                    team={form.team}
+                    onChange={(team) => setForm({ ...form, team })}
+                    disabled={busy}
+                  />
+                </div>
                 {!editProject && (
                   <button
                     type="button"
@@ -638,18 +1186,18 @@ export default function NewProjectModal({
                   <button
                     type="button"
                     onClick={onClose}
-                    disabled={publishing}
+                    disabled={busy}
                     className="px-4 py-2 rounded-lg text-sm font-semibold text-foreground-muted hover:text-foreground hover:bg-white/5 transition-colors disabled:opacity-50"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    disabled={publishing || !form.name.trim()}
+                    disabled={busy || !form.name.trim()}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-bitcoin to-yellow-500 text-black disabled:opacity-70 disabled:cursor-progress"
                   >
-                    {publishing ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" />{phaseLabel}</>
+                    {busy ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" />{publishing ? phaseLabel : "Subiendo imagen…"}</>
                     ) : (
                       <><Save className="h-4 w-4" />{editProject ? "Guardar" : "Crear"}</>
                     )}
@@ -666,6 +1214,40 @@ export default function NewProjectModal({
         <RelayPublishProgress relays={relays} results={relayResults} phase={phase} />
       )}
     </AnimatePresence>
+    {cropSource && (
+      <ImageCropModal
+        key={cropSource.target}
+        open
+        file={cropSource.file}
+        aspect={
+          cropSource.target === "cover"
+            ? 3
+            : cropSource.target === "logo"
+              ? 1
+              : 16 / 9
+        }
+        title={
+          cropSource.target === "cover"
+            ? "Recortar cover"
+            : cropSource.target === "logo"
+              ? "Recortar logo"
+              : cropSource.target === "thumbs"
+                ? "Recortar thumb"
+                : "Recortar imagen"
+        }
+        hint={
+          cropSource.target === "cover"
+            ? "Cover 3:1"
+            : cropSource.target === "logo"
+              ? "Logo 1:1"
+              : "Media 16:9"
+        }
+        maxOutputPx={cropSource.target === "logo" ? 1024 : 1500}
+        outputType="image/jpeg"
+        onConfirm={handleCropConfirm}
+        onCancel={() => setCropSource(null)}
+      />
+    )}
     </>
   );
 }
@@ -784,6 +1366,129 @@ function Field({ label, hint, required, action, children }: { label: string; hin
       </span>
       {children}
     </label>
+  );
+}
+
+function ProjectMediaList({
+  title,
+  urls,
+  kind,
+  disabled,
+  uploading,
+  onUpload,
+  onChange,
+}: {
+  title: string;
+  urls: string[];
+  kind: "image" | "thumb" | "video";
+  disabled?: boolean;
+  uploading?: boolean;
+  onUpload: () => void;
+  onChange: (next: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const icon =
+    kind === "video" ? (
+      <Video className="h-3.5 w-3.5" />
+    ) : (
+      <ImageIcon className="h-3.5 w-3.5" />
+    );
+
+  function addUrl() {
+    const clean = draft.trim();
+    if (!clean) return;
+    onChange([...urls, clean]);
+    setDraft("");
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-black/20 p-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="inline-flex min-w-0 items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-foreground-muted">
+          {icon}
+          <span>{title}</span>
+          <span className="text-foreground-subtle">{urls.length}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onUpload}
+          disabled={disabled}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-white/[0.03] px-2 py-1 text-[11px] font-semibold text-foreground-muted transition-colors hover:bg-white/[0.06] hover:text-foreground disabled:cursor-progress disabled:opacity-50"
+        >
+          {uploading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Upload className="h-3.5 w-3.5" />
+          )}
+          Subir
+        </button>
+      </div>
+
+      {urls.length > 0 && (
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          {urls.map((url, idx) => (
+            <div
+              key={`${url}-${idx}`}
+              className="group relative aspect-video overflow-hidden rounded-lg border border-border bg-white/[0.03]"
+            >
+              {kind === "video" ? (
+                <video
+                  src={url}
+                  className="h-full w-full object-cover"
+                  controls
+                  playsInline
+                  preload="metadata"
+                />
+              ) : (
+                <img
+                  src={url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => onChange(urls.filter((_, i) => i !== idx))}
+                disabled={disabled}
+                className="absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/15 bg-black/65 text-white opacity-0 transition-opacity hover:bg-danger/80 disabled:opacity-40 group-hover:opacity-100"
+                aria-label={`Eliminar ${title}`}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addUrl();
+            }
+          }}
+          disabled={disabled}
+          placeholder="https://…"
+          className="min-w-0 flex-1 rounded-lg border border-border bg-white/[0.03] px-3 py-2 text-xs font-mono transition-colors placeholder:text-foreground-subtle focus:border-bitcoin/50 focus:bg-white/[0.05] disabled:opacity-50"
+        />
+        <button
+          type="button"
+          onClick={addUrl}
+          disabled={disabled || !draft.trim()}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-white/[0.03] text-foreground-muted transition-colors hover:bg-white/[0.06] hover:text-foreground disabled:opacity-40"
+          aria-label={`Agregar ${title}`}
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
   );
 }
 
