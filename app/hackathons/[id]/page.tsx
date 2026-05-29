@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
+  Award,
   BookOpen,
   Calendar,
   Trophy,
@@ -413,6 +414,15 @@ export default async function HackathonPage({
                   <HackathonInscripcionButton hackathonId={hackathon.id} />
                 </div>
               )}
+              <div className="mt-4">
+                <Link
+                  href={`/hackathons/${hackathon.id}/badges`}
+                  className="inline-flex items-center gap-2 rounded-xl border border-bitcoin/30 bg-bitcoin/10 px-4 py-2 text-sm font-semibold text-bitcoin transition-colors hover:bg-bitcoin/15"
+                >
+                  <Award className="h-4 w-4" />
+                  Ver badges
+                </Link>
+              </div>
             </div>
           </div>
 

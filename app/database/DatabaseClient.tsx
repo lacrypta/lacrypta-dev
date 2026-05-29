@@ -764,8 +764,8 @@ function PubkeyOverride({
     <div className="mt-2 space-y-1.5 max-w-2xl">
       <div className="text-[10px] font-mono text-bitcoin inline-flex items-center gap-1">
         <AlertCircle className="h-3 w-3" />
-        NEXT_PUBLIC_LACRYPTA_NPUB no resuelto. Pegá una pubkey para habilitar el
-        resto de los eventos.
+        Pubkey oficial no resuelta desde LACRYPTA_NSEC. Pegá una pubkey para
+        habilitar el resto de los eventos.
       </div>
       <div className="flex gap-2">
         <input

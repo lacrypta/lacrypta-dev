@@ -10,6 +10,7 @@ import {
   PROJECT_TAG,
   PROJECT_D_PREFIX,
 } from "./userProjects";
+import { HACKATHON_BADGE_CATALOG_TAG } from "./hackathonBadges";
 
 export type RelayFilter = {
   kinds: number[];
@@ -33,7 +34,7 @@ export type EventCategory = {
   kind: number;
   source: string;
   replaceability: EventReplaceability;
-  /** True if the filter requires La Crypta's pubkey (NEXT_PUBLIC_LACRYPTA_NPUB). */
+  /** True if the filter requires La Crypta's official publisher pubkey. */
   requiresLacryptaPubkey: boolean;
   /** Builds the relay filter. ctx.lacryptaPubkey is hex (may be empty). */
   buildFilter: (ctx: { lacryptaPubkey: string }) => RelayFilter | null;
@@ -112,6 +113,26 @@ export const CATEGORIES: EventCategory[] = [
         kinds: [30078],
         authors: [lacryptaPubkey],
         "#t": ["lacrypta-dev-results"],
+        limit: 100,
+      };
+    },
+  },
+  {
+    id: "hackathon-badge-catalogs",
+    label: "Catalogos de badges de hackaton",
+    shortLabel: "Badges catalogo",
+    description:
+      "kind:30078 firmado por La Crypta · tag t=lacrypta-dev-hackathon-badges.",
+    kind: 30078,
+    source: "lib/hackathonBadges.ts",
+    replaceability: "parameterized",
+    requiresLacryptaPubkey: true,
+    buildFilter: ({ lacryptaPubkey }) => {
+      if (!lacryptaPubkey) return null;
+      return {
+        kinds: [30078],
+        authors: [lacryptaPubkey],
+        "#t": [HACKATHON_BADGE_CATALOG_TAG],
         limit: 100,
       };
     },
@@ -242,6 +263,9 @@ export function eventDisplayTitle(
   }
   if (category.id === "hackathon-results" && d) {
     return d.replace("lacrypta.dev:hackathon:", "").replace(":results", "");
+  }
+  if (category.id === "hackathon-badge-catalogs" && d) {
+    return d.replace("lacrypta.dev:hackathon-badges:", "");
   }
   if (category.id === "lacrypta-profile") {
     try {
