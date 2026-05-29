@@ -59,31 +59,9 @@
       "submittedAt": "2026-05-26"
     },
     {
-      "id": "zaploop",
-      "name": "Zaploop",
-      "description": "Tercer puesto de Commerce con score final 7.52 y pitch en el minuto 86:38 de la CC #161.",
-      "team": [
-        {
-          "name": "Burgos",
-          "github": "Burgos247",
-          "role": "Lead Dev",
-          "nip05": "burgos@primal.net",
-          "pubkey": "afc8a6df0841909c981c7c5a5536e562cbd5ff5bb22beb8357f3f2798465e4dc"
-        }
-      ],
-      "repo": "https://github.com/Burgos247/Zaploop",
-      "demo": "https://zaploop.vercel.app",
-      "tech": [
-        "Lightning",
-        "Commerce"
-      ],
-      "status": "winner",
-      "submittedAt": "2026-05-26"
-    },
-    {
       "id": "wapufy",
       "name": "wapufy",
-      "description": "Cuarto puesto de Commerce con score final 7.42 y mención fuerte en los resultados finales.",
+      "description": "Tercer puesto de Commerce.",
       "team": [
         {
           "name": "Looker",
@@ -104,7 +82,7 @@
     {
       "id": "tiendita",
       "name": "tiendita",
-      "description": "Quinto puesto de Commerce con score final 5.36 luego de penalización por no pitch.",
+      "description": "Cuarto puesto de Commerce.",
       "team": [
         {
           "name": "negr0",
@@ -124,19 +102,32 @@
       "submittedAt": "2026-05-26"
     },
     {
-      "id": "hash-21",
-      "name": "hash 21",
-      "description": "Sexto puesto de Commerce con score final 4.95 luego de penalización por no pitch.",
+      "id": "wapubot",
+      "name": "wapubot",
+      "description": "Quinto puesto de Commerce.",
+      "team": [],
+      "tech": [
+        "Lightning",
+        "Commerce"
+      ],
+      "status": "winner",
+      "submittedAt": "2026-05-26"
+    },
+    {
+      "id": "zaploop",
+      "name": "Zaploop",
+      "description": "Sexto puesto de Commerce.",
       "team": [
         {
-          "name": "Lai",
-          "github": "warrior-lai",
+          "name": "Burgos",
+          "github": "Burgos247",
           "role": "Lead Dev",
-          "pubkey": "a78a391888c6a7a2e114ad66dc0e473b9f561734c7f098c9552b2e5bb840d26c"
+          "nip05": "burgos@primal.net",
+          "pubkey": "afc8a6df0841909c981c7c5a5536e562cbd5ff5bb22beb8357f3f2798465e4dc"
         }
       ],
-      "repo": "https://github.com/warrior-lai/hash-21",
-      "demo": "https://hash21.studio/",
+      "repo": "https://github.com/Burgos247/Zaploop",
+      "demo": "https://zaploop.vercel.app",
       "tech": [
         "Lightning",
         "Commerce"

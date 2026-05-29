@@ -186,14 +186,7 @@ export async function fetchHackathonResults(
 // ─── hooks ───────────────────────────────────────────────────────────────────
 
 function getLacryptaPubkeyHex(): string {
-  const npub =
-    typeof process !== "undefined"
-      ? process.env.NEXT_PUBLIC_LACRYPTA_NPUB ?? ""
-      : "";
-  if (!npub) return "";
   try {
-    // Dynamic decode at runtime — nip19 is client-only
-    // We cache the hex so the import only happens once per session
     const cached = (window as unknown as Record<string, string>)[
       "__lcpk__"
     ];
@@ -204,18 +197,17 @@ function getLacryptaPubkeyHex(): string {
   }
 }
 
-/** Resolves npub → hex once and caches it on window.__lcpk__ */
+/** Resolves La Crypta's official publisher pubkey from the server. */
 async function resolveLacryptaPubkey(): Promise<string> {
   if (typeof window === "undefined") return "";
   const win = window as unknown as Record<string, string>;
   if (win.__lcpk__) return win.__lcpk__;
-  const npub = process.env.NEXT_PUBLIC_LACRYPTA_NPUB ?? "";
-  if (!npub) return "";
   try {
-    const { decode } = await import("nostr-tools/nip19");
-    const decoded = decode(npub);
-    if (decoded.type !== "npub") return "";
-    win.__lcpk__ = decoded.data as string;
+    const res = await fetch("/api/lacrypta-pubkeys");
+    if (!res.ok) return "";
+    const data = (await res.json()) as { publisherPubkey?: string };
+    if (!data.publisherPubkey) return "";
+    win.__lcpk__ = data.publisherPubkey;
     return win.__lcpk__;
   } catch {
     return "";

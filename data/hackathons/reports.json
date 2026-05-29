@@ -1742,8 +1742,8 @@
     },
     "zaploop": {
       "title": "Zaploop",
-      "position": 3,
-      "finalScore": 7.52,
+      "position": 6,
+      "finalScore": null,
       "team": [
         "Burgos"
       ],
@@ -1756,8 +1756,8 @@
     },
     "wapufy": {
       "title": "wapufy",
-      "position": 4,
-      "finalScore": 7.42,
+      "position": 3,
+      "finalScore": null,
       "team": [
         "Looker"
       ],
@@ -1770,8 +1770,8 @@
     },
     "tiendita": {
       "title": "tiendita",
-      "position": 5,
-      "finalScore": 5.36,
+      "position": 4,
+      "finalScore": null,
       "team": [
         "negr0"
       ],
@@ -1782,13 +1782,11 @@
         "improvements": []
       }
     },
-    "hash-21": {
-      "title": "hash 21",
-      "position": 6,
-      "finalScore": 4.95,
-      "team": [
-        "Lai"
-      ],
+    "wapubot": {
+      "title": "wapubot",
+      "position": 5,
+      "finalScore": null,
+      "team": [],
       "stack": [],
       "judges": [],
       "feedback": {
