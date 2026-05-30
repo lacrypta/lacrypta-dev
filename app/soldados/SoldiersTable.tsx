@@ -64,9 +64,9 @@ function medal(position: number | null): string {
 
 type ScoredPositionEntry = {
   position: number;
-  hackathonId: string | null;
   hackathonLabel: string;
   projectId: string;
+  projectName: string;
   points: number;
 };
 
@@ -75,14 +75,18 @@ function scoredPositionEntries(projects: Soldier["projects"]): ScoredPositionEnt
     .filter((p) => p.positionPoints > 0 && p.position != null)
     .map((p) => ({
       position: p.position!,
-      hackathonId: p.hackathonId,
       hackathonLabel: p.hackathonId ? hackathonLabel(p.hackathonId) : "Sin hackatón",
       projectId: p.projectId,
+      projectName: p.projectName,
       points: p.positionPoints,
     }))
     .sort((a, b) => {
       if (a.position !== b.position) return a.position - b.position;
-      return a.hackathonLabel.localeCompare(b.hackathonLabel, undefined, {
+      const byHackathon = a.hackathonLabel.localeCompare(b.hackathonLabel, undefined, {
+        sensitivity: "base",
+      });
+      if (byHackathon !== 0) return byHackathon;
+      return a.projectName.localeCompare(b.projectName, undefined, {
         sensitivity: "base",
       });
     });
@@ -133,6 +137,11 @@ export default function SoldiersTable({ soldiers }: { soldiers: Soldier[] }) {
             const src = avatarSrc(s);
             const bp = bestPosition(s);
             const ths = uniqHackathonsCount(s);
+            const scoredPositions = scoredPositionEntries(s.projects);
+            const positionsTotal = scoredPositions.reduce(
+              (sum, entry) => sum + entry.points,
+              0,
+            );
             return (
               <tr
                 key={s.id}
@@ -243,43 +252,35 @@ export default function SoldiersTable({ soldiers }: { soldiers: Soldier[] }) {
                   </span>
                 </td>
                 <td className="px-4 py-3 align-middle text-right">
-                  {(() => {
-                    const entries = scoredPositionEntries(s.projects);
-                    if (entries.length === 0)
-                      return (
-                        <span className="text-foreground-subtle text-xs">
-                          —
-                        </span>
-                      );
-                    const rows = entries.map(({ position, hackathonLabel }) => ({
-                      left: `${positionLabel(position)} · ${hackathonLabel} · ${POSITION_POINTS[position]} pts`,
-                    }));
-                    const positionsTotal = entries.reduce(
-                      (sum, entry) => sum + entry.points,
-                      0,
-                    );
-                    return (
-                      <span className="group/positions relative inline-block cursor-help">
-                        <span className="inline-flex max-w-44 flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs">
-                          {entries.map(({ position, hackathonLabel, projectId }) => (
+                  {scoredPositions.length === 0 ? (
+                    <span className="text-foreground-subtle text-xs">—</span>
+                  ) : (
+                    <span className="group/positions relative inline-block cursor-help">
+                      <span className="inline-flex max-w-44 flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs">
+                        {scoredPositions.map(
+                          ({ position, hackathonLabel, projectId, projectName }) => (
                             <span
-                              key={`${projectId}-${position}`}
-                              title={hackathonLabel}
+                              key={`${projectId}-${position}-${hackathonLabel}`}
+                              title={`${projectName} · ${hackathonLabel}`}
                               className="inline-flex items-center gap-1 rounded-full border border-border bg-white/[0.03] px-2 py-0.5 text-foreground-muted"
                             >
                               <span>{positionLabel(position)}</span>
                             </span>
-                          ))}
-                        </span>
-                        <StatTooltip
-                          hoverClass="group-hover/positions:opacity-100 group-hover/positions:translate-y-0"
-                          title="Puestos puntuables"
-                          rows={rows}
-                          total={positionsTotal}
-                        />
+                          ),
+                        )}
                       </span>
-                    );
-                  })()}
+                      <StatTooltip
+                        hoverClass="group-hover/positions:opacity-100 group-hover/positions:translate-y-0"
+                        title="Puestos puntuables"
+                        rows={scoredPositions.map(
+                          ({ position, hackathonLabel, projectName, points }) => ({
+                            left: `${positionLabel(position)} · ${projectName} · ${hackathonLabel} · ${points} pts`,
+                          }),
+                        )}
+                        total={positionsTotal}
+                      />
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 align-middle text-right">
                   {bp ? (
