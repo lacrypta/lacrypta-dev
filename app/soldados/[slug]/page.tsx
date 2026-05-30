@@ -209,7 +209,7 @@ export default async function SoldierProfilePage({
             sub={`+${soldier.scoreBreakdown.projects} pts`}
           />
           <ScoreCell
-            label="Posiciones"
+            label="Puestos"
             value={`+${soldier.scoreBreakdown.positions}`}
             sub="top 6"
           />

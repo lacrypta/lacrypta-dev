@@ -82,11 +82,11 @@ function scoredPositionEntries(projects: Soldier["projects"]): ScoredPositionEnt
     }))
     .sort((a, b) => {
       if (a.position !== b.position) return a.position - b.position;
-      const byHackathon = a.hackathonLabel.localeCompare(b.hackathonLabel, undefined, {
+      const byHackathon = a.hackathonLabel.localeCompare(b.hackathonLabel, "es-AR", {
         sensitivity: "base",
       });
       if (byHackathon !== 0) return byHackathon;
-      return a.projectName.localeCompare(b.projectName, undefined, {
+      return a.projectName.localeCompare(b.projectName, "es-AR", {
         sensitivity: "base",
       });
     });
@@ -113,7 +113,7 @@ export default function SoldiersTable({ soldiers }: { soldiers: Soldier[] }) {
   // Sort by score desc, then name asc.
   const ranked = [...soldiers].sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
-    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    return a.name.localeCompare(b.name, "es-AR", { sensitivity: "base" });
   });
 
   return (
