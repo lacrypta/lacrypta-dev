@@ -18,6 +18,7 @@ import {
   FolderKanban,
   LogOut,
   ExternalLink,
+  ShieldCheck,
 } from "lucide-react";
 import Logo from "./Logo";
 import LoginModal from "./LoginModal";
@@ -49,8 +50,10 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [adminPubkey, setAdminPubkey] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const { push: pushToast } = useToast();
+  const isAdmin = !!auth?.pubkey && !!adminPubkey && auth.pubkey === adminPubkey;
 
   const { scrollY } = useScroll();
 
@@ -84,6 +87,25 @@ export default function Navbar() {
     setMobileOpen(false);
     setUserMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!auth?.pubkey) {
+      setAdminPubkey(null);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/lacrypta-pubkeys")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { adminPubkey?: string } | null) => {
+        if (!cancelled) setAdminPubkey(data?.adminPubkey ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setAdminPubkey(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [auth?.pubkey]);
 
   useEffect(() => {
     if (!userMenuOpen) return;
@@ -209,8 +231,13 @@ export default function Navbar() {
                       <span>{auth.pubkey.slice(0, 2).toUpperCase()}</span>
                     )}
                   </span>
-                  <span className="text-xs text-foreground truncate max-w-[14ch]">
-                    {profile?.display_name || profile?.name || `${auth.pubkey.slice(0, 6)}…`}
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-xs text-foreground max-w-[14ch]">
+                      {profile?.display_name ||
+                        profile?.name ||
+                        `${auth.pubkey.slice(0, 6)}…`}
+                    </span>
+                    {isAdmin && <AdminBadge compact />}
                   </span>
                 </button>
 
@@ -378,6 +405,7 @@ export default function Navbar() {
                               profile?.name ||
                               `${auth.pubkey.slice(0, 10)}…`}
                           </div>
+                          {isAdmin && <AdminBadge />}
                         </div>
                         <div className="text-[11px] text-foreground-subtle font-mono truncate">
                           {auth.pubkey.slice(0, 10)}…{auth.pubkey.slice(-4)}
@@ -437,5 +465,20 @@ export default function Navbar() {
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </>
+  );
+}
+
+function AdminBadge({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full border border-bitcoin/35 bg-bitcoin/10 font-mono font-bold uppercase tracking-widest text-bitcoin",
+        compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]",
+      )}
+      title="Admin La Crypta"
+    >
+      <ShieldCheck className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
+      Admin
+    </span>
   );
 }

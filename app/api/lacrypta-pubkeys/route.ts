@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { connection, NextResponse } from "next/server";
 
 async function decodeNpub(npub: string): Promise<string> {
   const { decode } = await import("nostr-tools/nip19");
@@ -17,12 +17,21 @@ async function publisherPubkeyFromNsec(): Promise<string> {
   return getPublicKey(decoded.data as Uint8Array);
 }
 
+function getAdminNpub(): string {
+  const adminNpub =
+    process.env.NEXT_PUBLIC_LACRYPTA_ADMIN_NPUB ||
+    process.env.NEXT_PUBLIC_LACRYPTA_NPUB;
+  if (!adminNpub) {
+    throw new Error("Falta NEXT_PUBLIC_LACRYPTA_ADMIN_NPUB.");
+  }
+  return adminNpub;
+}
+
 export async function GET() {
   try {
-    const adminNpub = process.env.NEXT_PUBLIC_LACRYPTA_NPUB;
-    if (!adminNpub) throw new Error("Falta NEXT_PUBLIC_LACRYPTA_NPUB.");
+    await connection();
     const [adminPubkey, publisherPubkey] = await Promise.all([
-      decodeNpub(adminNpub),
+      decodeNpub(getAdminNpub()),
       publisherPubkeyFromNsec(),
     ]);
     return NextResponse.json({ adminPubkey, publisherPubkey });

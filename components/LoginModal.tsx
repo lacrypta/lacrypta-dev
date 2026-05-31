@@ -32,6 +32,7 @@ const QR_TIMEOUT_MS = 5 * 60_000;
 
 type Method = "nostr" | "email";
 type NcMode = "picker" | "url" | "qr";
+type EmailState = "idle" | "sending" | "sent" | "error";
 type NcState =
   | "idle"
   | "form"
@@ -60,6 +61,8 @@ export default function LoginModal({
   const { push: pushToast } = useToast();
   const [method, setMethod] = useState<Method>("nostr");
   const [email, setEmail] = useState("");
+  const [emailState, setEmailState] = useState<EmailState>("idle");
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [nip07, setNip07] = useState<"checking" | "available" | "missing">(
     "checking",
   );
@@ -131,6 +134,8 @@ export default function LoginModal({
     setQrExpiresAt(null);
     setNcDiag([]);
     setNip07Loading(false);
+    setEmailState("idle");
+    setEmailError(null);
   }, [open]);
 
   function finishLogin() {
@@ -174,6 +179,31 @@ export default function LoginModal({
       onClose();
     } catch {
       setNip07Loading(false);
+    }
+  }
+
+  async function handleEmailLogin() {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized || emailState === "sending") return;
+    setEmail(normalized);
+    setEmailState("sending");
+    setEmailError(null);
+    try {
+      const res = await fetch("/api/auth/email/request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: normalized }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo enviar el enlace.");
+      }
+      setEmailState("sent");
+    } catch (error) {
+      setEmailState("error");
+      setEmailError(
+        error instanceof Error ? error.message : "No se pudo enviar el enlace.",
+      );
     }
   }
 
@@ -423,7 +453,7 @@ export default function LoginModal({
                       id: "email",
                       label: "Correo",
                       icon: Mail,
-                      disabled: true,
+                      disabled: false,
                     },
                   ] as const
                 ).map((t) => {
@@ -678,6 +708,7 @@ export default function LoginModal({
                     className="space-y-3"
                     onSubmit={(e) => {
                       e.preventDefault();
+                      handleEmailLogin();
                     }}
                   >
                     <label className="block">
@@ -691,14 +722,41 @@ export default function LoginModal({
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="vos@ejemplo.com"
                         className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-border focus:border-bitcoin/50 focus:bg-white/[0.05] transition-colors text-sm placeholder:text-foreground-subtle"
+                        disabled={emailState === "sending"}
                       />
                     </label>
+                    {emailState === "sent" && (
+                      <div className="rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
+                        Te enviamos un enlace mágico. Revisá tu correo y abrilo
+                        en este navegador.
+                      </div>
+                    )}
+                    {emailState === "error" && emailError && (
+                      <div className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+                        {emailError}
+                      </div>
+                    )}
                     <button
                       type="submit"
-                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-bitcoin to-yellow-500 text-black font-semibold text-sm hover:shadow-lg hover:shadow-bitcoin/30 transition-all"
+                      disabled={emailState === "sending" || !email.trim()}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-bitcoin to-yellow-500 text-black font-semibold text-sm hover:shadow-lg hover:shadow-bitcoin/30 transition-all disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Enviar enlace mágico
-                      <ArrowRight className="h-4 w-4" />
+                      {emailState === "sending" ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : emailState === "sent" ? (
+                        <>
+                          Reenviar enlace
+                          <Mail className="h-4 w-4" />
+                        </>
+                      ) : (
+                        <>
+                          Enviar enlace mágico
+                          <ArrowRight className="h-4 w-4" />
+                        </>
+                      )}
                     </button>
                   </motion.form>
                 )}
