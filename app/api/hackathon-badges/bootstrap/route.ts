@@ -25,12 +25,14 @@ async function getBackendSecret() {
 }
 
 async function getAdminPubkey(): Promise<string> {
-  const npub = process.env.NEXT_PUBLIC_LACRYPTA_NPUB;
-  if (!npub) throw new Error("Falta NEXT_PUBLIC_LACRYPTA_NPUB.");
+  const npub =
+    process.env.NEXT_PUBLIC_LACRYPTA_ADMIN_NPUB ||
+    process.env.NEXT_PUBLIC_LACRYPTA_NPUB;
+  if (!npub) throw new Error("Falta NEXT_PUBLIC_LACRYPTA_ADMIN_NPUB.");
   const { decode } = await import("nostr-tools/nip19");
   const decoded = decode(npub);
   if (decoded.type !== "npub") {
-    throw new Error("NEXT_PUBLIC_LACRYPTA_NPUB invalido.");
+    throw new Error("NEXT_PUBLIC_LACRYPTA_ADMIN_NPUB invalido.");
   }
   return decoded.data as string;
 }
@@ -67,7 +69,7 @@ export async function POST(req: Request) {
     }
     if (request.pubkey !== adminPubkey) {
       return jsonError(
-        "El usuario logueado debe coincidir con NEXT_PUBLIC_LACRYPTA_NPUB.",
+        "El usuario logueado debe coincidir con NEXT_PUBLIC_LACRYPTA_ADMIN_NPUB.",
         403,
       );
     }

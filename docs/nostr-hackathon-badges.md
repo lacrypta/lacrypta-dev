@@ -307,11 +307,13 @@ Ejemplo:
 
 Si el catalogo no existe en Nostr, el frontend puede mostrar un boton
 `Bootstrap` solo al admin logueado. Ese admin es la pubkey configurada en
-`NEXT_PUBLIC_LACRYPTA_NPUB`.
+`NEXT_PUBLIC_LACRYPTA_ADMIN_NPUB`. Es publica y no firma los eventos oficiales:
+solo firma el request efimero que autoriza al backend a devolver eventos ya
+firmados.
 
 Flujo:
 
-1. El admin (`NEXT_PUBLIC_LACRYPTA_NPUB`) firma un request Nostr efimero
+1. El admin (`NEXT_PUBLIC_LACRYPTA_ADMIN_NPUB`) firma un request Nostr efimero
    `kind: 27235`.
 2. El frontend envia ese request a `/api/hackathon-badges/bootstrap`.
 3. El backend verifica firma, pubkey y tags del request.
