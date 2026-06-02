@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import {
   AlertCircle,
@@ -8,10 +8,12 @@ import {
   Check,
   Code2,
   Loader2,
+  Mail,
   Sparkles,
   UserRoundSearch,
   X,
 } from "lucide-react";
+import { queryProfile } from "nostr-tools/nip05";
 import { fetchNostrProfile, type NostrProfile } from "@/lib/nostrProfile";
 import { DEFAULT_RELAYS, mergeDataRelays } from "@/lib/nostrRelayConfig";
 import type { SignedEvent } from "@/lib/nostrSigner";
@@ -19,6 +21,8 @@ import { cn } from "@/lib/cn";
 
 type ResolveStatus = "idle" | "resolving" | "found" | "missing" | "error";
 type PublishPhase = "idle" | "signing" | "publishing" | "done" | "error";
+type SubscribePhase = "idle" | "sending" | "sent" | "error";
+type NotifyMode = "email" | "nostr" | "both";
 
 type ResolvedUser = {
   handle: string;
@@ -58,30 +62,26 @@ function initials(name: string): string {
     .join("");
 }
 
+function isLikelyNip05(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value.trim().toLowerCase());
+}
+
 async function resolveInput(raw: string): Promise<ResolvedUser> {
   const value = raw.trim();
-  if (!value) throw new Error("Pegá un npub o NIP-05.");
+  if (!value) throw new Error("Pegá un NIP-05.");
+  if (!isLikelyNip05(value)) throw new Error("Ingresá un NIP-05 valido.");
 
   let pubkey = "";
   let relays: string[] = [];
-  let inputType: ResolvedUser["inputType"] = "nip05";
+  const inputType: ResolvedUser["inputType"] = "nip05";
   const normalized = value.toLowerCase();
 
-  if (normalized.startsWith("npub1")) {
-    const { decode } = await import("nostr-tools/nip19");
-    const decoded = decode(normalized);
-    if (decoded.type !== "npub") throw new Error("npub invalido.");
-    pubkey = decoded.data as string;
-    inputType = "npub";
-  } else {
-    const { queryProfile } = await import("nostr-tools/nip05");
-    const pointer = await queryProfile(normalized);
-    if (!pointer?.pubkey) {
-      throw new Error("No pudimos resolver ese NIP-05.");
-    }
-    pubkey = pointer.pubkey;
-    relays = pointer.relays ?? [];
+  const pointer = await queryProfile(normalized);
+  if (!pointer?.pubkey) {
+    throw new Error("No pudimos resolver ese NIP-05.");
   }
+  pubkey = pointer.pubkey;
+  relays = pointer.relays ?? [];
 
   const readRelays = mergeDataRelays(DEFAULT_RELAYS, relays);
   const cached = await fetchNostrProfile(pubkey, readRelays, 4500);
@@ -135,6 +135,9 @@ async function publishNotification(
 }
 
 export default function NewsletterCTA() {
+  const [subscribePhase, setSubscribePhase] = useState<SubscribePhase>("idle");
+  const [subscribeError, setSubscribeError] = useState("");
+  const [activeMode, setActiveMode] = useState<NotifyMode | null>(null);
   const [value, setValue] = useState("");
   const [resolveStatus, setResolveStatus] = useState<ResolveStatus>("idle");
   const [resolveError, setResolveError] = useState("");
@@ -147,12 +150,18 @@ export default function NewsletterCTA() {
 
   const okCount = progress.filter((item) => item.ok).length;
   const totalCount = progress.length;
-  const canNotify = !!resolved && !["signing", "publishing"].includes(publishPhase);
+  const isBusy =
+    subscribePhase === "sending" ||
+    ["signing", "publishing"].includes(publishPhase);
+  const canNotify = !!resolved && resolveStatus === "found" && !isBusy;
 
   useEffect(() => {
     const raw = value.trim();
     setPublishPhase("idle");
     setPublishError("");
+    setSubscribePhase("idle");
+    setSubscribeError("");
+    setActiveMode(null);
     setSignedEvent(null);
     setEventModalOpen(false);
     setProgress([]);
@@ -192,18 +201,48 @@ export default function NewsletterCTA() {
     [resolved],
   );
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleNotify(mode: NotifyMode) {
     if (!resolved || !canNotify) return;
 
-    setPublishPhase("signing");
+    const wantsEmail = mode === "email" || mode === "both";
+    const wantsNostr = mode === "nostr" || mode === "both";
+    const nip05 = resolved.handle;
+    setActiveMode(mode);
     setPublishError("");
     setSignedEvent(null);
     setEventModalOpen(false);
-    const relays = mergeDataRelays(DEFAULT_RELAYS, resolved.relays);
-    setProgress(relays.map((relay) => ({ relay, state: "pending" })));
+    setSubscribeError("");
+    if (wantsNostr) {
+      const relays = mergeDataRelays(DEFAULT_RELAYS, resolved.relays);
+      setProgress(relays.map((relay) => ({ relay, state: "pending" })));
+    } else {
+      setProgress([]);
+    }
 
+    let subscriptionCreated = false;
     try {
+      if (wantsEmail) {
+        setSubscribePhase("sending");
+      }
+      const subscribeRes = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: wantsEmail ? nip05 : undefined,
+          handle: resolved.profile.nip05 || resolved.handle,
+          recipientPubkey: wantsNostr ? resolved.pubkey : undefined,
+        }),
+      });
+      const subscribeData = (await subscribeRes.json()) as { error?: string };
+      if (!subscribeRes.ok) {
+        throw new Error(subscribeData.error || "No se pudo crear la suscripcion.");
+      }
+      subscriptionCreated = true;
+      setSubscribePhase(wantsEmail ? "sent" : "idle");
+
+      if (!wantsNostr) return;
+      setPublishPhase("signing");
+      const relays = mergeDataRelays(DEFAULT_RELAYS, resolved.relays);
       const res = await fetch("/api/nostr-opportunity-notification", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -230,10 +269,18 @@ export default function NewsletterCTA() {
       }
       setPublishPhase("done");
     } catch (error) {
-      setPublishPhase("error");
-      setPublishError(
-        error instanceof Error ? error.message : "No se pudo enviar la notificacion.",
-      );
+      const message =
+        error instanceof Error ? error.message : "No se pudo crear la suscripcion.";
+      if (!subscriptionCreated) {
+        setPublishPhase("idle");
+        setSubscribePhase("error");
+        setSubscribeError(message);
+      } else {
+        setPublishPhase("error");
+        setPublishError(message || "No se pudo enviar la notificacion.");
+      }
+    } finally {
+      setActiveMode(null);
     }
   }
 
@@ -281,7 +328,7 @@ export default function NewsletterCTA() {
           transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
           className="mt-4 text-sm leading-relaxed text-foreground-muted sm:text-base"
         >
-          Cero spam. Nuevas hackatons y oportunidades de trabajo por Nostr.
+          Cero spam. Nuevas hackatons y oportunidades de trabajo por email o Nostr.
         </motion.p>
 
         <motion.form
@@ -289,54 +336,101 @@ export default function NewsletterCTA() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-60px" }}
           transition={{ duration: 0.5, ease: "easeOut", delay: 0.15 }}
-          onSubmit={handleSubmit}
+          onSubmit={(e) => e.preventDefault()}
           className="mx-auto mt-8 max-w-2xl"
           noValidate
         >
           <label htmlFor="newsletter-nostr" className="sr-only">
-            npub o NIP-05
+            NIP-05
           </label>
-          <div className="flex flex-col items-stretch gap-2 sm:flex-row">
-            <div className="relative flex-1">
-              <UserRoundSearch
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-subtle"
-                aria-hidden
-              />
-              <input
-                id="newsletter-nostr"
-                type="text"
-                autoComplete="off"
-                inputMode="text"
-                placeholder="npub1… o usuario@dominio.com"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                aria-describedby="newsletter-status"
-                className="w-full rounded-xl border border-border bg-background-card/60 py-3 pl-9 pr-3 text-sm transition-all placeholder:text-foreground-subtle focus:border-bitcoin/60 focus:bg-background-card focus:outline-none focus:ring-2 focus:ring-bitcoin/20"
-              />
-            </div>
+          <div className="relative">
+            <UserRoundSearch
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-subtle"
+              aria-hidden
+            />
+            <input
+              id="newsletter-nostr"
+              type="text"
+              autoComplete="email"
+              inputMode="email"
+              placeholder="usuario@dominio.com"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              aria-describedby="newsletter-status"
+              className="w-full rounded-xl border border-border bg-background-card/60 py-3 pl-9 pr-3 text-sm transition-all placeholder:text-foreground-subtle focus:border-bitcoin/60 focus:bg-background-card focus:outline-none focus:ring-2 focus:ring-bitcoin/20"
+            />
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
             <button
-              type="submit"
+              type="button"
+              onClick={() => void handleNotify("email")}
               disabled={!canNotify}
-              className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-bitcoin to-bitcoin/80 px-5 py-3 text-sm font-semibold text-black shadow-lg shadow-bitcoin/20 transition-all hover:scale-[1.02] hover:shadow-bitcoin/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+              className="group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-bitcoin to-bitcoin/80 px-5 py-3 text-sm font-semibold text-black shadow-lg shadow-bitcoin/20 transition-all hover:scale-[1.02] hover:shadow-bitcoin/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
             >
-              {publishPhase === "signing" ? (
+              {subscribePhase === "sending" && activeMode === "email" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Enviando
+                </>
+              ) : subscribePhase === "sent" && activeMode === null ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Email enviado
+                </>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4" />
+                  Notificar por email
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleNotify("nostr")}
+              disabled={!canNotify}
+              className="group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-nostr/30 bg-nostr/10 px-5 py-3 text-sm font-semibold text-nostr transition-all hover:scale-[1.02] hover:bg-nostr/15 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+            >
+              {publishPhase === "signing" && activeMode === "nostr" ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Firmando
                 </>
-              ) : publishPhase === "publishing" ? (
+              ) : publishPhase === "publishing" && activeMode === "nostr" ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Publicando
                 </>
-              ) : publishPhase === "done" ? (
+              ) : publishPhase === "done" && !subscribePhase.includes("sent") ? (
                 <>
                   <Check className="h-4 w-4" />
-                  Enviado
+                  Nostr enviado
                 </>
               ) : (
                 <>
-                  Enviar notificación
+                  <UserRoundSearch className="h-4 w-4" />
+                  Notificar por Nostr
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleNotify("both")}
+              disabled={!canNotify}
+              className="group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-bitcoin/40 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-foreground transition-all hover:scale-[1.02] hover:bg-white/[0.07] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+            >
+              {activeMode === "both" && isBusy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Enviando
+                </>
+              ) : publishPhase === "done" && subscribePhase === "sent" ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Ambos enviados
+                </>
+              ) : (
+                <>
+                  Email + Nostr
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
@@ -345,6 +439,16 @@ export default function NewsletterCTA() {
         </motion.form>
 
         <div id="newsletter-status" className="mt-4" aria-live="polite">
+          {subscribePhase === "sent" && (
+            <StatusLine tone="success" icon={<Check className="h-3.5 w-3.5" />}>
+              Enviamos la notificación por email al NIP-05.
+            </StatusLine>
+          )}
+          {subscribePhase === "error" && subscribeError && (
+            <StatusLine tone="error" icon={<AlertCircle className="h-3.5 w-3.5" />}>
+              {subscribeError}
+            </StatusLine>
+          )}
           {resolveStatus === "resolving" && (
             <StatusLine icon={<Loader2 className="h-3.5 w-3.5 animate-spin" />}>
               Resolviendo identidad y verificando perfil en relays…
@@ -357,7 +461,7 @@ export default function NewsletterCTA() {
           )}
           {resolveStatus === "idle" && (
             <p className="text-[11px] text-foreground-subtle">
-              Pegá un NIP-05 o npub para verificar tu perfil público.
+              Ingresá un NIP-05. Lo resolvemos y verificamos el perfil antes de enviar.
             </p>
           )}
         </div>
@@ -394,7 +498,7 @@ function StatusLine({
 }: {
   children: ReactNode;
   icon: ReactNode;
-  tone?: "muted" | "error";
+  tone?: "muted" | "error" | "success";
 }) {
   return (
     <div
@@ -402,6 +506,8 @@ function StatusLine({
         "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px]",
         tone === "error"
           ? "border-danger/30 bg-danger/10 text-danger"
+          : tone === "success"
+            ? "border-success/30 bg-success/10 text-success"
           : "border-border bg-white/[0.03] text-foreground-muted",
       )}
     >
