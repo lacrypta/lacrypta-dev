@@ -101,21 +101,19 @@
     {
       "id": "zaps",
       "number": 4,
-      "name": "ZAPS",
-      "focus": "Lightning + Nostr Integration",
-      "description": "NIP-57. Value-for-value. Social payments.",
+      "name": "GAMING",
+      "focus": "Game Development",
+      "description": "Games, interactive mechanics, leaderboards and multiplayer experiences powered by Bitcoin, Lightning and Nostr.",
       "difficulty": "Intermediate",
       "stars": 2,
       "month": "Junio",
       "monthShort": "JUN",
       "year": 2026,
-      "icon": "💜",
-      "tags": ["Lightning", "Nostr"],
-      "topics": ["NIP-57 Zaps", "LNURL", "Value4Value", "Social Payments"],
+      "icon": "🎮",
+      "tags": ["Gaming", "Lightning", "Nostr"],
+      "topics": ["Game Development", "Game Loops", "Nostr Login", "Lightning Rewards", "Leaderboards", "Multiplayer"],
       "dates": [
         { "date": "2026-06-02", "day": 2, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
-        { "date": "2026-06-09", "day": 9, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
-        { "date": "2026-06-16", "day": 16, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
         { "date": "2026-06-23", "day": 23, "type": "pitch-final", "title": "Community Call — Pitch Final", "description": "Últimos pitches antes de la entrega. Feedback final de mentores." },
         { "date": "2026-06-30", "day": 30, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
       ]
