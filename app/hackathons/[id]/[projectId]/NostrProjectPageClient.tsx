@@ -19,6 +19,7 @@ import {
   CircleDashed,
 } from "lucide-react";
 import {
+  fetchCommunityProjects,
   fetchCommunityProjectsSnapshot,
   getCachedCommunityProjects,
   refetchCommunityProjectById,
@@ -43,6 +44,7 @@ import {
   dedupeSoldierProfileMembers,
   soldierProfileHref,
 } from "@/lib/soldierProfileLinks";
+import { projectMatchesIdentifier } from "@/lib/projectIdentity";
 import { mergeDataRelays } from "@/lib/nostrRelayConfig";
 import { Trophy, Lightbulb, AlertTriangle } from "lucide-react";
 import NewProjectModal from "@/components/NewProjectModal";
@@ -339,9 +341,12 @@ export default function NostrProjectPage({
       setSearchPhase("cache");
       setSearchProgress(null);
       const cached = getCachedCommunityProjects();
-      let latest = cached?.find(
-        (p) => p.id === projectId && p.hackathon === hackathonId,
-      ) ?? null;
+      let latest =
+        cached?.find(
+          (p) =>
+            p.hackathon === hackathonId &&
+            projectMatchesIdentifier(p, projectId),
+        ) ?? null;
       if (latest && !cancelled) {
         showProject(latest);
       }
@@ -356,7 +361,9 @@ export default function NostrProjectPage({
           });
           const fromSnapshot =
             snapshot.projects.find(
-              (p) => p.id === projectId && p.hackathon === hackathonId,
+              (p) =>
+                p.hackathon === hackathonId &&
+                projectMatchesIdentifier(p, projectId),
             ) ?? null;
           if (fromSnapshot && !cancelled) {
             latest = fromSnapshot;
@@ -368,7 +375,7 @@ export default function NostrProjectPage({
 
         if (!cancelled) setSearchPhase("relays");
         const fresh = await refetchCommunityProjectById(
-          projectId,
+          latest?.id ?? projectId,
           TOP10_RELAYS,
           5000,
           latest?.author,
@@ -385,7 +392,22 @@ export default function NostrProjectPage({
         if (fresh && fresh.hackathon === hackathonId) {
           showProject(fresh);
         } else if (!latest) {
-          setProject(null);
+          const broad = await fetchCommunityProjects(TOP10_RELAYS, {
+            perRelayTimeoutMs: 5000,
+            signal: snapshotAbort.signal,
+            onProgress: (progress) => {
+              if (!cancelled) setSearchProgress(progress);
+            },
+          });
+          if (cancelled) return;
+          const aliased =
+            broad.find(
+              (p) =>
+                p.hackathon === hackathonId &&
+                projectMatchesIdentifier(p, projectId),
+            ) ?? null;
+          if (aliased) showProject(aliased);
+          else setProject(null);
         }
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return;
