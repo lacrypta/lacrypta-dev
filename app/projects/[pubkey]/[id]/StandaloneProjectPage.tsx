@@ -14,6 +14,8 @@ import {
   Zap,
 } from "lucide-react";
 import {
+  fetchCommunityProjects,
+  fetchCommunityProjectsSnapshot,
   fetchProjectByDTag,
   fetchAuthorPictures,
   TOP10_RELAYS,
@@ -26,6 +28,7 @@ import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
 import NewProjectModal, {
   type ProjectEditField,
 } from "@/components/NewProjectModal";
+import { projectMatchesIdentifier } from "@/lib/projectIdentity";
 
 const STATUS_BADGE: Record<string, string> = {
   official: "bg-bitcoin/10 border-bitcoin/40 text-bitcoin",
@@ -75,14 +78,62 @@ export default function StandaloneProjectPage({
   const { auth } = useAuth();
 
   useEffect(() => {
-    fetchProjectByDTag(pubkey, projectId, TOP10_RELAYS).then((p) => {
-      setProject(p);
-      if (p) {
-        fetchAuthorPictures([pubkey], TOP10_RELAYS).then((pics) =>
-          setAuthorPicture(pics.get(pubkey)),
-        );
+    const abort = new AbortController();
+    let cancelled = false;
+
+    async function loadProject() {
+      const showProject = (p: UserProject, author = pubkey) => {
+        setProject(p);
+        fetchAuthorPictures([author], TOP10_RELAYS).then((pics) => {
+          if (!cancelled) setAuthorPicture(pics.get(author));
+        });
+      };
+
+      const direct = await fetchProjectByDTag(pubkey, projectId, TOP10_RELAYS);
+      if (cancelled) return;
+      if (direct) {
+        showProject(direct);
+        return;
       }
+
+      const snapshot = await fetchCommunityProjectsSnapshot({
+        signal: abort.signal,
+      }).catch(() => null);
+      if (cancelled) return;
+      const fromSnapshot =
+        snapshot?.projects.find(
+          (p) =>
+            p.author === pubkey &&
+            projectMatchesIdentifier(p, projectId),
+        ) ?? null;
+      if (fromSnapshot) {
+        showProject(fromSnapshot, fromSnapshot.author);
+        return;
+      }
+
+      const broad = await fetchCommunityProjects(TOP10_RELAYS, {
+        perRelayTimeoutMs: 5000,
+        signal: abort.signal,
+      }).catch(() => []);
+      if (cancelled) return;
+      const fromRelays =
+        broad.find(
+          (p) =>
+            p.author === pubkey &&
+            projectMatchesIdentifier(p, projectId),
+        ) ?? null;
+      if (fromRelays) showProject(fromRelays, fromRelays.author);
+      else setProject(null);
+    }
+
+    loadProject().catch(() => {
+      if (!cancelled) setProject(null);
     });
+
+    return () => {
+      cancelled = true;
+      abort.abort();
+    };
   }, [pubkey, projectId]);
 
   const backHref = project?.hackathon ? `/hackathons/${project.hackathon}` : "/projects";
