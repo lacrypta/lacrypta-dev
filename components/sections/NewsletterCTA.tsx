@@ -597,7 +597,7 @@ function ProfilePreview({
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold text-foreground">
-                Notificación NIP-04
+                Notificación NIP-17
               </p>
               <p className="mt-0.5 text-[11px] text-foreground-subtle">
                 Firmada por La Crypta y publicada desde tu navegador.

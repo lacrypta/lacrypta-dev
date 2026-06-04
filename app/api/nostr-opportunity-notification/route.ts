@@ -37,8 +37,8 @@ export async function POST(req: Request) {
 
   try {
     const secret = await getBackendSecret();
-    const { finalizeEvent, getPublicKey } = await import("nostr-tools/pure");
-    const { encrypt } = await import("nostr-tools/nip04");
+    const { getPublicKey } = await import("nostr-tools/pure");
+    const { wrapEvent } = await import("nostr-tools/nip17");
     const senderPubkey = getPublicKey(secret);
     const handle = body.handle?.trim();
     const message = [
@@ -48,19 +48,11 @@ export async function POST(req: Request) {
     ]
       .filter(Boolean)
       .join("\n\n");
-    const content = encrypt(secret, recipientPubkey, message);
-    const event = finalizeEvent(
-      {
-        kind: 4,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ["p", recipientPubkey],
-          ["t", "lacrypta-dev"],
-          ["t", "opportunities"],
-        ],
-        content,
-      },
+    const event = wrapEvent(
       secret,
+      { publicKey: recipientPubkey },
+      message,
+      "La Crypta Dev opportunities",
     );
 
     return NextResponse.json({ event, senderPubkey });
