@@ -11,6 +11,7 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { DEFAULT_RELAYS } from "./nostrRelayConfig";
 import type { ProjectStatus } from "./hackathons";
+import { projectMatchesIdentifier } from "./projectIdentity";
 
 const PROJECT_KIND = 30078;
 const PROJECT_TAG = "lacrypta-dev-project";
@@ -259,7 +260,9 @@ export async function getNostrProject(
 ): Promise<CachedNostrProject | null> {
   const all = await getAllSubmissionsCached();
   return (
-    all.find((p) => p.hackathon === hackathonId && p.id === projectId) ?? null
+    all.find(
+      (p) => p.hackathon === hackathonId && projectMatchesIdentifier(p, projectId),
+    ) ?? null
   );
 }
 
@@ -274,7 +277,11 @@ export async function getNostrProjectByAuthor(
   projectId: string,
 ): Promise<CachedNostrProject | null> {
   const all = await getAllSubmissionsCached();
-  return all.find((p) => p.author === pubkey && p.id === projectId) ?? null;
+  return (
+    all.find(
+      (p) => p.author === pubkey && projectMatchesIdentifier(p, projectId),
+    ) ?? null
+  );
 }
 
 export async function getAllNostrSubmissionsForSitemap(): Promise<
