@@ -266,6 +266,24 @@ export async function getNostrProject(
   );
 }
 
+/**
+ * Look up a single project by its author pubkey + local id, regardless of
+ * hackathon assignment. Backs the standalone `/projects/<pubkey>/<id>` page
+ * so it renders from the same cached relay snapshot instead of relying on a
+ * fragile browser-side relay fetch.
+ */
+export async function getNostrProjectByAuthor(
+  pubkey: string,
+  projectId: string,
+): Promise<CachedNostrProject | null> {
+  const all = await getAllSubmissionsCached();
+  return (
+    all.find(
+      (p) => p.author === pubkey && projectMatchesIdentifier(p, projectId),
+    ) ?? null
+  );
+}
+
 export async function getAllNostrSubmissionsForSitemap(): Promise<
   CachedNostrProject[]
 > {

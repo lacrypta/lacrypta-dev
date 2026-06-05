@@ -21,12 +21,17 @@ import { ProjectDetailView } from "@/components/ProjectDetailView";
 export default function StandaloneProjectPage({
   pubkey,
   projectId,
+  initialProject,
 }: {
   pubkey: string;
   projectId: string;
+  /** Project pre-fetched on the server from the cached relay snapshot. When
+   *  present the page renders immediately and a failed client fetch never
+   *  downgrades it to the "not found" state. */
+  initialProject?: UserProject;
 }) {
   const [project, setProject] = useState<UserProject | null | undefined>(
-    undefined,
+    initialProject ?? undefined,
   );
   const [authorPicture, setAuthorPicture] = useState<string | undefined>();
   const [editOpen, setEditOpen] = useState(false);
@@ -36,6 +41,12 @@ export default function StandaloneProjectPage({
   useEffect(() => {
     const abort = new AbortController();
     let cancelled = false;
+
+    // If the browser can't reach the relays (the production failure mode),
+    // keep whatever the server already gave us instead of clobbering it.
+    const fail = () => {
+      if (!cancelled && !initialProject) setProject(null);
+    };
 
     async function loadProject() {
       const showProject = (p: UserProject, author = pubkey) => {
@@ -75,18 +86,16 @@ export default function StandaloneProjectPage({
           (p) => p.author === pubkey && projectMatchesIdentifier(p, projectId),
         ) ?? null;
       if (fromRelays) showProject(fromRelays, fromRelays.author);
-      else setProject(null);
+      else fail();
     }
 
-    loadProject().catch(() => {
-      if (!cancelled) setProject(null);
-    });
+    loadProject().catch(fail);
 
     return () => {
       cancelled = true;
       abort.abort();
     };
-  }, [pubkey, projectId]);
+  }, [pubkey, projectId, initialProject]);
 
   const isAuthor = auth?.pubkey === pubkey;
 
