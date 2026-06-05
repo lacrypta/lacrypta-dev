@@ -64,25 +64,38 @@ function EditIconButton({
 export default function StandaloneProjectPage({
   pubkey,
   projectId,
+  initialProject,
 }: {
   pubkey: string;
   projectId: string;
+  /** Project pre-fetched on the server from the cached relay snapshot. When
+   *  present the page renders immediately and a failed client fetch never
+   *  downgrades it to the "not found" state. */
+  initialProject?: UserProject;
 }) {
-  const [project, setProject] = useState<UserProject | null | undefined>(undefined);
+  const [project, setProject] = useState<UserProject | null | undefined>(
+    initialProject ?? undefined,
+  );
   const [authorPicture, setAuthorPicture] = useState<string | undefined>();
   const [editOpen, setEditOpen] = useState(false);
   const [editFocus, setEditFocus] = useState<ProjectEditField>("all");
   const { auth } = useAuth();
 
   useEffect(() => {
+    let cancelled = false;
+    // Refresh from relays in the background. If the browser can't reach the
+    // relays (the production failure mode), keep whatever the server gave us
+    // rather than clobbering it with null.
     fetchProjectByDTag(pubkey, projectId, TOP10_RELAYS).then((p) => {
-      setProject(p);
-      if (p) {
-        fetchAuthorPictures([pubkey], TOP10_RELAYS).then((pics) =>
-          setAuthorPicture(pics.get(pubkey)),
-        );
-      }
+      if (cancelled) return;
+      setProject((prev) => p ?? prev ?? null);
     });
+    fetchAuthorPictures([pubkey], TOP10_RELAYS).then((pics) => {
+      if (!cancelled) setAuthorPicture(pics.get(pubkey));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [pubkey, projectId]);
 
   const backHref = project?.hackathon ? `/hackathons/${project.hackathon}` : "/projects";
