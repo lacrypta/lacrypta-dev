@@ -164,6 +164,23 @@ export async function fetchRelayList(
   return cached;
 }
 
+async function fetchCachedRelayListFromServer(
+  pubkey: string,
+  signal?: AbortSignal,
+): Promise<CachedRelayList | null> {
+  const res = await fetch(
+    `/api/nostr/relay-lists?pubkeys=${encodeURIComponent(pubkey)}`,
+    { cache: "no-store", signal },
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as {
+    relayLists?: Record<string, CachedRelayList | null>;
+  };
+  const cached = data.relayLists?.[pubkey] ?? null;
+  if (cached) setCachedRelayList(cached);
+  return cached;
+}
+
 /* ─────────────────────────── publish (kind:10002) ──────────────────────── */
 
 export type PublishRelayListRelayResult = {
@@ -321,8 +338,10 @@ export function useRelayList(pubkey: string | null | undefined) {
     if (isFresh) return;
 
     let cancelled = false;
+    const abort = new AbortController();
     setLoading(true);
-    fetchRelayList(pubkey)
+    fetchCachedRelayListFromServer(pubkey, abort.signal)
+      .then((serverList) => serverList ?? fetchRelayList(pubkey))
       .then((fresh) => {
         if (!cancelled && fresh) setCached(fresh);
       })
@@ -332,6 +351,7 @@ export function useRelayList(pubkey: string | null | undefined) {
       });
     return () => {
       cancelled = true;
+      abort.abort();
     };
   }, [pubkey]);
 

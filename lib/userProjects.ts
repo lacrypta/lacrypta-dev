@@ -124,12 +124,45 @@ export function setCachedCommunityProjects(projects: CommunityProject[]) {
   }
 }
 
-function communityProjectKey(project: Pick<CommunityProject, "author" | "id">) {
+export function communityProjectKey(
+  project: Pick<CommunityProject, "author" | "id">,
+) {
   return `${project.author}:${project.id}`;
 }
 
-function sortCommunityProjects(projects: CommunityProject[]) {
+export function sortCommunityProjects(projects: CommunityProject[]) {
   return [...projects].sort((a, b) => b.eventCreatedAt - a.eventCreatedAt);
+}
+
+export function mergeCommunityProjects(
+  base: CommunityProject[],
+  incoming: CommunityProject[],
+) {
+  const byKey = new Map<string, CommunityProject>();
+  for (const project of base) {
+    byKey.set(communityProjectKey(project), project);
+  }
+  for (const project of incoming) {
+    const key = communityProjectKey(project);
+    const prev = byKey.get(key);
+    if (!prev || project.eventCreatedAt >= prev.eventCreatedAt) {
+      byKey.set(key, project);
+    }
+  }
+  return sortCommunityProjects([...byKey.values()]);
+}
+
+export function newerCommunityProjects(
+  incoming: CommunityProject[],
+  current: CommunityProject[],
+) {
+  const byKey = new Map(
+    current.map((project) => [communityProjectKey(project), project]),
+  );
+  return incoming.filter((project) => {
+    const prev = byKey.get(communityProjectKey(project));
+    return !prev || project.eventCreatedAt > prev.eventCreatedAt;
+  });
 }
 
 export function upsertCachedCommunityProject(project: CommunityProject) {
@@ -177,18 +210,68 @@ export type CommunityProjectsSnapshot = {
   relays: string[];
 };
 
+export type NostrRefreshRequest = {
+  scopes?: ("projects" | "profile" | "relay-list" | "badges" | "reports" | "results")[];
+  hackathonId?: string;
+  projectId?: string;
+  author?: string;
+  pubkey?: string;
+  candidateEventId?: string;
+  candidateCreatedAt?: number;
+  blocking?: boolean;
+  signal?: AbortSignal;
+};
+
+type NostrRefreshResponse = {
+  ok: boolean;
+  refreshed?: {
+    projects?: CommunityProjectsSnapshot;
+  };
+  error?: string;
+};
+
+export async function refreshNostrServerCache(
+  input: NostrRefreshRequest = {},
+): Promise<CommunityProjectsSnapshot | null> {
+  const { signal, ...body } = input;
+  const res = await fetch("/api/nostr/refresh", {
+    method: "POST",
+    cache: "no-store",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      scopes: body.scopes ?? ["projects"],
+      blocking: body.blocking ?? true,
+      hackathonId: body.hackathonId,
+      projectId: body.projectId,
+      author: body.author,
+      pubkey: body.pubkey,
+      candidateEventId: body.candidateEventId,
+      candidateCreatedAt: body.candidateCreatedAt,
+    }),
+    signal,
+  });
+  if (!res.ok) {
+    throw new Error(`Nostr refresh failed (${res.status})`);
+  }
+  const data = (await res.json()) as NostrRefreshResponse;
+  const snapshot = data.refreshed?.projects ?? null;
+  if (snapshot) setCachedCommunityProjects(snapshot.projects);
+  return snapshot;
+}
+
 export async function fetchCommunityProjectsSnapshot(opts?: {
   revalidate?: boolean;
   signal?: AbortSignal;
 }): Promise<CommunityProjectsSnapshot> {
   if (opts?.revalidate) {
-    await fetch("/api/nostr-projects", {
-      method: "POST",
-      cache: "no-store",
+    const refreshed = await refreshNostrServerCache({
+      scopes: ["projects"],
+      blocking: true,
       signal: opts.signal,
     });
+    if (refreshed) return refreshed;
   }
-  const res = await fetch("/api/nostr-projects", {
+  const res = await fetch("/api/nostr/projects", {
     method: "GET",
     cache: "no-store",
     signal: opts?.signal,

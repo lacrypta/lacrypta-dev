@@ -9,6 +9,7 @@
 
 import { cacheLife, cacheTag } from "next/cache";
 import { DEFAULT_RELAYS } from "./nostrRelayConfig";
+import { nostrProfileTag } from "./nostrCacheTags";
 
 export type CachedNostrProfile = {
   pubkey: string;
@@ -90,7 +91,7 @@ export async function getCachedNostrProfile(
 ): Promise<CachedNostrProfile | null> {
   "use cache";
   cacheLife("days");
-  cacheTag(`nostr:profile:${pubkey}`);
+  cacheTag(nostrProfileTag(pubkey));
   try {
     return await rawFetchProfile(pubkey);
   } catch {

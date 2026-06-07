@@ -411,6 +411,32 @@ export async function publishProfileBadges(
   return { signed, relays: results };
 }
 
+async function fetchCachedBadgesSnapshotFromServer(
+  pubkey: string,
+  signal?: AbortSignal,
+): Promise<{
+  badges: AwardedBadge[];
+  profileBadges: ProfileBadges;
+} | null> {
+  const res = await fetch(
+    `/api/nostr/badges?pubkey=${encodeURIComponent(pubkey)}`,
+    { cache: "no-store", signal },
+  );
+  if (!res.ok) return null;
+  const snapshot = (await res.json()) as {
+    badges?: AwardedBadge[];
+    profileBadges?: ProfileBadges;
+  };
+  const badges = snapshot.badges ?? [];
+  const profileBadges = snapshot.profileBadges ?? {
+    aTags: [],
+    eventIdByATag: {},
+  };
+  setCache(pubkey, badges);
+  setCachedProfileBadges(pubkey, profileBadges);
+  return { badges, profileBadges };
+}
+
 export function useProfileBadges(
   pubkey: string | null | undefined,
   relays?: string[],
@@ -426,8 +452,12 @@ export function useProfileBadges(
     const cached = getCachedProfileBadges(pubkey);
     if (cached) setData(cached);
     let cancelled = false;
+    const abort = new AbortController();
     setLoading(true);
-    fetchProfileBadges(pubkey, relays)
+    fetchCachedBadgesSnapshotFromServer(pubkey, abort.signal)
+      .then((serverSnapshot) =>
+        serverSnapshot?.profileBadges ?? fetchProfileBadges(pubkey, relays),
+      )
       .then((fresh) => {
         if (cancelled) return;
         setData(fresh);
@@ -440,6 +470,7 @@ export function useProfileBadges(
       });
     return () => {
       cancelled = true;
+      abort.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pubkey, relays?.join(",")]);
@@ -477,9 +508,13 @@ export function useUserBadges(
     }
 
     let cancelled = false;
+    const abort = new AbortController();
     setLoading(true);
     setError(null);
-    fetchUserBadges(pubkey, relays)
+    fetchCachedBadgesSnapshotFromServer(pubkey, abort.signal)
+      .then((serverSnapshot) =>
+        serverSnapshot?.badges ?? fetchUserBadges(pubkey, relays),
+      )
       .then((fresh) => {
         if (cancelled) return;
         setBadges(fresh);
@@ -496,6 +531,7 @@ export function useUserBadges(
 
     return () => {
       cancelled = true;
+      abort.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pubkey, relays?.join(",")]);

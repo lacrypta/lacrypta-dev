@@ -14,6 +14,10 @@ import {
   type CachedNostrTeamMember,
 } from "./nostrCache";
 import { soldierProfileSlugAliases } from "./soldierProfileLinks";
+import {
+  NOSTR_LEGACY_SUBMISSIONS_TAG,
+  NOSTR_PROJECTS_TAG,
+} from "./nostrCacheTags";
 import reportsData from "@/data/hackathons/reports.json";
 
 type ReportEntry = {
@@ -386,7 +390,8 @@ function curatedHackathonId(p: (typeof PROJECTS)[number]): string | null {
 async function buildSoldiers(): Promise<Soldier[]> {
   "use cache";
   cacheLife("days");
-  cacheTag("nostr:hackathon-submissions");
+  cacheTag(NOSTR_PROJECTS_TAG);
+  cacheTag(NOSTR_LEGACY_SUBMISSIONS_TAG);
 
   const map = new Map<string, Soldier>();
 
