@@ -36,10 +36,23 @@ type NavLink = {
 
 const NAV_LINKS: NavLink[] = [
   { href: "/hackathons", label: "Hackatones" },
+  { href: "/badges", label: "Badges" },
   { href: "/projects", label: "Proyectos" },
   { href: "/soldados", label: "Soldados" },
   { href: "/infrastructure", label: "Infra propia" },
 ];
+
+function isBadgesPath(pathname: string) {
+  return pathname === "/badges";
+}
+
+function isActiveNavLink(link: NavLink, pathname: string) {
+  if (link.external) return false;
+  if (link.href === "/") return pathname === "/";
+  if (link.href === "/badges") return isBadgesPath(pathname);
+  if (link.href === "/hackathons" && isBadgesPath(pathname)) return false;
+  return pathname === link.href || pathname.startsWith(`${link.href}/`);
+}
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -142,12 +155,7 @@ export default function Navbar() {
 
           <div className="hidden lg:flex items-center gap-1">
             {NAV_LINKS.map((link) => {
-              const active =
-                link.external
-                  ? false
-                  : link.href === "/"
-                    ? pathname === "/"
-                    : pathname.startsWith(link.href);
+              const active = isActiveNavLink(link, pathname);
               const className = cn(
                 "relative px-4 py-2 text-sm font-medium rounded-lg transition-colors",
                 active
@@ -327,12 +335,7 @@ export default function Navbar() {
             >
               <div className="flex flex-col gap-1 mb-8">
                 {NAV_LINKS.map((link, i) => {
-                  const active =
-                    link.external
-                      ? false
-                      : link.href === "/"
-                        ? pathname === "/"
-                        : pathname.startsWith(link.href);
+                  const active = isActiveNavLink(link, pathname);
                   const itemClass = cn(
                     "flex items-center justify-between gap-2 px-4 py-3 rounded-lg text-base font-medium transition-colors",
                     active

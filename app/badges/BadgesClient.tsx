@@ -147,7 +147,7 @@ const TONE_STYLE: Record<
   },
 };
 
-export default function HackathonBadgesClient({
+export default function BadgesClient({
   hackathonId,
   hackathonName,
 }: {
