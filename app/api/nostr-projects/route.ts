@@ -2,6 +2,7 @@ import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import {
   getNostrSubmissionsSnapshot,
+  NOSTR_PROJECTS_TAG,
   NOSTR_SUBMISSIONS_TAG,
 } from "@/lib/nostrCache";
 
@@ -11,6 +12,12 @@ export async function GET() {
 }
 
 export async function POST() {
-  revalidateTag(NOSTR_SUBMISSIONS_TAG, "max");
-  return NextResponse.json({ ok: true, revalidated: NOSTR_SUBMISSIONS_TAG });
+  revalidateTag(NOSTR_PROJECTS_TAG, { expire: 0 });
+  revalidateTag(NOSTR_SUBMISSIONS_TAG, { expire: 0 });
+  const snapshot = await getNostrSubmissionsSnapshot();
+  return NextResponse.json({
+    ok: true,
+    revalidated: [NOSTR_PROJECTS_TAG, NOSTR_SUBMISSIONS_TAG],
+    snapshot,
+  });
 }

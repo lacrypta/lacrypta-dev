@@ -228,10 +228,24 @@ export function useProjectReport(
     if (staticFallback) setReport(staticFallback);
 
     let cancelled = false;
+    const abort = new AbortController();
     setLoading(true);
-    resolveLacryptaPubkey()
-      .then((pubkey) =>
-        fetchProjectReport(hackathonId, projectId, pubkey, relays),
+    fetch(
+      `/api/nostr/reports?hackathonId=${encodeURIComponent(
+        hackathonId,
+      )}&projectId=${encodeURIComponent(projectId)}`,
+      { cache: "no-store", signal: abort.signal },
+    )
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const data = (await res.json()) as { report?: ProjectReport | null };
+        return data.report ?? null;
+      })
+      .then((report) =>
+        report ??
+        resolveLacryptaPubkey().then((pubkey) =>
+          fetchProjectReport(hackathonId, projectId, pubkey, relays),
+        ),
       )
       .then((r) => {
         if (!cancelled) setReport(r);
@@ -244,6 +258,7 @@ export function useProjectReport(
       });
     return () => {
       cancelled = true;
+      abort.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hackathonId, projectId, relays?.join(",")]);
@@ -260,9 +275,25 @@ export function useHackathonResults(
 
   useEffect(() => {
     let cancelled = false;
+    const abort = new AbortController();
     setLoading(true);
-    resolveLacryptaPubkey()
-      .then((pubkey) => fetchHackathonResults(hackathonId, pubkey, relays))
+    fetch(
+      `/api/nostr/reports?hackathonId=${encodeURIComponent(hackathonId)}`,
+      { cache: "no-store", signal: abort.signal },
+    )
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const data = (await res.json()) as {
+          results?: HackathonResults | null;
+        };
+        return data.results ?? null;
+      })
+      .then((results) =>
+        results ??
+        resolveLacryptaPubkey().then((pubkey) =>
+          fetchHackathonResults(hackathonId, pubkey, relays),
+        ),
+      )
       .then((r) => {
         if (!cancelled) setResults(r);
       })
@@ -274,6 +305,7 @@ export function useHackathonResults(
       });
     return () => {
       cancelled = true;
+      abort.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hackathonId, relays?.join(",")]);

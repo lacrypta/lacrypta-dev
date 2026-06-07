@@ -33,6 +33,7 @@ import { cn } from "@/lib/cn";
 import { breadcrumbLd, eventLd, jsonLdScript } from "@/lib/jsonld";
 import {
   getNostrHackathonSubmissions,
+  NOSTR_PROJECTS_TAG,
   NOSTR_SUBMISSIONS_TAG,
 } from "@/lib/nostrCache";
 import { getCachedNostrProfile } from "@/lib/nostrProfileCache";
@@ -315,6 +316,7 @@ export default async function HackathonPage({
   params: Promise<{ id: string }>;
 }) {
   "use cache";
+  cacheTag(NOSTR_PROJECTS_TAG);
   cacheTag(NOSTR_SUBMISSIONS_TAG);
   const { id } = await params;
   const hackathon = getHackathon(id);

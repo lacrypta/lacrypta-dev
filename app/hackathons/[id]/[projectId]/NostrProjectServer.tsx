@@ -131,6 +131,7 @@ export default async function NostrProjectServer({
       <NostrProjectPageClient
         hackathonId={hackathonId}
         projectId={projectId}
+        initialProject={project}
       />
     </>
   );

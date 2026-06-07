@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowUpRight,
   ExternalLink,
@@ -26,8 +27,13 @@ import {
 import {
   fetchCommunityProjectsSnapshot,
   getCachedCommunityProjects,
+  communityProjectKey,
+  mergeCommunityProjects,
+  newerCommunityProjects,
   fetchAuthorPictures,
+  refreshNostrServerCache,
   refreshCommunityProjectsFromRelays,
+  sortCommunityProjects,
   TOP10_RELAYS,
   type CommunityProject,
   type CommunityScanProgress,
@@ -194,6 +200,8 @@ export default function ProjectsGrid({
     progress,
     error: scanError,
     rescan,
+    syncingCache,
+    cachePending,
   } = useNostrCommunityProjects(initialNostrProjects);
 
   useEffect(() => {
@@ -273,6 +281,8 @@ export default function ProjectsGrid({
           error={scanError}
           projectCount={nostrProjects.length}
           onRescan={rescan}
+          syncingCache={syncingCache}
+          cachePending={cachePending}
         />
 
         <div className="flex flex-col gap-4 mb-10">
@@ -362,18 +372,28 @@ export default function ProjectsGrid({
 /* ─────────────────────────── Nostr scan hook ───────────────────────────── */
 
 function useNostrCommunityProjects(initialProjects: CommunityProject[]) {
+  const router = useRouter();
   const [projects, setProjects] = useState<CommunityProject[]>(initialProjects);
   const [scanning, setScanning] = useState(false);
+  const [syncingCache, setSyncingCache] = useState(false);
+  const [cachePending, setCachePending] = useState(false);
   const [progress, setProgress] = useState<CommunityScanProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const projectsRef = useRef<CommunityProject[]>(initialProjects);
+
+  function commitProjects(next: CommunityProject[]) {
+    const sorted = sortCommunityProjects(next);
+    projectsRef.current = sorted;
+    setProjects(sorted);
+  }
 
   async function syncServerSnapshot(signal?: AbortSignal) {
     const snapshot = await fetchCommunityProjectsSnapshot({ signal });
-    setProjects(snapshot.projects);
+    commitProjects(mergeCommunityProjects(projectsRef.current, snapshot.projects));
   }
 
-  async function refreshFromRelays() {
+  async function refreshFromRelays(opts?: { manual?: boolean }) {
     if (scanning) return;
     setScanning(true);
     setError(null);
@@ -386,7 +406,59 @@ function useNostrCommunityProjects(initialProjects: CommunityProject[]) {
         signal: abort.signal,
         onProgress: setProgress,
       });
-      setProjects(snapshot.projects);
+      const current = projectsRef.current;
+      const newer = newerCommunityProjects(snapshot.projects, current);
+      if (newer.length > 0) {
+        const merged = mergeCommunityProjects(current, snapshot.projects);
+        commitProjects(merged);
+        const newest = newer.reduce((best, project) =>
+          project.eventCreatedAt > best.eventCreatedAt ? project : best,
+        );
+        setSyncingCache(true);
+        try {
+          const serverSnapshot = await refreshNostrServerCache({
+            scopes: ["projects"],
+            candidateEventId: newest.eventId,
+            candidateCreatedAt: newest.eventCreatedAt,
+            blocking: true,
+            signal: abort.signal,
+          });
+          if (serverSnapshot) {
+            commitProjects(mergeCommunityProjects(merged, serverSnapshot.projects));
+            setCachePending(
+              newer.some(
+                (candidate) =>
+                  !serverSnapshot.projects.some(
+                    (serverProject) =>
+                      communityProjectKey(serverProject) ===
+                        communityProjectKey(candidate) &&
+                      serverProject.eventCreatedAt >= candidate.eventCreatedAt,
+                  ),
+              ),
+            );
+            router.refresh();
+          }
+        } catch (e) {
+          if (!(e instanceof DOMException && e.name === "AbortError")) {
+            console.warn("[labs] server nostr refresh failed", e);
+          }
+        } finally {
+          setSyncingCache(false);
+        }
+      } else if (opts?.manual) {
+        setCachePending(false);
+        const serverSnapshot = await refreshNostrServerCache({
+          scopes: ["projects"],
+          blocking: true,
+          signal: abort.signal,
+        });
+        if (serverSnapshot) {
+          commitProjects(
+            mergeCommunityProjects(projectsRef.current, serverSnapshot.projects),
+          );
+          router.refresh();
+        }
+      }
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : String(e));
@@ -399,7 +471,7 @@ function useNostrCommunityProjects(initialProjects: CommunityProject[]) {
     const snapshotAbort = new AbortController();
     if (initialProjects.length === 0) {
       const cached = getCachedCommunityProjects();
-      if (cached) setProjects(cached);
+      if (cached) commitProjects(cached);
     }
     syncServerSnapshot(snapshotAbort.signal)
       .catch((e) => {
@@ -408,7 +480,22 @@ function useNostrCommunityProjects(initialProjects: CommunityProject[]) {
       })
       .finally(() => {
         if (!snapshotAbort.signal.aborted) {
-          refreshFromRelays();
+          const idle = window.requestIdleCallback?.(
+            () => refreshFromRelays(),
+            { timeout: 1200 },
+          );
+          const fallback =
+            idle === undefined
+              ? window.setTimeout(() => refreshFromRelays(), 250)
+              : null;
+          snapshotAbort.signal.addEventListener(
+            "abort",
+            () => {
+              if (idle !== undefined) window.cancelIdleCallback(idle);
+              if (fallback !== null) window.clearTimeout(fallback);
+            },
+            { once: true },
+          );
         }
       });
     return () => {
@@ -418,7 +505,15 @@ function useNostrCommunityProjects(initialProjects: CommunityProject[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { projects, scanning, progress, error, rescan: refreshFromRelays };
+  return {
+    projects,
+    scanning,
+    syncingCache,
+    cachePending,
+    progress,
+    error,
+    rescan: () => refreshFromRelays({ manual: true }),
+  };
 }
 
 /* ─────────────────────── Nostr scan progress panel ─────────────────────── */
@@ -438,12 +533,16 @@ function NostrScanPanel({
   error,
   projectCount,
   onRescan,
+  syncingCache,
+  cachePending,
 }: {
   scanning: boolean;
   progress: CommunityScanProgress | null;
   error: string | null;
   projectCount: number;
   onRescan: () => void;
+  syncingCache: boolean;
+  cachePending: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -478,6 +577,8 @@ function NostrScanPanel({
           <div className="font-display font-bold text-sm truncate">
             {scanning
               ? scanningLabel
+              : syncingCache || cachePending
+                ? `${projectCount} proyecto${projectCount !== 1 ? "s" : ""} · sincronizando cache`
               : error
                 ? "Error sincronizando Nostr"
                 : projectCount > 0

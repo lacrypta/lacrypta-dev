@@ -12,11 +12,16 @@ import { cacheLife, cacheTag } from "next/cache";
 import { DEFAULT_RELAYS } from "./nostrRelayConfig";
 import type { ProjectStatus } from "./hackathons";
 import { projectMatchesIdentifier } from "./projectIdentity";
+import {
+  NOSTR_LEGACY_SUBMISSIONS_TAG,
+  NOSTR_PROJECTS_TAG,
+} from "./nostrCacheTags";
 
 const PROJECT_KIND = 30078;
 const PROJECT_TAG = "lacrypta-dev-project";
 const PROJECT_D_PREFIX = "lacrypta.dev:project:";
-export const NOSTR_SUBMISSIONS_TAG = "nostr:hackathon-submissions";
+export const NOSTR_SUBMISSIONS_TAG = NOSTR_LEGACY_SUBMISSIONS_TAG;
+export { NOSTR_PROJECTS_TAG };
 
 const TOP10_RELAYS = DEFAULT_RELAYS;
 
@@ -220,6 +225,7 @@ async function getSubmissionsSnapshotCached(): Promise<
 > {
   "use cache";
   cacheLife("days");
+  cacheTag(NOSTR_PROJECTS_TAG);
   cacheTag(NOSTR_SUBMISSIONS_TAG);
   try {
     return {
@@ -240,6 +246,24 @@ export async function getNostrSubmissionsSnapshot(): Promise<
   CachedNostrSubmissionsSnapshot
 > {
   return getSubmissionsSnapshotCached();
+}
+
+export async function getFreshNostrSubmissionsSnapshot(): Promise<
+  CachedNostrSubmissionsSnapshot
+> {
+  try {
+    return {
+      projects: await rawFetchAllProjects(),
+      generatedAt: new Date().toISOString(),
+      relays: TOP10_RELAYS,
+    };
+  } catch {
+    return {
+      projects: [],
+      generatedAt: new Date().toISOString(),
+      relays: TOP10_RELAYS,
+    };
+  }
 }
 
 async function getAllSubmissionsCached(): Promise<CachedNostrProject[]> {

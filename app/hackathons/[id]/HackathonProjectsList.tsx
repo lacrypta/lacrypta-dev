@@ -1,7 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   CircleDashed,
@@ -25,7 +33,12 @@ import {
   fetchAuthorPictures,
   fetchCommunityProjectsSnapshot,
   getCachedCommunityProjects,
+  communityProjectKey,
+  mergeCommunityProjects,
+  newerCommunityProjects,
+  refreshNostrServerCache,
   refreshCommunityProjectsFromRelays,
+  sortCommunityProjects,
   TOP10_RELAYS,
   type CommunityProject,
 } from "@/lib/userProjects";
@@ -34,6 +47,10 @@ import { useHackathonResults, type WinnerEntry } from "@/lib/nostrReports";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
 import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
+import {
+  rememberScrollPosition,
+  restoreScrollPosition,
+} from "@/lib/scrollMemory";
 
 function medal(position: number | null | undefined) {
   if (position === 1) return "🥇";
@@ -60,6 +77,30 @@ function fromCommunity(np: CommunityProject): HackathonSubmission {
   };
 }
 
+function communityFromSubmission(
+  submission: HackathonSubmission,
+): CommunityProject | null {
+  if (
+    !submission.nostrAuthor ||
+    !submission.nostrEventId ||
+    !submission.nostrCreatedAt
+  ) {
+    return null;
+  }
+  const withRuntime = submission as HackathonSubmission & {
+    createdAt?: number;
+    updatedAt?: number;
+  };
+  return {
+    ...submission,
+    author: submission.nostrAuthor,
+    eventId: submission.nostrEventId,
+    eventCreatedAt: submission.nostrCreatedAt,
+    createdAt: withRuntime.createdAt ?? submission.nostrCreatedAt,
+    updatedAt: withRuntime.updatedAt ?? submission.nostrCreatedAt,
+  };
+}
+
 export default function HackathonProjectsList({
   hackathon,
   initialNostrSubmissions = [],
@@ -67,15 +108,27 @@ export default function HackathonProjectsList({
   hackathon: Hackathon;
   initialNostrSubmissions?: HackathonSubmission[];
 }) {
+  const router = useRouter();
   const [nostrSubmissions, setNostrSubmissions] = useState<
     HackathonSubmission[]
   >(initialNostrSubmissions);
   const [scanning, setScanning] = useState(false);
+  const [syncingCache, setSyncingCache] = useState(false);
+  const [cachePending, setCachePending] = useState(false);
   const [authorPictures, setAuthorPictures] = useState<Map<string, string>>(
     () => picturesFromSubmissions(initialNostrSubmissions),
   );
   const sectionRef = useRef<HTMLElement>(null);
   const relayAbortRef = useRef<AbortController | null>(null);
+  const communityRef = useRef<CommunityProject[]>(
+    initialNostrSubmissions
+      .map(communityFromSubmission)
+      .filter((project): project is CommunityProject => project !== null),
+  );
+
+  useLayoutEffect(() => {
+    return restoreScrollPosition(`/hackathons/${hackathon.id}`);
+  }, [hackathon.id]);
 
   const awards = useMemo<PrizedProject[]>(
     () => prizedProjects(hackathon.id),
@@ -100,14 +153,25 @@ export default function HackathonProjectsList({
     [hackathon.id, nostrSubmissions],
   );
 
-  function applyCommunityProjects(projects: CommunityProject[]) {
-    const filtered = projects.filter((p) => p.hackathon === hackathon.id);
-    setNostrSubmissions(filtered.map(fromCommunity));
-    const seeded = picturesFromCommunityProjects(filtered);
+  function applyCommunityProjects(
+    projects: CommunityProject[],
+    opts?: { merge?: boolean },
+  ) {
+    const filtered = sortCommunityProjects(
+      projects.filter((p) => p.hackathon === hackathon.id),
+    );
+    const next = opts?.merge
+      ? mergeCommunityProjects(communityRef.current, filtered).filter(
+          (p) => p.hackathon === hackathon.id,
+        )
+      : filtered;
+    communityRef.current = next;
+    setNostrSubmissions(next.map(fromCommunity));
+    const seeded = picturesFromCommunityProjects(next);
     if (seeded.size > 0) {
       setAuthorPictures((prev) => new Map([...prev, ...seeded]));
     }
-    const pubkeys = [...new Set(filtered.map((p) => p.author))];
+    const pubkeys = [...new Set(next.map((p) => p.author))];
     if (pubkeys.length > 0) {
       fetchAuthorPictures(pubkeys, TOP10_RELAYS).then(setAuthorPictures);
     }
@@ -115,6 +179,9 @@ export default function HackathonProjectsList({
 
   function upsertCommunityProject(project: CommunityProject) {
     if (project.hackathon !== hackathon.id) return;
+    communityRef.current = mergeCommunityProjects(communityRef.current, [
+      project,
+    ]).filter((p) => p.hackathon === hackathon.id);
     const next = fromCommunity(project);
     setNostrSubmissions((prev) => {
       const idx = prev.findIndex(
@@ -136,10 +203,10 @@ export default function HackathonProjectsList({
 
   async function syncServerSnapshot(signal?: AbortSignal) {
     const snapshot = await fetchCommunityProjectsSnapshot({ signal });
-    applyCommunityProjects(snapshot.projects);
+    applyCommunityProjects(snapshot.projects, { merge: true });
   }
 
-  async function refreshFromRelays() {
+  async function refreshFromRelays(opts?: { manual?: boolean }) {
     if (scanning) return;
     setScanning(true);
     relayAbortRef.current?.abort();
@@ -149,7 +216,60 @@ export default function HackathonProjectsList({
       const snapshot = await refreshCommunityProjectsFromRelays({
         signal: abort.signal,
       });
-      applyCommunityProjects(snapshot.projects);
+      const visible = snapshot.projects.filter(
+        (p) => p.hackathon === hackathon.id,
+      );
+      const newer = newerCommunityProjects(visible, communityRef.current);
+      if (newer.length > 0) {
+        applyCommunityProjects(snapshot.projects, { merge: true });
+        const newest = newer.reduce((best, project) =>
+          project.eventCreatedAt > best.eventCreatedAt ? project : best,
+        );
+        setSyncingCache(true);
+        try {
+          const serverSnapshot = await refreshNostrServerCache({
+            scopes: ["projects"],
+            hackathonId: hackathon.id,
+            candidateEventId: newest.eventId,
+            candidateCreatedAt: newest.eventCreatedAt,
+            blocking: true,
+            signal: abort.signal,
+          });
+          if (serverSnapshot) {
+            applyCommunityProjects(serverSnapshot.projects, { merge: true });
+            setCachePending(
+              newer.some(
+                (candidate) =>
+                  !serverSnapshot.projects.some(
+                    (serverProject) =>
+                      communityProjectKey(serverProject) ===
+                        communityProjectKey(candidate) &&
+                      serverProject.eventCreatedAt >= candidate.eventCreatedAt,
+                  ),
+              ),
+            );
+            router.refresh();
+          }
+        } catch (e) {
+          if (!(e instanceof DOMException && e.name === "AbortError")) {
+            console.warn("[labs] hackathon cache refresh failed", e);
+          }
+        } finally {
+          setSyncingCache(false);
+        }
+      } else if (opts?.manual) {
+        setCachePending(false);
+        const serverSnapshot = await refreshNostrServerCache({
+          scopes: ["projects"],
+          hackathonId: hackathon.id,
+          blocking: true,
+          signal: abort.signal,
+        });
+        if (serverSnapshot) {
+          applyCommunityProjects(serverSnapshot.projects, { merge: true });
+          router.refresh();
+        }
+      }
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       console.warn("[labs] hackathon scan failed", e);
@@ -167,6 +287,7 @@ export default function HackathonProjectsList({
     if (cached) {
       const filtered = cached.filter((p) => p.hackathon === hackathon.id);
       if (filtered.length > 0) {
+        communityRef.current = filtered;
         setNostrSubmissions(filtered.map(fromCommunity));
         const pics = picturesFromCommunityProjects(filtered);
         if (pics.size > 0) setAuthorPictures(pics);
@@ -179,7 +300,22 @@ export default function HackathonProjectsList({
       })
       .finally(() => {
         if (!snapshotAbort.signal.aborted) {
-          refreshFromRelays();
+          const idle = window.requestIdleCallback?.(
+            () => refreshFromRelays(),
+            { timeout: 1200 },
+          );
+          const fallback =
+            idle === undefined
+              ? window.setTimeout(() => refreshFromRelays(), 250)
+              : null;
+          snapshotAbort.signal.addEventListener(
+            "abort",
+            () => {
+              if (idle !== undefined) window.cancelIdleCallback(idle);
+              if (fallback !== null) window.clearTimeout(fallback);
+            },
+            { once: true },
+          );
         }
       });
     return () => {
@@ -203,7 +339,7 @@ export default function HackathonProjectsList({
         block: "start",
       });
       if (project) upsertCommunityProject(project);
-      refreshFromRelays();
+      refreshFromRelays({ manual: true });
     }
     window.addEventListener("labs:project-published", onPublished);
     return () =>
@@ -229,10 +365,12 @@ export default function HackathonProjectsList({
           <div>
             <div className="inline-flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-foreground-subtle">
               {headerLabel}
-              {scanning && (
+              {(scanning || syncingCache || cachePending) && (
                 <span className="inline-flex items-center gap-1 text-nostr">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  sincronizando
+                  {syncingCache || cachePending
+                    ? "sincronizando cache"
+                    : "sincronizando"}
                 </span>
               )}
             </div>
@@ -251,7 +389,7 @@ export default function HackathonProjectsList({
               <HackathonInscripcionButton hackathonId={hackathon.id} />
             )}
             <button
-              onClick={refreshFromRelays}
+              onClick={() => refreshFromRelays({ manual: true })}
               disabled={scanning}
               aria-label="Rescanear Nostr"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white/[0.03] hover:bg-white/[0.06] text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-progress"
@@ -334,7 +472,22 @@ function ProjectRow({
   const team = dedupeSoldierProfileMembers(project.team);
 
   const Wrapper: React.ElementType = Link;
-  const wrapperProps = { href };
+  const wrapperProps = {
+    href,
+    onClick(event: MouseEvent<HTMLAnchorElement>) {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+      rememberScrollPosition(`/hackathons/${hackathonId}`);
+    },
+  };
 
   return (
     <Wrapper

@@ -123,7 +123,7 @@ export default function Navbar() {
   return (
     <>
       <motion.header
-        initial={{ y: -40, opacity: 0 }}
+        initial={false}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
         className={cn(

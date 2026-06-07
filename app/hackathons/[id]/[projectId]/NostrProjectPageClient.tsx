@@ -22,6 +22,7 @@ import {
   getCachedCommunityProjects,
   refetchCommunityProjectById,
   fetchAuthorPictures,
+  refreshNostrServerCache,
   archiveUserProject,
   removeCachedCommunityProject,
   upsertCachedCommunityProject,
@@ -445,12 +446,14 @@ function FeedbackCard({
 export default function NostrProjectPage({
   hackathonId,
   projectId,
+  initialProject,
 }: {
   hackathonId: string;
   projectId: string;
+  initialProject?: CommunityProject;
 }) {
   const [project, setProject] = useState<CommunityProject | null | undefined>(
-    undefined,
+    initialProject ?? undefined,
   );
   const [authorPicture, setAuthorPicture] = useState<string | undefined>();
   const hackathon = getHackathon(hackathonId) as Hackathon;
@@ -461,6 +464,7 @@ export default function NostrProjectPage({
   const [editOpen, setEditOpen] = useState(false);
   const [archiveStep, setArchiveStep] = useState<"idle" | "confirm" | "archiving">("idle");
   const [revalidating, setRevalidating] = useState(false);
+  const [cachePending, setCachePending] = useState(false);
   const [searchPhase, setSearchPhase] = useState<
     "cache" | "snapshot" | "relays"
   >("cache");
@@ -482,6 +486,46 @@ export default function NostrProjectPage({
       });
     }
 
+    async function refreshServerForProject(candidate: CommunityProject) {
+      setRevalidating(true);
+      try {
+        const snapshot = await refreshNostrServerCache({
+          scopes: ["projects"],
+          hackathonId,
+          projectId: candidate.id,
+          author: candidate.author,
+          candidateEventId: candidate.eventId,
+          candidateCreatedAt: candidate.eventCreatedAt,
+          blocking: true,
+          signal: snapshotAbort.signal,
+        });
+        const fromServer =
+          snapshot?.projects.find(
+            (p) =>
+              p.hackathon === hackathonId &&
+              p.author === candidate.author &&
+              projectMatchesIdentifier(p, candidate.id),
+          ) ?? null;
+        if (!cancelled && fromServer) {
+          setCachePending(fromServer.eventCreatedAt < candidate.eventCreatedAt);
+          showProject(
+            fromServer.eventCreatedAt >= candidate.eventCreatedAt
+              ? fromServer
+              : candidate,
+          );
+        } else if (!cancelled) {
+          setCachePending(true);
+        }
+        if (!cancelled) router.refresh();
+      } catch (e) {
+        if (!(e instanceof DOMException && e.name === "AbortError")) {
+          console.warn("[labs] project cache refresh failed", e);
+        }
+      } finally {
+        if (!cancelled) setRevalidating(false);
+      }
+    }
+
     async function load() {
       // 1. Show cached version immediately for instant render.
       setSearchPhase("cache");
@@ -493,11 +537,12 @@ export default function NostrProjectPage({
             p.hackathon === hackathonId &&
             projectMatchesIdentifier(p, projectId),
         ) ?? null;
+      if (!latest && initialProject) latest = initialProject;
       if (latest && !cancelled) {
         showProject(latest);
       }
 
-      // 2. Pull the server snapshot quickly, then refresh this d-tag from relays.
+      // 2. Pull the server snapshot, then reconcile this project from relays.
       if (!cancelled) setRevalidating(true);
       try {
         try {
@@ -512,8 +557,10 @@ export default function NostrProjectPage({
                 projectMatchesIdentifier(p, projectId),
             ) ?? null;
           if (fromSnapshot && !cancelled) {
-            latest = fromSnapshot;
-            showProject(fromSnapshot);
+            if (!latest || fromSnapshot.eventCreatedAt >= latest.eventCreatedAt) {
+              latest = fromSnapshot;
+              showProject(fromSnapshot);
+            }
           }
         } catch (e) {
           if (e instanceof DOMException && e.name === "AbortError") return;
@@ -535,8 +582,13 @@ export default function NostrProjectPage({
 
         if (cancelled) return;
 
-        if (fresh && fresh.hackathon === hackathonId) {
+        if (
+          fresh &&
+          fresh.hackathon === hackathonId &&
+          (!latest || fresh.eventCreatedAt > latest.eventCreatedAt)
+        ) {
           showProject(fresh);
+          await refreshServerForProject(fresh);
         } else if (!latest) {
           const broad = await fetchCommunityProjects(TOP10_RELAYS, {
             perRelayTimeoutMs: 5000,
@@ -552,8 +604,12 @@ export default function NostrProjectPage({
                 p.hackathon === hackathonId &&
                 projectMatchesIdentifier(p, projectId),
             ) ?? null;
-          if (aliased) showProject(aliased);
-          else setProject(null);
+          if (aliased) {
+            showProject(aliased);
+            await refreshServerForProject(aliased);
+          } else {
+            setProject(null);
+          }
         }
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return;
@@ -568,7 +624,7 @@ export default function NostrProjectPage({
       cancelled = true;
       snapshotAbort.abort();
     };
-  }, [hackathonId, projectId]);
+  }, [hackathonId, projectId, initialProject, router]);
 
   async function handleArchive() {
     if (!auth || !project) return;
@@ -639,7 +695,7 @@ export default function NostrProjectPage({
             : ""
         }`}
         isAuthor={isAuthor}
-        revalidating={revalidating}
+        revalidating={revalidating || cachePending}
         onEdit={isAuthor ? () => setEditOpen(true) : undefined}
         archiveState={archiveStep}
         onArchive={

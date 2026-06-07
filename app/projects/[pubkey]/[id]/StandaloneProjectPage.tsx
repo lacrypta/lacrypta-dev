@@ -2,19 +2,23 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import {
   fetchAuthorPictures,
   fetchCommunityProjects,
   fetchCommunityProjectsSnapshot,
-  fetchProjectByDTag,
+  refetchCommunityProjectById,
+  refreshNostrServerCache,
   TOP10_RELAYS,
-  type UserProject,
+  upsertCachedCommunityProject,
+  type CommunityProject,
 } from "@/lib/userProjects";
 import { useAuth } from "@/lib/auth";
 import NewProjectModal, {
   type ProjectEditField,
 } from "@/components/NewProjectModal";
+import { getHackathon } from "@/lib/hackathons";
 import { projectMatchesIdentifier } from "@/lib/projectIdentity";
 import { ProjectDetailView } from "@/components/ProjectDetailView";
 
@@ -28,15 +32,18 @@ export default function StandaloneProjectPage({
   /** Project pre-fetched on the server from the cached relay snapshot. When
    *  present the page renders immediately and a failed client fetch never
    *  downgrades it to the "not found" state. */
-  initialProject?: UserProject;
+  initialProject?: CommunityProject;
 }) {
-  const [project, setProject] = useState<UserProject | null | undefined>(
+  const [project, setProject] = useState<CommunityProject | null | undefined>(
     initialProject ?? undefined,
   );
   const [authorPicture, setAuthorPicture] = useState<string | undefined>();
   const [editOpen, setEditOpen] = useState(false);
   const [editFocus, setEditFocus] = useState<ProjectEditField>("all");
+  const [revalidating, setRevalidating] = useState(false);
+  const [cachePending, setCachePending] = useState(false);
   const { auth } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     const abort = new AbortController();
@@ -49,18 +56,48 @@ export default function StandaloneProjectPage({
     };
 
     async function loadProject() {
-      const showProject = (p: UserProject, author = pubkey) => {
+      const showProject = (p: CommunityProject) => {
         setProject(p);
-        fetchAuthorPictures([author], TOP10_RELAYS).then((pics) => {
-          if (!cancelled) setAuthorPicture(pics.get(author));
+        upsertCachedCommunityProject(p);
+        fetchAuthorPictures([p.author], TOP10_RELAYS).then((pics) => {
+          if (!cancelled) setAuthorPicture(pics.get(p.author));
         });
       };
 
-      const direct = await fetchProjectByDTag(pubkey, projectId, TOP10_RELAYS);
-      if (cancelled) return;
-      if (direct) {
-        showProject(direct);
-        return;
+      let latest = initialProject ?? null;
+      if (latest) showProject(latest);
+
+      async function refreshServerForProject(candidate: CommunityProject) {
+        setRevalidating(true);
+        try {
+          const snapshot = await refreshNostrServerCache({
+            scopes: ["projects"],
+            projectId: candidate.id,
+            author: candidate.author,
+            candidateEventId: candidate.eventId,
+            candidateCreatedAt: candidate.eventCreatedAt,
+            blocking: true,
+            signal: abort.signal,
+          }).catch(() => null);
+          const fromServer =
+            snapshot?.projects.find(
+              (p) => p.author === pubkey && projectMatchesIdentifier(p, projectId),
+            ) ?? null;
+          if (cancelled) return;
+          if (fromServer) {
+            setCachePending(fromServer.eventCreatedAt < candidate.eventCreatedAt);
+            showProject(
+              fromServer.eventCreatedAt >= candidate.eventCreatedAt
+                ? fromServer
+                : candidate,
+            );
+          } else {
+            setCachePending(true);
+          }
+          router.refresh();
+        } finally {
+          if (!cancelled) setRevalidating(false);
+        }
       }
 
       const snapshot = await fetchCommunityProjectsSnapshot({
@@ -72,9 +109,28 @@ export default function StandaloneProjectPage({
           (p) => p.author === pubkey && projectMatchesIdentifier(p, projectId),
         ) ?? null;
       if (fromSnapshot) {
-        showProject(fromSnapshot, fromSnapshot.author);
+        if (!latest || fromSnapshot.eventCreatedAt >= latest.eventCreatedAt) {
+          latest = fromSnapshot;
+          showProject(fromSnapshot);
+        }
+      }
+
+      const direct = await refetchCommunityProjectById(
+        latest?.id ?? projectId,
+        TOP10_RELAYS,
+        5000,
+        pubkey,
+        { signal: abort.signal },
+      ).catch(() => null);
+      if (cancelled) return;
+      if (direct && (!latest || direct.eventCreatedAt > latest.eventCreatedAt)) {
+        latest = direct;
+        showProject(direct);
+        await refreshServerForProject(direct);
         return;
       }
+
+      if (latest) return;
 
       const broad = await fetchCommunityProjects(TOP10_RELAYS, {
         perRelayTimeoutMs: 5000,
@@ -85,8 +141,12 @@ export default function StandaloneProjectPage({
         broad.find(
           (p) => p.author === pubkey && projectMatchesIdentifier(p, projectId),
         ) ?? null;
-      if (fromRelays) showProject(fromRelays, fromRelays.author);
-      else fail();
+      if (fromRelays) {
+        showProject(fromRelays);
+        await refreshServerForProject(fromRelays);
+      } else {
+        fail();
+      }
     }
 
     loadProject().catch(fail);
@@ -95,7 +155,7 @@ export default function StandaloneProjectPage({
       cancelled = true;
       abort.abort();
     };
-  }, [pubkey, projectId, initialProject]);
+  }, [pubkey, projectId, initialProject, router]);
 
   const isAuthor = auth?.pubkey === pubkey;
 
@@ -145,7 +205,15 @@ export default function StandaloneProjectPage({
   }
 
   const backHref = project.hackathon ? `/hackathons/${project.hackathon}` : "/projects";
-  const backLabel = project.hackathon ? project.hackathon.toUpperCase() : "Proyectos";
+  const hackathon = project.hackathon ? getHackathon(project.hackathon) : null;
+  const backLabel = hackathon?.name ?? (project.hackathon ? project.hackathon.toUpperCase() : "Proyectos");
+  const contextLabel = hackathon
+    ? `${hackathon.icon ?? ""} ${hackathon.name}${
+        hackathon.monthShort && hackathon.year
+          ? ` · ${hackathon.monthShort} ${hackathon.year}`
+          : ""
+      }`
+    : project.hackathon?.toUpperCase();
 
   return (
     <>
@@ -155,8 +223,9 @@ export default function StandaloneProjectPage({
         authorPicture={authorPicture}
         backHref={backHref}
         backLabel={backLabel}
-        contextLabel={project.hackathon ? project.hackathon.toUpperCase() : undefined}
+        contextLabel={contextLabel}
         isAuthor={isAuthor}
+        revalidating={revalidating || cachePending}
         onEdit={isAuthor ? openEditor : undefined}
       />
       {isAuthor && (
@@ -165,7 +234,24 @@ export default function StandaloneProjectPage({
           onClose={() => setEditOpen(false)}
           editProject={project}
           initialFocus={editFocus}
-          onSaved={(updated) => setProject(updated)}
+          onSaved={(updated) =>
+            setProject((prev) => {
+              if (!prev) {
+                const eventCreatedAt = updated.updatedAt;
+                return {
+                  ...updated,
+                  author: pubkey,
+                  eventId: updated.id,
+                  eventCreatedAt,
+                };
+              }
+              return {
+                ...prev,
+                ...updated,
+                eventCreatedAt: Math.max(prev.eventCreatedAt, updated.updatedAt),
+              };
+            })
+          }
         />
       )}
     </>

@@ -118,6 +118,48 @@ export async function fetchNostrProfile(
   }
 }
 
+async function fetchCachedNostrProfileFromServer(
+  pubkey: string,
+  signal?: AbortSignal,
+): Promise<CachedProfile | null> {
+  const res = await fetch(
+    `/api/nostr/profiles?pubkeys=${encodeURIComponent(pubkey)}`,
+    { cache: "no-store", signal },
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as {
+    profiles?: Record<
+      string,
+      | (NostrProfile & {
+          pubkey: string;
+          eventCreatedAt: number;
+        })
+      | null
+    >;
+  };
+  const profile = data.profiles?.[pubkey];
+  if (!profile) return null;
+  const cached: CachedProfile = {
+    pubkey,
+    profile: {
+      name: profile.name,
+      display_name: profile.display_name,
+      picture: profile.picture,
+      banner: profile.banner,
+      about: profile.about,
+      nip05: profile.nip05,
+      lud16: profile.lud16,
+      website: profile.website,
+      github: profile.github,
+    },
+    fetchedAt: Date.now(),
+    eventCreatedAt: profile.eventCreatedAt,
+    relaysUsed: DEFAULT_PROFILE_RELAYS,
+  };
+  setCachedProfile(cached);
+  return cached;
+}
+
 /* ─────────────────────────── publish (kind:0) ─────────────────────────── */
 
 export type PublishProfileRelayResult = {
@@ -283,8 +325,10 @@ export function useNostrProfile(
     if (isFresh) return;
 
     let cancelled = false;
+    const abort = new AbortController();
     setLoading(true);
-    fetchNostrProfile(pubkey, relays)
+    fetchCachedNostrProfileFromServer(pubkey, abort.signal)
+      .then((serverProfile) => serverProfile ?? fetchNostrProfile(pubkey, relays))
       .then((fresh) => {
         if (!cancelled && fresh) setCached(fresh);
       })
@@ -295,6 +339,7 @@ export function useNostrProfile(
 
     return () => {
       cancelled = true;
+      abort.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pubkey, relays?.join(",")]);

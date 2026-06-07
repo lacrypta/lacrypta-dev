@@ -1,5 +1,9 @@
 import { revalidateTag } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
+import {
+  NOSTR_LEGACY_SUBMISSIONS_TAG,
+  NOSTR_PROJECTS_TAG,
+} from "@/lib/nostrCacheTags";
 
 /**
  * Secret-gated revalidation hook for Nostr-sourced cached data.
@@ -9,9 +13,7 @@ import { type NextRequest, NextResponse } from "next/server";
  *     -H "x-revalidate-secret: $REVALIDATE_SECRET" \
  *     -d '{"tag":"nostr:hackathon-submissions"}'
  *
- * Defaults to the global submissions tag when no body is provided.
- * Stale-while-revalidate ('max') keeps perceived speed while a fresh
- * relay round-trip completes in the background.
+ * Defaults to the global projects tag when no body is provided.
  */
 export async function POST(req: NextRequest) {
   const secret = req.headers.get("x-revalidate-secret");
@@ -20,7 +22,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  let tag = "nostr:hackathon-submissions";
+  let tag = NOSTR_PROJECTS_TAG;
   try {
     const body = (await req.json()) as { tag?: unknown };
     if (typeof body.tag === "string" && body.tag.length > 0) {
@@ -30,6 +32,9 @@ export async function POST(req: NextRequest) {
     /* no body, use default */
   }
 
-  revalidateTag(tag, "max");
+  revalidateTag(tag, { expire: 0 });
+  if (tag === NOSTR_PROJECTS_TAG) {
+    revalidateTag(NOSTR_LEGACY_SUBMISSIONS_TAG, { expire: 0 });
+  }
   return NextResponse.json({ ok: true, tag });
 }

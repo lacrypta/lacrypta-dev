@@ -59,7 +59,7 @@ export default function GamingHackathonBanner() {
 
       <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-4 py-14 sm:px-6 sm:py-16 lg:grid-cols-[1fr_360px] lg:px-8">
         <motion.div
-          initial={{ opacity: 0, y: 18 }}
+          initial={false}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.5, ease: "easeOut" }}
@@ -100,7 +100,7 @@ export default function GamingHackathonBanner() {
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 18 }}
+          initial={false}
           whileInView={{ opacity: 1, scale: 1, y: 0 }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.55, ease: "easeOut", delay: 0.08 }}
