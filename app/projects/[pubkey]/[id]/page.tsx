@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import {
   getNostrProjectByAuthor,
   type CachedNostrProject,
@@ -43,6 +44,7 @@ export default async function ProjectPage({
 }: {
   params: Promise<{ pubkey: string; id: string }>;
 }) {
+  await connection();
   const { pubkey, id: projectId } = await params;
   // Pre-fetch from the shared cached relay snapshot (same source the hackathon
   // project pages and sitemap use). This makes the page resilient: if the
