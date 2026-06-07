@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -67,6 +68,7 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string; projectId: string }>;
 }): Promise<Metadata> {
+  await connection();
   const { id, projectId } = await params;
   const h = getHackathon(id);
   if (!h) return { title: "Proyecto" };
@@ -135,10 +137,7 @@ export default function ProjectPage({
 }) {
   return (
     <Suspense fallback={<ProjectPageFallback />}>
-      {/* Keep runtime params out of the Cache Components prerender shell. */}
-      {params.then((resolved) => (
-        <ProjectPageContent {...resolved} />
-      ))}
+      <ProjectPageContent params={params} />
     </Suspense>
   );
 }
@@ -196,7 +195,13 @@ function ProjectPageFallback() {
   );
 }
 
-function ProjectPageContent({ id, projectId }: ProjectPageParams) {
+async function ProjectPageContent({
+  params,
+}: {
+  params: Promise<ProjectPageParams>;
+}) {
+  await connection();
+  const { id, projectId } = await params;
   const hackathon = getHackathon(id);
   if (!hackathon) notFound();
   const project = getProject(id, projectId);
