@@ -7,11 +7,15 @@ export const HACKATHON_BADGE_SCHEMA_VERSION = 1;
 export const HACKATHON_BADGE_CATALOG_TAG = "lacrypta-dev-hackathon-badges";
 export const HACKATHON_BADGE_DEFINITION_TAG = "lacrypta-dev-hackathon-badge";
 
-export type HackathonBadgeCategoryId =
+export type KnownHackathonBadgeCategoryId =
   | "ranking"
   | "favorites"
   | "specials"
   | "streaks";
+
+export type HackathonBadgeCategoryId =
+  | KnownHackathonBadgeCategoryId
+  | (string & {});
 
 export type HackathonBadgeTone =
   | "gold"
@@ -22,6 +26,33 @@ export type HackathonBadgeTone =
   | "cyan"
   | "success"
   | "pink";
+
+export const HACKATHON_BADGE_TONES = [
+  "gold",
+  "silver",
+  "bronze",
+  "bitcoin",
+  "nostr",
+  "cyan",
+  "success",
+  "pink",
+] as const satisfies readonly HackathonBadgeTone[];
+
+export const HACKATHON_BADGE_ICONS = [
+  "award",
+  "brush",
+  "flame",
+  "gem",
+  "heart",
+  "medal",
+  "mic",
+  "rocket",
+  "send",
+  "shield-check",
+  "sparkles",
+  "star",
+  "trophy",
+] as const;
 
 export type HackathonBadgeCriterion =
   | { type: "rank"; position: number }
@@ -44,6 +75,8 @@ export type HackathonBadgeTemplate = {
   tone: HackathonBadgeTone;
   icon: string;
   criteria: HackathonBadgeCriterion;
+  image?: string;
+  thumb?: string;
 };
 
 export type HackathonBadgeCatalogBadge = HackathonBadgeTemplate & {
@@ -245,26 +278,141 @@ export function hackathonBadgeDefinitionATag(
   return `${HACKATHON_BADGE_DEFINITION_KIND}:${issuerPubkey}:${hackathonBadgeDefinitionDTag(hackathonId, badgeId)}`;
 }
 
+function titleizeCategoryId(id: string): string {
+  return id
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export function normalizeHackathonBadgeId(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
+
+export function normalizeHackathonBadgeCategoryId(
+  input: string,
+): HackathonBadgeCategoryId {
+  return normalizeHackathonBadgeId(input) as HackathonBadgeCategoryId;
+}
+
+export function isHackathonBadgeTone(
+  value: string,
+): value is HackathonBadgeTone {
+  return HACKATHON_BADGE_TONES.some((tone) => tone === value);
+}
+
+export function normalizeHackathonBadgeTemplate(
+  badge: HackathonBadgeTemplate,
+): HackathonBadgeTemplate {
+  const id = normalizeHackathonBadgeId(badge.id);
+  const category = normalizeHackathonBadgeCategoryId(badge.category);
+  if (!id) throw new Error("Badge id invalido.");
+  if (!category) throw new Error("Categoria de badge invalida.");
+  const name = badge.name.trim();
+  const description = badge.description.trim();
+  if (!name) throw new Error(`Badge ${id} necesita nombre.`);
+  if (!description) throw new Error(`Badge ${id} necesita descripcion.`);
+  if (!isHackathonBadgeTone(badge.tone)) {
+    throw new Error(`Badge ${id} tiene tone invalido.`);
+  }
+  return {
+    ...badge,
+    id,
+    category,
+    name,
+    description,
+    icon: badge.icon.trim() || "award",
+    criteria: badge.criteria ?? { type: "manual" },
+    image: badge.image?.trim() || undefined,
+    thumb: badge.thumb?.trim() || undefined,
+  };
+}
+
+export function catalogBadgeToTemplate(
+  badge: HackathonBadgeCatalogBadge,
+): HackathonBadgeTemplate {
+  return normalizeHackathonBadgeTemplate({
+    id: badge.id,
+    category: badge.category,
+    name: badge.name,
+    description: badge.description,
+    tone: badge.tone,
+    icon: badge.icon,
+    criteria: badge.criteria,
+    image: badge.image,
+    thumb: badge.thumb,
+  });
+}
+
+export function ensureHackathonBadgeCategories(
+  badges: HackathonBadgeTemplate[],
+  categories: HackathonBadgeCategory[] = [],
+): HackathonBadgeCategory[] {
+  const byId = new Map<string, HackathonBadgeCategory>();
+  for (const category of [...HACKATHON_BADGE_CATEGORIES, ...categories]) {
+    const id = normalizeHackathonBadgeCategoryId(category.id);
+    if (!id) continue;
+    byId.set(id, {
+      id,
+      label: category.label.trim() || titleizeCategoryId(id),
+      description: category.description?.trim() || undefined,
+    });
+  }
+  for (const badge of badges) {
+    const id = normalizeHackathonBadgeCategoryId(badge.category);
+    if (!id || byId.has(id)) continue;
+    byId.set(id, { id, label: titleizeCategoryId(id) });
+  }
+  return [...byId.values()];
+}
+
+export function mergeHackathonBadgeTemplates(
+  existing: HackathonBadgeTemplate[],
+  additions: HackathonBadgeTemplate[],
+): HackathonBadgeTemplate[] {
+  const byId = new Map<string, HackathonBadgeTemplate>();
+  for (const badge of existing) {
+    byId.set(badge.id, normalizeHackathonBadgeTemplate(badge));
+  }
+  for (const badge of additions) {
+    byId.set(badge.id, normalizeHackathonBadgeTemplate(badge));
+  }
+  return [...byId.values()];
+}
+
 export function buildHackathonBadgeCatalogContent(
   issuerPubkey: string,
   hackathonId: string,
   hackathonName: string,
   badges: HackathonBadgeTemplate[] = DEFAULT_HACKATHON_BADGES,
+  categories: HackathonBadgeCategory[] = HACKATHON_BADGE_CATEGORIES,
 ): HackathonBadgeCatalog {
+  const normalizedBadges = badges.map(normalizeHackathonBadgeTemplate);
   return {
     version: HACKATHON_BADGE_SCHEMA_VERSION,
     hackathon: hackathonId,
     title: `Badges ${hackathonName}`,
-    categories: HACKATHON_BADGE_CATEGORIES,
-    badges: badges.map((badge) => ({
+    categories: ensureHackathonBadgeCategories(normalizedBadges, categories),
+    badges: normalizedBadges.map((badge) => ({
       ...badge,
       definition: hackathonBadgeDefinitionATag(
         issuerPubkey,
         hackathonId,
         badge.id,
       ),
-      image: `https://lacrypta.dev/badges/${hackathonId}/${badge.id}.png`,
-      thumb: `https://lacrypta.dev/badges/${hackathonId}/${badge.id}-thumb.png`,
+      image: badge.image ?? `https://lacrypta.dev/badges/${hackathonId}/${badge.id}.png`,
+      thumb:
+        badge.thumb ??
+        badge.image ??
+        `https://lacrypta.dev/badges/${hackathonId}/${badge.id}-thumb.png`,
     })),
   };
 }
@@ -275,7 +423,7 @@ export function buildHackathonBadgeDefinitionEvents(
   badges: HackathonBadgeTemplate[] = DEFAULT_HACKATHON_BADGES,
   createdAt = Math.floor(Date.now() / 1000),
 ): UnsignedEvent[] {
-  return badges.map((badge) => ({
+  return badges.map(normalizeHackathonBadgeTemplate).map((badge) => ({
     kind: HACKATHON_BADGE_DEFINITION_KIND,
     pubkey: issuerPubkey,
     created_at: createdAt,
@@ -284,8 +432,13 @@ export function buildHackathonBadgeDefinitionEvents(
       ["d", hackathonBadgeDefinitionDTag(hackathonId, badge.id)],
       ["name", badge.name],
       ["description", badge.description],
-      ["image", `https://lacrypta.dev/badges/${hackathonId}/${badge.id}.png`],
-      ["thumb", `https://lacrypta.dev/badges/${hackathonId}/${badge.id}-thumb.png`],
+      ["image", badge.image ?? `https://lacrypta.dev/badges/${hackathonId}/${badge.id}.png`],
+      [
+        "thumb",
+        badge.thumb ??
+          badge.image ??
+          `https://lacrypta.dev/badges/${hackathonId}/${badge.id}-thumb.png`,
+      ],
       ["t", HACKATHON_BADGE_DEFINITION_TAG],
       ["hackathon", hackathonId],
       ["badge", badge.id],
@@ -300,12 +453,14 @@ export function buildHackathonBadgeCatalogEvent(
   hackathonName: string,
   badges: HackathonBadgeTemplate[] = DEFAULT_HACKATHON_BADGES,
   createdAt = Math.floor(Date.now() / 1000),
+  categories: HackathonBadgeCategory[] = HACKATHON_BADGE_CATEGORIES,
 ): UnsignedEvent {
   const catalog = buildHackathonBadgeCatalogContent(
     issuerPubkey,
     hackathonId,
     hackathonName,
     badges,
+    categories,
   );
 
   return {
