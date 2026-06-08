@@ -119,6 +119,21 @@ export async function fetchHackathonBadgeCatalog(
   timeoutMs = 5000,
 ): Promise<HackathonBadgeCatalogEvent | null> {
   if (!issuerPubkey) return null;
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams({ hackathonId });
+    const res = await fetch(`/api/hackathon-badges/catalog?${params}`, {
+      cache: "no-store",
+    });
+    const data = (await res.json()) as {
+      catalogEvent?: HackathonBadgeCatalogEvent | null;
+      error?: string;
+    };
+    if (!res.ok) {
+      throw new Error(data.error || "No se pudo buscar catalogo de badges.");
+    }
+    return data.catalogEvent ?? null;
+  }
+
   const { SimplePool } = await import("nostr-tools/pool");
   const pool = new SimplePool();
   const events: SignedEvent[] = [];
@@ -163,6 +178,11 @@ export async function fetchHackathonBadgeDefinition(
   relays: string[] = DEFAULT_BADGE_RELAYS,
   timeoutMs = 4500,
 ): Promise<BadgeDefinitionEvent | null> {
+  if (typeof window !== "undefined") {
+    const definitions = await fetchHackathonBadgeDefinitions([aTag]);
+    return definitions[aTag] ?? null;
+  }
+
   const parsed = parseBadgeDefinitionATag(aTag);
   if (!parsed) return null;
   const { SimplePool } = await import("nostr-tools/pool");
@@ -208,6 +228,23 @@ export async function fetchHackathonBadgeDefinitions(
   relays: string[] = DEFAULT_BADGE_RELAYS,
   timeoutMs = 4500,
 ): Promise<Record<string, BadgeDefinitionEvent>> {
+  if (typeof window !== "undefined") {
+    const res = await fetch("/api/hackathon-badges/definitions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ aTags }),
+    });
+    const data = (await res.json()) as {
+      definitions?: Record<string, BadgeDefinitionEvent>;
+      error?: string;
+    };
+    if (!res.ok) {
+      throw new Error(data.error || "No se pudieron buscar definiciones.");
+    }
+    return data.definitions ?? {};
+  }
+
   const wanted = new Map<string, { issuer: string; d: string }>();
   for (const aTag of aTags) {
     const parsed = parseBadgeDefinitionATag(aTag);
@@ -267,6 +304,22 @@ export async function fetchHackathonBadgeAwardOwners(
   relays: string[] = DEFAULT_BADGE_RELAYS,
   timeoutMs = 5000,
 ): Promise<BadgeAwardOwner[]> {
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams({ aTag });
+    if (issuerPubkey) params.set("issuer", issuerPubkey);
+    const res = await fetch(`/api/hackathon-badges/owners?${params}`, {
+      cache: "no-store",
+    });
+    const data = (await res.json()) as {
+      owners?: BadgeAwardOwner[];
+      error?: string;
+    };
+    if (!res.ok) {
+      throw new Error(data.error || "No se pudieron buscar owners.");
+    }
+    return data.owners ?? [];
+  }
+
   const { SimplePool } = await import("nostr-tools/pool");
   const pool = new SimplePool();
   const events: SignedEvent[] = [];
@@ -320,6 +373,45 @@ export async function fetchBadgeSoldiers(): Promise<BadgeSoldierOption[]> {
     throw new Error(data.error || "No se pudieron cargar soldados.");
   }
   return (data.soldiers ?? []).filter((soldier) => soldier.pubkey);
+}
+
+export async function refreshHackathonBadgeCache({
+  hackathonId,
+  aTags = [],
+  issuerPubkey,
+  catalog = false,
+  definitions = false,
+  owners = false,
+}: {
+  hackathonId?: string;
+  aTags?: string[];
+  issuerPubkey?: string;
+  catalog?: boolean;
+  definitions?: boolean;
+  owners?: boolean;
+}): Promise<void> {
+  const scopes: string[] = [];
+  if (catalog) scopes.push("hackathon-badges");
+  if (definitions) scopes.push("hackathon-badge-definitions");
+  if (owners) scopes.push("hackathon-badge-owners");
+  if (scopes.length === 0) return;
+
+  const res = await fetch("/api/nostr/refresh", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({
+      scopes,
+      hackathonId,
+      issuerPubkey,
+      aTags,
+      blocking: true,
+    }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "No se pudo refrescar cache Nostr.");
+  }
 }
 
 export async function publishSignedEventsToRelays(

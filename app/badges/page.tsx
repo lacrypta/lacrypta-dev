@@ -5,6 +5,10 @@ import {
   hackathonStatus,
   type Hackathon,
 } from "@/lib/hackathons";
+import {
+  getCachedHackathonBadgeCatalogSnapshot,
+  getCachedHackathonBadgeDefinitionsSnapshot,
+} from "@/lib/hackathonBadgeCache";
 import BadgesClient from "./BadgesClient";
 
 export const metadata: Metadata = {
@@ -36,11 +40,25 @@ function pickFeaturedHackathon(now: Date) {
 export default async function BadgesPage() {
   await connection();
   const hackathon = pickFeaturedHackathon(new Date());
+  const initialSnapshot = await getCachedHackathonBadgeCatalogSnapshot(
+    hackathon.id,
+  ).catch(() => null);
+  const initialCatalog = initialSnapshot?.catalogEvent?.catalog ?? null;
+  const initialDefinitions = initialCatalog
+    ? (
+        await getCachedHackathonBadgeDefinitionsSnapshot(
+          initialCatalog.badges.map((badge) => badge.definition),
+        ).catch(() => null)
+      )?.definitions ?? {}
+    : {};
 
   return (
     <BadgesClient
       hackathonId={hackathon.id}
       hackathonName={hackathon.name}
+      initialCatalog={initialCatalog}
+      initialDefinitions={initialDefinitions}
+      initialPublisherPubkey={initialSnapshot?.publisherPubkey ?? ""}
     />
   );
 }

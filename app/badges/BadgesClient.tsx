@@ -64,6 +64,7 @@ import {
   requestBadgeAward,
   requestBadgeBootstrap,
   requestBadgeCreate,
+  refreshHackathonBadgeCache,
   type BadgeAwardOwner,
   type BadgeAwardRecipient,
   type BadgeDefinitionEvent,
@@ -192,18 +193,25 @@ const TONE_STYLE: Record<
 export default function BadgesClient({
   hackathonId,
   hackathonName,
+  initialCatalog,
+  initialDefinitions = {},
+  initialPublisherPubkey = "",
 }: {
   hackathonId: string;
   hackathonName: string;
+  initialCatalog?: HackathonBadgeCatalog | null;
+  initialDefinitions?: Record<string, BadgeDefinitionEvent>;
+  initialPublisherPubkey?: string;
 }) {
   const { auth, signerReady } = useAuth();
   const [adminPubkey, setAdminPubkey] = useState("");
-  const [publisherPubkey, setPublisherPubkey] = useState("");
-  const [state, setState] = useState<CatalogState>({
-    status: "loading",
-    catalog: null,
-    error: null,
-  });
+  const [publisherPubkey, setPublisherPubkey] =
+    useState(initialPublisherPubkey);
+  const [state, setState] = useState<CatalogState>(() =>
+    initialCatalog
+      ? { status: "ready", catalog: initialCatalog, error: null }
+      : { status: "loading", catalog: null, error: null },
+  );
   const [bootstrap, setBootstrap] = useState<BootstrapState>({
     phase: "idle",
     message: "",
@@ -221,7 +229,7 @@ export default function BadgesClient({
   const [showCreateBadgeModal, setShowCreateBadgeModal] = useState(false);
   const [definitionByATag, setDefinitionByATag] = useState<
     Record<string, BadgeDefinitionEvent>
-  >({});
+  >(() => initialDefinitions);
   const [soldiers, setSoldiers] = useState<BadgeSoldierOption[]>([]);
   const [soldiersError, setSoldiersError] = useState("");
 
@@ -248,13 +256,20 @@ export default function BadgesClient({
     }
   }
 
-  async function loadCatalog() {
-    setState({ status: "loading", catalog: null, error: null });
-    setDefinitionByATag({});
+  async function loadBadgePubkeys() {
+    const keys = await fetchLacryptaBadgePubkeys();
+    setAdminPubkey(keys.adminPubkey);
+    setPublisherPubkey(keys.publisherPubkey);
+    return keys;
+  }
+
+  async function loadCatalog({ showLoading = true } = {}) {
+    if (showLoading) {
+      setState({ status: "loading", catalog: null, error: null });
+      setDefinitionByATag({});
+    }
     try {
-      const keys = await fetchLacryptaBadgePubkeys();
-      setAdminPubkey(keys.adminPubkey);
-      setPublisherPubkey(keys.publisherPubkey);
+      const keys = await loadBadgePubkeys();
       const found = await fetchHackathonBadgeCatalog(
         hackathonId,
         keys.publisherPubkey,
@@ -275,6 +290,10 @@ export default function BadgesClient({
   }
 
   useEffect(() => {
+    if (initialCatalog) {
+      loadBadgePubkeys().catch(() => {});
+      return;
+    }
     loadCatalog();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hackathonId]);
@@ -329,6 +348,17 @@ export default function BadgesClient({
       if (ok === 0) {
         throw new Error("Ningun relay acepto los eventos firmados.");
       }
+      const aTags = result.events.flatMap((event) =>
+        event.tags
+          .filter((tag) => tag[0] === "a" && tag[1])
+          .map((tag) => tag[1]),
+      );
+      await refreshHackathonBadgeCache({
+        hackathonId,
+        aTags,
+        catalog: true,
+        definitions: aTags.length > 0,
+      });
       setBootstrap({
         phase: "done",
         message: `Publicado en ${ok}/${published.length} relays.`,
@@ -393,6 +423,13 @@ export default function BadgesClient({
       if (ok === 0) {
         throw new Error("Ningun relay acepto los eventos firmados.");
       }
+      const aTags = result.catalog?.badges.map((badge) => badge.definition) ?? [];
+      await refreshHackathonBadgeCache({
+        hackathonId,
+        aTags,
+        catalog: true,
+        definitions: aTags.length > 0,
+      });
       if (result.catalog) {
         setState({ status: "ready", catalog: result.catalog, error: null });
         void preloadBadgeDefinitions(result.catalog);
@@ -532,6 +569,7 @@ export default function BadgesClient({
                       <BadgeCard
                         key={badge.id}
                         badge={badge}
+                        definition={definitionByATag[badge.definition] ?? null}
                         onOpen={() => setSelectedBadge(badge)}
                       />
                     ))}
@@ -1385,6 +1423,12 @@ function BadgeDetailModal({
       const published = await publishSignedEventsToRelays(result.events);
       const ok = published.filter((relay) => relay.ok).length;
       if (ok === 0) throw new Error("Ningun relay acepto los awards.");
+      await refreshHackathonBadgeCache({
+        hackathonId,
+        aTags: [badge.definition],
+        issuerPubkey: result.publisherPubkey || publisherPubkey,
+        owners: true,
+      });
       setAwardFlow({
         phase: "done",
         message: `Publicado en ${ok}/${published.length} relays.`,
@@ -2194,13 +2238,27 @@ function OwnerPill({
 
 function BadgeCard({
   badge,
+  definition,
   onOpen,
 }: {
   badge: HackathonBadgeCatalogBadge;
+  definition?: BadgeDefinitionEvent | null;
   onOpen: () => void;
 }) {
   const Icon = ICONS[badge.icon] ?? Award;
   const tone = TONE_STYLE[badge.tone];
+  const image =
+    definition?.parsed.image ||
+    definition?.parsed.thumb ||
+    badge.image ||
+    badge.thumb ||
+    "";
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = !!image && !imageFailed;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [image]);
 
   return (
     <button
@@ -2224,8 +2282,23 @@ function BadgeCard({
             tone.preview,
           )}
         >
-          <div className="absolute inset-[3px] rounded-[14px] border border-black/20 bg-black/20" />
-          <Icon className="relative h-9 w-9 text-white drop-shadow" />
+          {showImage ? (
+            <>
+              <img
+                src={image}
+                alt={badge.name}
+                className="absolute inset-0 h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+                onError={() => setImageFailed(true)}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-white/10" />
+            </>
+          ) : (
+            <>
+              <div className="absolute inset-[3px] rounded-[14px] border border-black/20 bg-black/20" />
+              <Icon className="relative h-9 w-9 text-white drop-shadow" />
+            </>
+          )}
         </div>
 
         <div className="min-w-0 flex-1">

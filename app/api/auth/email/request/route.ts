@@ -5,9 +5,11 @@ import {
   isValidEmail,
   normalizeEmail,
 } from "@/lib/emailLogin";
+import { DEFAULT_LOGIN_REDIRECT, safeLoginRedirect } from "@/lib/loginRedirect";
 
 type RequestBody = {
   email?: string;
+  redirectTo?: string;
 };
 
 function jsonError(message: string, status = 400) {
@@ -107,7 +109,12 @@ export async function POST(req: Request) {
     const siteUrl = requiredEnv("NEXT_PUBLIC_SITE_URL").replace(/\/+$/u, "");
     const rootSecret = await getLacryptaSecret();
     const { token } = await createEmailLoginToken(rootSecret, email);
-    const link = `${siteUrl}/login/email?token=${encodeURIComponent(token)}`;
+    const params = new URLSearchParams({ token });
+    params.set(
+      "next",
+      safeLoginRedirect(body.redirectTo, DEFAULT_LOGIN_REDIRECT),
+    );
+    const link = `${siteUrl}/login/email?${params.toString()}`;
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
