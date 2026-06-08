@@ -84,6 +84,9 @@ export default function LoginModal({
   const [nip07Loading, setNip07Loading] = useState(false);
   const signerRef = useRef<BunkerSignerType | Nip46Client | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // URL snapshot taken when the modal opens, so we return the user to the page
+  // they were on when they started logging in (nostr or email).
+  const redirectToRef = useRef<string>(DEFAULT_LOGIN_REDIRECT);
 
   function pushDiag(msg: string) {
     const stamp = new Date().toLocaleTimeString("es-AR", { hour12: false });
@@ -92,6 +95,16 @@ export default function LoginModal({
   }
 
   useScrollLock(open);
+
+  useEffect(() => {
+    if (!open) return;
+    // Snapshot the destination at open time (explicit prop wins, otherwise the
+    // current URL behind the modal). Used for both nostr and email flows.
+    redirectToRef.current = safeLoginRedirect(
+      redirectTo ?? currentLoginRedirect(),
+      DEFAULT_LOGIN_REDIRECT,
+    );
+  }, [open, redirectTo]);
 
   useEffect(() => {
     if (!open) return;
@@ -144,10 +157,7 @@ export default function LoginModal({
   }, [open]);
 
   function resolveRedirectTo() {
-    return safeLoginRedirect(
-      redirectTo ?? currentLoginRedirect(),
-      DEFAULT_LOGIN_REDIRECT,
-    );
+    return redirectToRef.current;
   }
 
   function navigateAfterLogin() {

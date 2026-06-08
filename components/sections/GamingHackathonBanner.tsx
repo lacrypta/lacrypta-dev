@@ -89,7 +89,7 @@ export default function GamingHackathonBanner() {
               href="/hackathons/zaps"
               className="group inline-flex items-center justify-center gap-3 rounded-2xl bg-bitcoin px-7 py-4 font-display text-base font-black uppercase tracking-wide text-black shadow-[0_0_42px_rgba(247,147,26,0.38)] transition-all hover:scale-[1.025] hover:shadow-[0_0_64px_rgba(247,147,26,0.55)] active:scale-[0.98]"
             >
-              Inscribirme ahora
+              Ver hackaton
               <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
             </Link>
             <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-white/[0.04] px-5 py-4 text-sm font-mono font-bold text-foreground-muted sm:justify-start">

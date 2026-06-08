@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { setAuth } from "@/lib/auth";
 import { DEFAULT_LOGIN_REDIRECT, safeLoginRedirect } from "@/lib/loginRedirect";
+import { fetchNostrProfile } from "@/lib/nostrProfile";
 
 type Phase = "loading" | "success" | "error";
 
@@ -52,9 +53,33 @@ export default function EmailLoginClient() {
           pubkey: data.pubkey,
           localSecret: Array.from(decoded.data as Uint8Array),
         });
+
+        // New users have no kind:0 profile yet → send them through the
+        // onboarding wizard before returning to where they were.
+        let hasProfile = false;
+        try {
+          const existing = await fetchNostrProfile(data.pubkey, undefined, 2500);
+          const p = existing?.profile;
+          hasProfile = Boolean(p && (p.display_name || p.name || p.picture));
+        } catch {
+          /* treat as new user on lookup failure */
+        }
+        if (cancelled) return;
+
         setPhase("success");
-        setMessage("Listo. Volviendo a donde estabas...");
-        window.setTimeout(() => router.replace(redirectTo), 600);
+        if (hasProfile) {
+          setMessage("Listo. Volviendo a donde estabas...");
+          window.setTimeout(() => router.replace(redirectTo), 600);
+        } else {
+          setMessage("Vamos a crear tu perfil...");
+          window.setTimeout(
+            () =>
+              router.replace(
+                `/onboarding?next=${encodeURIComponent(redirectTo)}`,
+              ),
+            600,
+          );
+        }
       } catch (error) {
         if (cancelled) return;
         setPhase("error");
