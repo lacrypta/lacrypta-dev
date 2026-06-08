@@ -433,6 +433,7 @@ export function buildHackathonBadgeDefinitionEvents(
     content: "",
     tags: [
       ["d", hackathonBadgeDefinitionDTag(hackathonId, badge.id)],
+      ["client", LACRYPTA_NOSTR_CLIENT_TAG],
       ["name", badge.name],
       ["description", badge.description],
       ["image", badge.image ?? `https://lacrypta.dev/badges/${hackathonId}/${badge.id}.png`],

@@ -129,6 +129,7 @@ Cada badge del catalogo debe tener una definicion NIP-58 independiente:
   "content": "",
   "tags": [
     ["d", "lacrypta.dev:badge:commerce:rank-1"],
+    ["client", "La Crypta Dev"],
     ["name", "1er Puesto"],
     ["description", "Proyecto ganador de Commerce."],
     ["image", "https://lacrypta.dev/badges/commerce/rank-1.png"],
