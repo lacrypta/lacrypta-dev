@@ -96,6 +96,12 @@ function plainAwardOwner(owner: BadgeAwardOwner): BadgeAwardOwner {
   };
 }
 
+export async function getCachedHackathonBadgePublisherPubkey(): Promise<string> {
+  "use cache";
+  cacheLife("hours");
+  return publisherPubkeyFromNsec();
+}
+
 export async function getCachedHackathonBadgeCatalogSnapshot(
   hackathonId: string,
 ): Promise<CachedHackathonBadgeCatalogSnapshot> {

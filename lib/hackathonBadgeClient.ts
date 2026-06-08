@@ -592,6 +592,10 @@ export async function requestBadgeAward({
         ]),
     ).values(),
   ];
+  const { adminPubkey } = await fetchLacryptaBadgePubkeys();
+  if (signer.pubkey !== adminPubkey) {
+    throw new Error("Solo el admin puede entregar badges.");
+  }
   const request = await signer.signEvent({
     kind: 27235,
     pubkey: signer.pubkey,

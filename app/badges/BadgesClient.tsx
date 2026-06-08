@@ -1624,7 +1624,7 @@ function BadgeDetailModal({
                 )}
               </div>
 
-              {isAdmin ? (
+              {isAdmin && (
                 <div className="rounded-xl border border-nostr/25 bg-nostr/10 p-4">
                   <button
                     type="button"
@@ -1837,10 +1837,6 @@ function BadgeDetailModal({
                       </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-border bg-black/20 p-4 text-sm text-foreground-muted">
-                  El award de badges esta disponible solo para admin.
                 </div>
               )}
             </aside>

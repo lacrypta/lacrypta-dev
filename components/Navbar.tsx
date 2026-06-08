@@ -13,7 +13,6 @@ import {
   Menu,
   X,
   LogIn,
-  Zap,
   LayoutDashboard,
   FolderKanban,
   LogOut,
@@ -31,15 +30,15 @@ import { useToast } from "./Toast";
 type NavLink = {
   href: string;
   label: string;
+  badge?: string;
   external?: boolean;
 };
 
 const NAV_LINKS: NavLink[] = [
   { href: "/hackathons", label: "Hackatones" },
-  { href: "/badges", label: "Badges" },
   { href: "/projects", label: "Proyectos" },
   { href: "/soldados", label: "Soldados" },
-  { href: "/infrastructure", label: "Infra propia" },
+  { href: "/badges", label: "Reconocimientos", badge: "NEW" },
 ];
 
 function isBadgesPath(pathname: string) {
@@ -171,8 +170,9 @@ export default function Navbar() {
                       transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
                     />
                   )}
-                  <span className="relative inline-flex items-center gap-1">
+                  <span className="relative inline-flex items-center gap-2">
                     {link.label}
+                    {link.badge && <NavBadge label={link.badge} />}
                     {link.external && (
                       <ExternalLink className="h-3 w-3 opacity-60" />
                     )}
@@ -344,7 +344,10 @@ export default function Navbar() {
                   );
                   const inner = (
                     <>
-                      <span>{link.label}</span>
+                      <span className="inline-flex items-center gap-2">
+                        {link.label}
+                        {link.badge && <NavBadge label={link.badge} />}
+                      </span>
                       {link.external && (
                         <ExternalLink className="h-4 w-4 opacity-60" />
                       )}
@@ -468,6 +471,14 @@ export default function Navbar() {
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </>
+  );
+}
+
+function NavBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full border border-bitcoin/35 bg-bitcoin/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase leading-none tracking-widest text-bitcoin shadow-[0_0_18px_rgba(255,153,0,0.16)]">
+      {label}
+    </span>
   );
 }
 

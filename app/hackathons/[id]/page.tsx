@@ -17,6 +17,14 @@ import {
   Users,
 } from "lucide-react";
 import {
+  buildHackathonBadgeCatalogContent,
+  type HackathonBadgeCatalog,
+  type HackathonBadgeCatalogBadge,
+} from "@/lib/hackathonBadges";
+import {
+  getCachedHackathonBadgePublisherPubkey,
+} from "@/lib/hackathonBadgeCache";
+import {
   HACKATHONS,
   PROGRAM,
   formatSats,
@@ -29,6 +37,7 @@ import {
   type HackathonSubmission,
   type Sponsor,
 } from "@/lib/hackathons";
+import { getSoldiers, type Soldier } from "@/lib/soldiers";
 import { cn } from "@/lib/cn";
 import { breadcrumbLd, eventLd, jsonLdScript } from "@/lib/jsonld";
 import {
@@ -39,6 +48,7 @@ import {
 import { getCachedNostrProfile } from "@/lib/nostrProfileCache";
 import HackathonProjectsList from "./HackathonProjectsList";
 import HackathonResultsClient from "./HackathonResultsClient";
+import PrizeBadgeButton, { type PrizeBadgeTask } from "./PrizeBadgeButton";
 import PrizeZapButton from "./PrizeZapButton";
 import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
 
@@ -120,6 +130,114 @@ function medal(position: number | null): string {
   if (position === 3) return "🥉";
   if (!position) return "";
   return `#${position}`;
+}
+
+function prizeBadgeMatchesPosition(
+  badge: HackathonBadgeCatalogBadge,
+  position: number,
+): boolean {
+  const criteria = badge.criteria;
+  if (criteria.type === "rank") return criteria.position === position;
+  if (criteria.type === "rank-range") {
+    return position >= criteria.min && position <= criteria.max;
+  }
+  return false;
+}
+
+function prizeBadgesForPosition(
+  catalog: HackathonBadgeCatalog | null,
+  position: number,
+): HackathonBadgeCatalogBadge[] {
+  if (!catalog) return [];
+  return catalog.badges.filter((badge) =>
+    prizeBadgeMatchesPosition(badge, position),
+  );
+}
+
+function projectBadgeRecipient(project: HackathonSubmission): {
+  pubkey: string;
+  name?: string;
+  nip05?: string;
+} | null;
+function projectBadgeRecipient(
+  project: HackathonSubmission,
+  soldierRecipients: Map<string, { pubkey: string; name?: string; nip05?: string }>,
+): {
+  pubkey: string;
+  name?: string;
+  nip05?: string;
+} | null;
+function projectBadgeRecipient(
+  project: HackathonSubmission,
+  soldierRecipients?: Map<string, { pubkey: string; name?: string; nip05?: string }>,
+): {
+  pubkey: string;
+  name?: string;
+  nip05?: string;
+} | null {
+  const member = project.team.find((m) => m.pubkey);
+  if (member?.pubkey) {
+    return {
+      pubkey: member.pubkey,
+      name: member.name || project.name,
+      nip05: member.nip05,
+    };
+  }
+
+  if (!soldierRecipients) return null;
+  for (const teamMember of project.team) {
+    const keys = memberIdentityKeys(teamMember);
+    for (const key of keys) {
+      const recipient = soldierRecipients.get(key);
+      if (recipient) return recipient;
+    }
+  }
+  return null;
+}
+
+function slugifyIdentity(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function memberIdentityKeys(member: {
+  github?: string;
+  pubkey?: string;
+  nip05?: string;
+  name?: string;
+}): string[] {
+  const keys: string[] = [];
+  const github = member.github?.trim().replace(/^@+/, "").toLowerCase();
+  const pubkey = member.pubkey?.trim().toLowerCase();
+  const nip05 = member.nip05?.trim().toLowerCase();
+  const name = member.name ? slugifyIdentity(member.name) : "";
+  if (github) keys.push(`gh:${github}`);
+  if (pubkey) keys.push(`pk:${pubkey}`);
+  if (nip05) keys.push(`nip05:${nip05}`);
+  if (name) keys.push(`name:${name}`);
+  return keys;
+}
+
+function soldierRecipientLookup(
+  soldiers: Soldier[],
+): Map<string, { pubkey: string; name?: string; nip05?: string }> {
+  const lookup = new Map<string, { pubkey: string; name?: string; nip05?: string }>();
+  for (const soldier of soldiers) {
+    if (!soldier.pubkey) continue;
+    const recipient = {
+      pubkey: soldier.pubkey,
+      name: soldier.name,
+      nip05: soldier.nip05,
+    };
+    for (const key of memberIdentityKeys(soldier)) {
+      lookup.set(key, recipient);
+    }
+  }
+  return lookup;
 }
 
 type CachedHackathonSubmission = Awaited<
@@ -343,6 +461,24 @@ export default async function HackathonPage({
   const nostrSubmissions = (await getNostrHackathonSubmissions(id)).map(
     fromCachedNostrSubmission,
   );
+  const prizeBadgeIssuerPubkey =
+    status === "closed"
+      ? await getCachedHackathonBadgePublisherPubkey().catch(() => "")
+      : "";
+  const prizeBadgeCatalog =
+    status === "closed" && prizeBadgeIssuerPubkey
+      ? buildHackathonBadgeCatalogContent(
+          prizeBadgeIssuerPubkey,
+          id,
+          hackathon.name,
+        )
+      : null;
+  const needsSoldierRecipientLookup =
+    status === "closed" &&
+    awards.some((award) => !primaryProjectPubkey(award.project));
+  const prizeSoldierRecipients = needsSoldierRecipientLookup
+    ? soldierRecipientLookup(await getSoldiers().catch(() => []))
+    : new Map<string, { pubkey: string; name?: string; nip05?: string }>();
 
   return (
     <div className="relative">
@@ -443,9 +579,23 @@ export default async function HackathonPage({
                   <ol className="space-y-2">
                     {awards.map((a) => {
                       const recipientPubkey = primaryProjectPubkey(a.project);
+                      const badgeRecipient = projectBadgeRecipient(
+                        a.project,
+                        prizeSoldierRecipients,
+                      );
                       const recipientLightningAddress = recipientPubkey
                         ? prizeProfiles.get(recipientPubkey)?.lud16 ?? null
                         : null;
+                      const prizeBadgeTasks: PrizeBadgeTask[] =
+                        status === "closed" && badgeRecipient
+                          ? prizeBadgesForPosition(
+                              prizeBadgeCatalog,
+                              a.position,
+                            ).map((badge) => ({
+                              badge,
+                              awarded: false,
+                            }))
+                          : [];
                       return (
                         <li
                           key={a.project.id}
@@ -498,6 +648,15 @@ export default async function HackathonPage({
                                   ),
                                 sats: a.prize,
                               }}
+                            />
+                          )}
+                          {badgeRecipient && prizeBadgeTasks.length > 0 && (
+                            <PrizeBadgeButton
+                              hackathonId={hackathon.id}
+                              projectName={a.project.name}
+                              issuerPubkey={prizeBadgeIssuerPubkey}
+                              recipient={badgeRecipient}
+                              tasks={prizeBadgeTasks}
                             />
                           )}
                         </li>
