@@ -56,13 +56,15 @@ export function useBlossomUpload(
   const optsRef = useRef(opts);
   optsRef.current = opts;
 
-  // Don't leak the local blob URL if we unmount mid-upload.
+  // Tracks the in-flight blob URL so the unmount cleanup can revoke it
+  // directly (a setReveal updater may be skipped after unmount).
+  const localUrlRef = useRef<string | null>(null);
   useEffect(
     () => () => {
-      setReveal((prev) => {
-        if (prev) URL.revokeObjectURL(prev.localUrl);
-        return null;
-      });
+      if (localUrlRef.current) {
+        URL.revokeObjectURL(localUrlRef.current);
+        localUrlRef.current = null;
+      }
     },
     [],
   );
@@ -94,6 +96,7 @@ export function useBlossomUpload(
     setUploadingTarget(target);
     // The cropped blob is local immediately — start the reveal at 0%.
     const localUrl = URL.createObjectURL(file);
+    localUrlRef.current = localUrl;
     setReveal({ target, localUrl, percent: 0 });
     let signer: Awaited<ReturnType<typeof getSigner>> | null = null;
     try {
@@ -167,11 +170,13 @@ export function useBlossomUpload(
       await new Promise<void>((res) => window.setTimeout(res, 380));
       setReveal((prev) => (prev && prev.target === target ? null : prev));
       URL.revokeObjectURL(localUrl);
+      if (localUrlRef.current === localUrl) localUrlRef.current = null;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       optsRef.current.onError?.(msg);
       setReveal((prev) => (prev && prev.target === target ? null : prev));
       URL.revokeObjectURL(localUrl);
+      if (localUrlRef.current === localUrl) localUrlRef.current = null;
     } finally {
       signer?.close?.().catch(() => {});
       setUploadingTarget(null);

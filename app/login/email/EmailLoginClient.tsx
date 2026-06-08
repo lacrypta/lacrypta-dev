@@ -17,6 +17,7 @@ export default function EmailLoginClient() {
 
   useEffect(() => {
     let cancelled = false;
+    let redirectTimer: number | undefined;
     const token = searchParams.get("token")?.trim();
     const redirectTo = safeLoginRedirect(
       searchParams.get("next"),
@@ -54,13 +55,13 @@ export default function EmailLoginClient() {
           localSecret: Array.from(decoded.data as Uint8Array),
         });
 
-        // New users have no kind:0 profile yet → send them through the
-        // onboarding wizard before returning to where they were.
+        // New users have no kind:0 profile at all → send them through the
+        // onboarding wizard. Any existing kind:0 event counts as "has profile"
+        // (sparse metadata still means the user already onboarded).
         let hasProfile = false;
         try {
           const existing = await fetchNostrProfile(data.pubkey, undefined, 2500);
-          const p = existing?.profile;
-          hasProfile = Boolean(p && (p.display_name || p.name || p.picture));
+          hasProfile = Boolean(existing);
         } catch {
           /* treat as new user on lookup failure */
         }
@@ -69,10 +70,13 @@ export default function EmailLoginClient() {
         setPhase("success");
         if (hasProfile) {
           setMessage("Listo. Volviendo a donde estabas...");
-          window.setTimeout(() => router.replace(redirectTo), 600);
+          redirectTimer = window.setTimeout(
+            () => router.replace(redirectTo),
+            600,
+          );
         } else {
           setMessage("Vamos a crear tu perfil...");
-          window.setTimeout(
+          redirectTimer = window.setTimeout(
             () =>
               router.replace(
                 `/onboarding?next=${encodeURIComponent(redirectTo)}`,
@@ -92,6 +96,7 @@ export default function EmailLoginClient() {
     consume();
     return () => {
       cancelled = true;
+      if (redirectTimer !== undefined) window.clearTimeout(redirectTimer);
     };
   }, [router, searchParams]);
 

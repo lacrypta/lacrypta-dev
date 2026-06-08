@@ -138,7 +138,12 @@ export default function OnboardingClient() {
   }, [step, initialized]);
 
   const busy =
-    phase === "rasterizing" || phase === "uploading" || phase === "publishing";
+    phase === "rasterizing" ||
+    phase === "uploading" ||
+    phase === "publishing" ||
+    // An in-flight custom avatar/banner upload must finish before we publish,
+    // otherwise kind:0 could be written with a stale picture/banner URL.
+    upload.uploadingTarget !== null;
 
   async function handleFinish() {
     if (!auth || busy) return;

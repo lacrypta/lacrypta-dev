@@ -101,12 +101,15 @@ export default function LoginModal({
   useEffect(() => {
     if (!open) return;
     // Snapshot the destination at open time (explicit prop wins, otherwise the
-    // current URL behind the modal). Used for both nostr and email flows.
+    // current URL behind the modal). Deliberately keyed on `open` only so a
+    // later `redirectTo` change while the modal stays open can't move the
+    // target mid-session. Used for both nostr and email flows.
     redirectToRef.current = safeLoginRedirect(
       redirectTo ?? currentLoginRedirect(),
       DEFAULT_LOGIN_REDIRECT,
     );
-  }, [open, redirectTo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
