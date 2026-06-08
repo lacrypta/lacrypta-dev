@@ -21,13 +21,9 @@ export async function GET(req: Request) {
       await getCachedHackathonBadgeOwnersSnapshot(aTag, issuer || undefined),
     );
   } catch (error) {
+    console.error("[api/hackathon-badges/owners] failed", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "No se pudieron buscar owners de badge.",
-      },
+      { error: "No se pudieron buscar owners de badge." },
       { status: 500 },
     );
   }

@@ -41,7 +41,7 @@ Ejemplo para Commerce:
 ```json
 [
   ["d", "lacrypta.dev:hackathon-badges:commerce"],
-  ["client", "lacrypta.dev"],
+  ["client", "La Crypta Dev"],
   ["hackathon", "commerce"],
   ["schema", "lacrypta.dev/hackathon-badges", "1"],
   ["title", "Badges Commerce"],
@@ -255,7 +255,7 @@ lacrypta.dev:badge:commerce:great-pitch
   "content": "{\"version\":1,\"hackathon\":\"commerce\",\"title\":\"Badges Commerce\",\"categories\":[{\"id\":\"ranking\",\"label\":\"Ranking\"},{\"id\":\"favorites\",\"label\":\"Favoritos\"},{\"id\":\"specials\",\"label\":\"Especiales\"},{\"id\":\"streaks\",\"label\":\"Rachas\"}],\"badges\":[{\"id\":\"rank-1\",\"category\":\"ranking\",\"definition\":\"30009:<issuer-pubkey>:lacrypta.dev:badge:commerce:rank-1\",\"name\":\"1er Puesto\",\"description\":\"Proyecto ganador de Commerce.\",\"criteria\":{\"type\":\"rank\",\"position\":1}}]}",
   "tags": [
     ["d", "lacrypta.dev:hackathon-badges:commerce"],
-    ["client", "lacrypta.dev"],
+    ["client", "La Crypta Dev"],
     ["hackathon", "commerce"],
     ["schema", "lacrypta.dev/hackathon-badges", "1"],
     ["title", "Badges Commerce"],

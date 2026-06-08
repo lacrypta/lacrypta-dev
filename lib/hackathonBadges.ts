@@ -6,6 +6,7 @@ export const HACKATHON_BADGE_SCHEMA = "lacrypta.dev/hackathon-badges";
 export const HACKATHON_BADGE_SCHEMA_VERSION = 1;
 export const HACKATHON_BADGE_CATALOG_TAG = "lacrypta-dev-hackathon-badges";
 export const HACKATHON_BADGE_DEFINITION_TAG = "lacrypta-dev-hackathon-badge";
+export const LACRYPTA_NOSTR_CLIENT_TAG = "La Crypta Dev";
 
 export type KnownHackathonBadgeCategoryId =
   | "ranking"
@@ -380,10 +381,12 @@ export function mergeHackathonBadgeTemplates(
 ): HackathonBadgeTemplate[] {
   const byId = new Map<string, HackathonBadgeTemplate>();
   for (const badge of existing) {
-    byId.set(badge.id, normalizeHackathonBadgeTemplate(badge));
+    const normalized = normalizeHackathonBadgeTemplate(badge);
+    byId.set(normalized.id, normalized);
   }
   for (const badge of additions) {
-    byId.set(badge.id, normalizeHackathonBadgeTemplate(badge));
+    const normalized = normalizeHackathonBadgeTemplate(badge);
+    byId.set(normalized.id, normalized);
   }
   return [...byId.values()];
 }
@@ -470,7 +473,7 @@ export function buildHackathonBadgeCatalogEvent(
     content: JSON.stringify(catalog),
     tags: [
       ["d", hackathonBadgeCatalogDTag(hackathonId)],
-      ["client", "lacrypta.dev"],
+      ["client", LACRYPTA_NOSTR_CLIENT_TAG],
       ["hackathon", hackathonId],
       ["schema", HACKATHON_BADGE_SCHEMA, String(HACKATHON_BADGE_SCHEMA_VERSION)],
       ["title", catalog.title],

@@ -1,13 +1,13 @@
-import type { SignedEvent } from "./nostrSigner";
 import type { Filter } from "nostr-tools";
-import { DEFAULT_RELAYS, mergeDataRelays } from "./nostrRelayConfig";
+import type { SignedEvent } from "@/lib/nostrSigner";
+import { DEFAULT_RELAYS, mergeDataRelays } from "@/lib/nostrRelayConfig";
 import {
   HACKATHON_BADGE_CATALOG_KIND,
   HACKATHON_BADGE_DEFINITION_KIND,
   hackathonBadgeCatalogDTag,
   parseHackathonBadgeCatalogEvent,
   type HackathonBadgeCatalogEvent,
-} from "./hackathonBadges";
+} from "@/lib/hackathonBadges";
 
 export type BadgeDefinitionEvent = SignedEvent & {
   parsed: {
@@ -63,11 +63,21 @@ async function collectRelayEvents(
   timeoutMs = 5000,
 ): Promise<SignedEvent[]> {
   const { SimplePool } = await import("nostr-tools/pool");
+  const { verifyEvent } = await import("nostr-tools/pure");
   const pool = new SimplePool();
   const readRelays = mergeDataRelays(relays);
   const events: SignedEvent[] = [];
+  const maxCreatedAt = Math.floor(Date.now() / 1000) + 10 * 60;
   const closer = pool.subscribe(readRelays, filter, {
     onevent(ev: SignedEvent) {
+      if (!verifyEvent(ev) || ev.created_at > maxCreatedAt) {
+        console.warn("[hackathonBadgeRelay] dropped invalid event", {
+          id: ev.id,
+          kind: ev.kind,
+          pubkey: ev.pubkey,
+        });
+        return;
+      }
       events.push(ev);
     },
   });

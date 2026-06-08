@@ -24,6 +24,10 @@ function firstDate(hackathon: Hackathon) {
 }
 
 function pickFeaturedHackathon(now: Date) {
+  if (HACKATHONS.length === 0) {
+    throw new Error("No hay hackatones configuradas.");
+  }
+
   const active = HACKATHONS.find(
     (hackathon) => hackathonStatus(hackathon, now) === "active",
   );

@@ -18,13 +18,9 @@ export async function GET(req: Request) {
       await getCachedHackathonBadgeCatalogSnapshot(hackathonId),
     );
   } catch (error) {
+    console.error("[api/hackathon-badges/catalog] failed", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "No se pudo buscar catalogo de badges.",
-      },
+      { error: "No se pudo buscar catalogo de badges." },
       { status: 500 },
     );
   }

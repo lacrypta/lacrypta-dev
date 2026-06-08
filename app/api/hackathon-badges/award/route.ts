@@ -4,6 +4,7 @@ import type { SignedEvent } from "@/lib/nostrSigner";
 import type { HackathonBadgeCatalogBadge } from "@/lib/hackathonBadges";
 import {
   HACKATHON_BADGE_DEFINITION_KIND,
+  LACRYPTA_NOSTR_CLIENT_TAG,
   normalizeHackathonBadgeId,
 } from "@/lib/hackathonBadges";
 
@@ -175,7 +176,7 @@ export async function POST(req: Request) {
             ["hackathon", hackathon.id],
             ["badge", badge.id],
             ["category", badge.category],
-            ["client", "lacrypta.dev"],
+            ["client", LACRYPTA_NOSTR_CLIENT_TAG],
             ["name", recipient.name],
             ["nip05", recipient.nip05],
           ].filter((tag) => tag[1]),
@@ -190,9 +191,7 @@ export async function POST(req: Request) {
       count: events.length,
     });
   } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : "No se pudo otorgar badge.",
-      500,
-    );
+    console.error("[api/hackathon-badges/award] failed", error);
+    return jsonError("No se pudo otorgar badge.", 500);
   }
 }

@@ -409,7 +409,6 @@ export default function BadgesClient({
         signer,
         badges,
         categories,
-        existingCatalog: state.catalog,
       });
 
       setCreateFlow({
@@ -511,7 +510,7 @@ export default function BadgesClient({
                 className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-bitcoin/35 bg-bitcoin px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-lightning"
               >
                 <PlusCircle className="h-4 w-4" />
-                Create Badge
+                Crear reconocimiento
               </button>
             )}
           </div>

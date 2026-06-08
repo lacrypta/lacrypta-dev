@@ -32,13 +32,9 @@ export async function POST(req: Request) {
       await getCachedHackathonBadgeDefinitionsSnapshot(aTags),
     );
   } catch (error) {
+    console.error("[api/hackathon-badges/definitions] failed", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "No se pudieron buscar definiciones de badges.",
-      },
+      { error: "No se pudieron buscar definiciones de badges." },
       { status: 500 },
     );
   }

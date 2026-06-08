@@ -1,13 +1,13 @@
 export const DEFAULT_LOGIN_REDIRECT = "/dashboard";
 
 export function safeLoginRedirect(
-  value?: string | null,
+  value?: unknown,
   fallback = DEFAULT_LOGIN_REDIRECT,
 ): string {
-  const candidate = value?.trim();
+  const candidate = typeof value === "string" ? value.trim() : "";
   if (!candidate) return fallback;
   if (!candidate.startsWith("/") || candidate.startsWith("//")) return fallback;
-  if (candidate.startsWith("/api/")) return fallback;
+  if (candidate === "/api" || candidate.startsWith("/api/")) return fallback;
   if (candidate.startsWith("/login/email")) return fallback;
   if (/[\u0000-\u001f\u007f]/u.test(candidate)) return fallback;
   return candidate;

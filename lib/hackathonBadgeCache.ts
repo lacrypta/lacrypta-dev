@@ -1,19 +1,19 @@
 import { cacheLife, cacheTag } from "next/cache";
-import { DEFAULT_RELAYS } from "./nostrRelayConfig";
+import { DEFAULT_RELAYS } from "@/lib/nostrRelayConfig";
 import {
   fetchHackathonBadgeAwardOwnersFromRelays,
   fetchHackathonBadgeCatalogFromRelays,
   fetchHackathonBadgeDefinitionsFromRelays,
   type BadgeAwardOwner,
   type BadgeDefinitionEvent,
-} from "./hackathonBadgeRelay";
-import type { HackathonBadgeCatalogEvent } from "./hackathonBadges";
+} from "@/lib/hackathonBadgeRelay";
+import type { HackathonBadgeCatalogEvent } from "@/lib/hackathonBadges";
 import {
   nostrHackathonBadgeDefinitionTag,
   nostrHackathonBadgeOwnersTag,
   nostrHackathonBadgesTag,
-} from "./nostrCacheTags";
-import type { SignedEvent } from "./nostrSigner";
+} from "@/lib/nostrCacheTags";
+import type { SignedEvent } from "@/lib/nostrSigner";
 
 export type CachedHackathonBadgeCatalogSnapshot = {
   hackathonId: string;
@@ -123,14 +123,9 @@ export async function getCachedHackathonBadgeCatalogSnapshot(
       generatedAt: new Date().toISOString(),
       relays: DEFAULT_RELAYS,
     };
-  } catch {
-    return {
-      hackathonId,
-      publisherPubkey,
-      catalogEvent: null,
-      generatedAt: new Date().toISOString(),
-      relays: DEFAULT_RELAYS,
-    };
+  } catch (error) {
+    console.error("[hackathonBadgeCache] catalog snapshot failed", error);
+    throw error;
   }
 }
 
@@ -139,7 +134,9 @@ export async function getCachedHackathonBadgeDefinitionsSnapshot(
 ): Promise<CachedHackathonBadgeDefinitionsSnapshot> {
   "use cache";
   cacheLife("hours");
-  const cleanATags = [...new Set(aTags.map((tag) => tag.trim()).filter(Boolean))];
+  const cleanATags = [
+    ...new Set(aTags.map((tag) => tag.trim()).filter(Boolean)),
+  ].sort();
   if (cleanATags.length > 0) {
     cacheTag(...cleanATags.map(nostrHackathonBadgeDefinitionTag));
   }
@@ -152,12 +149,9 @@ export async function getCachedHackathonBadgeDefinitionsSnapshot(
       generatedAt: new Date().toISOString(),
       relays: DEFAULT_RELAYS,
     };
-  } catch {
-    return {
-      definitions: {},
-      generatedAt: new Date().toISOString(),
-      relays: DEFAULT_RELAYS,
-    };
+  } catch (error) {
+    console.error("[hackathonBadgeCache] definitions snapshot failed", error);
+    throw error;
   }
 }
 
@@ -179,13 +173,8 @@ export async function getCachedHackathonBadgeOwnersSnapshot(
       generatedAt: new Date().toISOString(),
       relays: DEFAULT_RELAYS,
     };
-  } catch {
-    return {
-      aTag,
-      issuerPubkey,
-      owners: [],
-      generatedAt: new Date().toISOString(),
-      relays: DEFAULT_RELAYS,
-    };
+  } catch (error) {
+    console.error("[hackathonBadgeCache] owners snapshot failed", error);
+    throw error;
   }
 }

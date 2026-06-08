@@ -506,13 +506,11 @@ export async function requestBadgeCreate({
   signer,
   badges,
   categories,
-  existingCatalog,
 }: {
   hackathonId: string;
   signer: BadgeRequestSigner;
   badges: HackathonBadgeTemplate[];
   categories?: HackathonBadgeCategory[];
-  existingCatalog?: HackathonBadgeCatalog | null;
 }): Promise<{
   events: SignedEvent[];
   publisherPubkey: string;
@@ -544,7 +542,6 @@ export async function requestBadgeCreate({
       request,
       badges: normalizedBadges,
       categories,
-      existingCatalog,
     }),
   });
   const data = (await res.json()) as {

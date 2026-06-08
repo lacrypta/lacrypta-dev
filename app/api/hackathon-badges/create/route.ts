@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getHackathon } from "@/lib/hackathons";
+import { getCachedHackathonBadgeCatalogSnapshot } from "@/lib/hackathonBadgeCache";
 import type { SignedEvent } from "@/lib/nostrSigner";
 import {
   HACKATHON_BADGE_SCHEMA_VERSION,
@@ -22,7 +23,6 @@ type CreateBody = {
   request?: SignedEvent;
   badges?: HackathonBadgeTemplate[];
   categories?: HackathonBadgeCategory[];
-  existingCatalog?: HackathonBadgeCatalog | null;
 };
 
 const MAX_BADGES_PER_REQUEST = 32;
@@ -193,14 +193,17 @@ export async function POST(req: Request) {
       }
     }
 
+    const currentCatalog =
+      (await getCachedHackathonBadgeCatalogSnapshot(hackathonId)).catalogEvent
+        ?.catalog ?? null;
     const categories = ensureHackathonBadgeCategories(additions, [
-      ...existingCategories(body.existingCatalog),
+      ...existingCategories(currentCatalog),
       ...((Array.isArray(body.categories) ? body.categories : [])
         .map(parseCategory)
         .filter(Boolean) as HackathonBadgeCategory[]),
     ]);
     const mergedBadges = mergeHackathonBadgeTemplates(
-      existingTemplates(body.existingCatalog),
+      existingTemplates(currentCatalog),
       additions,
     );
     const createdAt = Math.floor(Date.now() / 1000);
@@ -239,9 +242,7 @@ export async function POST(req: Request) {
       catalog: JSON.parse(events[events.length - 1]?.content ?? "null"),
     });
   } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : "No se pudieron crear badges.",
-      500,
-    );
+    console.error("[api/hackathon-badges/create] failed", error);
+    return jsonError("No se pudieron crear badges.", 500);
   }
 }

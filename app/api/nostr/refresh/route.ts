@@ -46,8 +46,22 @@ type RefreshBody = {
   blocking?: boolean;
 };
 
+const MAX_REFRESH_ATAGS = 50;
+
 function expireTag(tag: string) {
   revalidateTag(tag, { expire: 0 });
+}
+
+function parseRefreshATags(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value
+        .filter((tag): tag is string => typeof tag === "string")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0 && tag.length <= 220),
+    ),
+  ].slice(0, MAX_REFRESH_ATAGS);
 }
 
 export async function POST(req: NextRequest) {
@@ -112,12 +126,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const aTags = Array.isArray(body.aTags)
-    ? body.aTags
-        .filter((tag): tag is string => typeof tag === "string")
-        .map((tag) => tag.trim())
-        .filter(Boolean)
-    : [];
+  const aTags = parseRefreshATags(body.aTags);
   if (aTags.length > 0) {
     if (scopes.includes("hackathon-badge-definitions")) {
       for (const aTag of aTags) expire(nostrHackathonBadgeDefinitionTag(aTag));
