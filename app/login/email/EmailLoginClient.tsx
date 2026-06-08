@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { setAuth } from "@/lib/auth";
 import { DEFAULT_LOGIN_REDIRECT, safeLoginRedirect } from "@/lib/loginRedirect";
+import { fetchNostrProfile } from "@/lib/nostrProfile";
 
 type Phase = "loading" | "success" | "error";
 
@@ -16,6 +17,7 @@ export default function EmailLoginClient() {
 
   useEffect(() => {
     let cancelled = false;
+    let redirectTimer: number | undefined;
     const token = searchParams.get("token")?.trim();
     const redirectTo = safeLoginRedirect(
       searchParams.get("next"),
@@ -52,9 +54,36 @@ export default function EmailLoginClient() {
           pubkey: data.pubkey,
           localSecret: Array.from(decoded.data as Uint8Array),
         });
+
+        // New users have no kind:0 profile at all → send them through the
+        // onboarding wizard. Any existing kind:0 event counts as "has profile"
+        // (sparse metadata still means the user already onboarded).
+        let hasProfile = false;
+        try {
+          const existing = await fetchNostrProfile(data.pubkey, undefined, 2500);
+          hasProfile = Boolean(existing);
+        } catch {
+          /* treat as new user on lookup failure */
+        }
+        if (cancelled) return;
+
         setPhase("success");
-        setMessage("Listo. Volviendo a donde estabas...");
-        window.setTimeout(() => router.replace(redirectTo), 600);
+        if (hasProfile) {
+          setMessage("Listo. Volviendo a donde estabas...");
+          redirectTimer = window.setTimeout(
+            () => router.replace(redirectTo),
+            600,
+          );
+        } else {
+          setMessage("Vamos a crear tu perfil...");
+          redirectTimer = window.setTimeout(
+            () =>
+              router.replace(
+                `/onboarding?next=${encodeURIComponent(redirectTo)}`,
+              ),
+            600,
+          );
+        }
       } catch (error) {
         if (cancelled) return;
         setPhase("error");
@@ -67,6 +96,7 @@ export default function EmailLoginClient() {
     consume();
     return () => {
       cancelled = true;
+      if (redirectTimer !== undefined) window.clearTimeout(redirectTimer);
     };
   }, [router, searchParams]);
 

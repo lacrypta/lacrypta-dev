@@ -64,7 +64,9 @@ export default function LoginModal({
 }) {
   const router = useRouter();
   const { push: pushToast } = useToast();
-  const [method, setMethod] = useState<Method>("nostr");
+  // Email is the default entry point; if a NIP-07 extension is detected we
+  // switch to Nostr and auto-connect (see the detection effect below).
+  const [method, setMethod] = useState<Method>("email");
   const [email, setEmail] = useState("");
   const [emailState, setEmailState] = useState<EmailState>("idle");
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -84,6 +86,9 @@ export default function LoginModal({
   const [nip07Loading, setNip07Loading] = useState(false);
   const signerRef = useRef<BunkerSignerType | Nip46Client | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // URL snapshot taken when the modal opens, so we return the user to the page
+  // they were on when they started logging in (nostr or email).
+  const redirectToRef = useRef<string>(DEFAULT_LOGIN_REDIRECT);
 
   function pushDiag(msg: string) {
     const stamp = new Date().toLocaleTimeString("es-AR", { hour12: false });
@@ -92,6 +97,19 @@ export default function LoginModal({
   }
 
   useScrollLock(open);
+
+  useEffect(() => {
+    if (!open) return;
+    // Snapshot the destination at open time (explicit prop wins, otherwise the
+    // current URL behind the modal). Deliberately keyed on `open` only so a
+    // later `redirectTo` change while the modal stays open can't move the
+    // target mid-session. Used for both nostr and email flows.
+    redirectToRef.current = safeLoginRedirect(
+      redirectTo ?? currentLoginRedirect(),
+      DEFAULT_LOGIN_REDIRECT,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -108,11 +126,19 @@ export default function LoginModal({
     if (!open) return;
     setNip07("checking");
     let cancelled = false;
+    // Extensions inject `window.nostr` asynchronously, so we check on open and
+    // again after a short delay. The first time we see it, switch to Nostr and
+    // kick off the connection automatically.
+    let autoTried = false;
     const check = () => {
       if (cancelled) return;
-      setNip07(
-        typeof window !== "undefined" && window.nostr ? "available" : "missing",
-      );
+      const available = typeof window !== "undefined" && !!window.nostr;
+      setNip07(available ? "available" : "missing");
+      if (available && !autoTried) {
+        autoTried = true;
+        setMethod("nostr");
+        void handleNip07();
+      }
     };
     check();
     const t = window.setTimeout(check, 400);
@@ -120,6 +146,9 @@ export default function LoginModal({
       cancelled = true;
       window.clearTimeout(t);
     };
+    // handleNip07 is a stable component-scoped declaration; we only want this
+    // to run when the modal opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
@@ -141,13 +170,12 @@ export default function LoginModal({
     setNip07Loading(false);
     setEmailState("idle");
     setEmailError(null);
+    // Back to the default entry point for the next open.
+    setMethod("email");
   }, [open]);
 
   function resolveRedirectTo() {
-    return safeLoginRedirect(
-      redirectTo ?? currentLoginRedirect(),
-      DEFAULT_LOGIN_REDIRECT,
-    );
+    return redirectToRef.current;
   }
 
   function navigateAfterLogin() {
