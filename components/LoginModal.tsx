@@ -24,6 +24,11 @@ import { setAuth } from "@/lib/auth";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { useToast } from "./Toast";
 import { NIP46_LOGIN_RELAYS } from "@/lib/nostrRelayConfig";
+import {
+  DEFAULT_LOGIN_REDIRECT,
+  currentLoginRedirect,
+  safeLoginRedirect,
+} from "@/lib/loginRedirect";
 import { cn } from "@/lib/cn";
 import type { BunkerSigner as BunkerSignerType } from "nostr-tools/nip46";
 import { Nip46Client, type EncryptionVersion } from "@/lib/nip46Client";
@@ -51,7 +56,7 @@ const nclog = (...args: unknown[]) => {
 export default function LoginModal({
   open,
   onClose,
-  redirectTo = "/dashboard",
+  redirectTo,
 }: {
   open: boolean;
   onClose: () => void;
@@ -138,9 +143,23 @@ export default function LoginModal({
     setEmailError(null);
   }, [open]);
 
+  function resolveRedirectTo() {
+    return safeLoginRedirect(
+      redirectTo ?? currentLoginRedirect(),
+      DEFAULT_LOGIN_REDIRECT,
+    );
+  }
+
+  function navigateAfterLogin() {
+    const target = resolveRedirectTo();
+    if (target !== currentLoginRedirect()) {
+      router.push(target);
+    }
+  }
+
   function finishLogin() {
     setNcState("connected");
-    router.push(redirectTo);
+    navigateAfterLogin();
     onClose();
   }
 
@@ -175,7 +194,7 @@ export default function LoginModal({
         return;
       }
       setAuth({ method: "nip07", pubkey });
-      router.push(redirectTo);
+      navigateAfterLogin();
       onClose();
     } catch {
       setNip07Loading(false);
@@ -192,7 +211,10 @@ export default function LoginModal({
       const res = await fetch("/api/auth/email/request", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: normalized }),
+        body: JSON.stringify({
+          email: normalized,
+          redirectTo: resolveRedirectTo(),
+        }),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
@@ -232,7 +254,7 @@ export default function LoginModal({
         description: `${npub.slice(0, 14)}…${npub.slice(-6)} · la clave queda en localStorage (sólo dev).`,
         duration: 8000,
       });
-      router.push(redirectTo);
+      navigateAfterLogin();
       onClose();
     } catch (e) {
       pushToast({

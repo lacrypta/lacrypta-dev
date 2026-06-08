@@ -13,7 +13,6 @@ import {
   Menu,
   X,
   LogIn,
-  Zap,
   LayoutDashboard,
   FolderKanban,
   LogOut,
@@ -31,6 +30,7 @@ import { useToast } from "./Toast";
 type NavLink = {
   href: string;
   label: string;
+  badge?: string;
   external?: boolean;
 };
 
@@ -38,8 +38,20 @@ const NAV_LINKS: NavLink[] = [
   { href: "/hackathons", label: "Hackatones" },
   { href: "/projects", label: "Proyectos" },
   { href: "/soldados", label: "Soldados" },
-  { href: "/infrastructure", label: "Infra propia" },
+  { href: "/badges", label: "Reconocimientos", badge: "NEW" },
 ];
+
+function isBadgesPath(pathname: string) {
+  return pathname === "/badges";
+}
+
+function isActiveNavLink(link: NavLink, pathname: string) {
+  if (link.external) return false;
+  if (link.href === "/") return pathname === "/";
+  if (link.href === "/badges") return isBadgesPath(pathname);
+  if (link.href === "/hackathons" && isBadgesPath(pathname)) return false;
+  return pathname === link.href || pathname.startsWith(`${link.href}/`);
+}
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -142,12 +154,7 @@ export default function Navbar() {
 
           <div className="hidden lg:flex items-center gap-1">
             {NAV_LINKS.map((link) => {
-              const active =
-                link.external
-                  ? false
-                  : link.href === "/"
-                    ? pathname === "/"
-                    : pathname.startsWith(link.href);
+              const active = isActiveNavLink(link, pathname);
               const className = cn(
                 "relative px-4 py-2 text-sm font-medium rounded-lg transition-colors",
                 active
@@ -163,8 +170,9 @@ export default function Navbar() {
                       transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
                     />
                   )}
-                  <span className="relative inline-flex items-center gap-1">
+                  <span className="relative inline-flex items-center gap-2">
                     {link.label}
+                    {link.badge && <NavBadge label={link.badge} />}
                     {link.external && (
                       <ExternalLink className="h-3 w-3 opacity-60" />
                     )}
@@ -327,12 +335,7 @@ export default function Navbar() {
             >
               <div className="flex flex-col gap-1 mb-8">
                 {NAV_LINKS.map((link, i) => {
-                  const active =
-                    link.external
-                      ? false
-                      : link.href === "/"
-                        ? pathname === "/"
-                        : pathname.startsWith(link.href);
+                  const active = isActiveNavLink(link, pathname);
                   const itemClass = cn(
                     "flex items-center justify-between gap-2 px-4 py-3 rounded-lg text-base font-medium transition-colors",
                     active
@@ -341,7 +344,10 @@ export default function Navbar() {
                   );
                   const inner = (
                     <>
-                      <span>{link.label}</span>
+                      <span className="inline-flex items-center gap-2">
+                        {link.label}
+                        {link.badge && <NavBadge label={link.badge} />}
+                      </span>
                       {link.external && (
                         <ExternalLink className="h-4 w-4 opacity-60" />
                       )}
@@ -465,6 +471,14 @@ export default function Navbar() {
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </>
+  );
+}
+
+function NavBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full border border-bitcoin/35 bg-bitcoin/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase leading-none tracking-widest text-bitcoin shadow-[0_0_18px_rgba(255,153,0,0.16)]">
+      {label}
+    </span>
   );
 }
 

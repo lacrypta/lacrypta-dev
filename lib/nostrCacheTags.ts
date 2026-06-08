@@ -16,3 +16,15 @@ export function nostrBadgesTag(pubkey: string) {
 export function nostrReportsTag(hackathonId: string) {
   return `nostr:reports:${hackathonId}`;
 }
+
+export function nostrHackathonBadgesTag(hackathonId: string) {
+  return `nostr:hackathon-badges:${hackathonId}`;
+}
+
+export function nostrHackathonBadgeDefinitionTag(aTag: string) {
+  return `nostr:hackathon-badge-definition:${aTag}`;
+}
+
+export function nostrHackathonBadgeOwnersTag(aTag: string) {
+  return `nostr:hackathon-badge-owners:${aTag}`;
+}

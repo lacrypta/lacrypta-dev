@@ -7,11 +7,19 @@ import {
 import {
   NOSTR_LEGACY_SUBMISSIONS_TAG,
   NOSTR_PROJECTS_TAG,
+  nostrHackathonBadgeDefinitionTag,
+  nostrHackathonBadgeOwnersTag,
+  nostrHackathonBadgesTag,
   nostrBadgesTag,
   nostrProfileTag,
   nostrRelayListTag,
   nostrReportsTag,
 } from "@/lib/nostrCacheTags";
+import {
+  getCachedHackathonBadgeCatalogSnapshot,
+  getCachedHackathonBadgeDefinitionsSnapshot,
+  getCachedHackathonBadgeOwnersSnapshot,
+} from "@/lib/hackathonBadgeCache";
 import { projectMatchesIdentifier } from "@/lib/projectIdentity";
 
 type RefreshScope =
@@ -19,6 +27,9 @@ type RefreshScope =
   | "profile"
   | "relay-list"
   | "badges"
+  | "hackathon-badges"
+  | "hackathon-badge-definitions"
+  | "hackathon-badge-owners"
   | "reports"
   | "results";
 
@@ -28,13 +39,29 @@ type RefreshBody = {
   projectId?: string;
   author?: string;
   pubkey?: string;
+  issuerPubkey?: string;
+  aTags?: string[];
   candidateEventId?: string;
   candidateCreatedAt?: number;
   blocking?: boolean;
 };
 
+const MAX_REFRESH_ATAGS = 50;
+
 function expireTag(tag: string) {
   revalidateTag(tag, { expire: 0 });
+}
+
+function parseRefreshATags(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value
+        .filter((tag): tag is string => typeof tag === "string")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0 && tag.length <= 220),
+    ),
+  ].slice(0, MAX_REFRESH_ATAGS);
 }
 
 export async function POST(req: NextRequest) {
@@ -87,8 +114,42 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.hackathonId) {
+    if (scopes.includes("hackathon-badges")) {
+      expire(nostrHackathonBadgesTag(body.hackathonId));
+      if (body.blocking !== false) {
+        refreshed.hackathonBadges =
+          await getCachedHackathonBadgeCatalogSnapshot(body.hackathonId);
+      }
+    }
     if (scopes.includes("reports") || scopes.includes("results")) {
       expire(nostrReportsTag(body.hackathonId));
+    }
+  }
+
+  const aTags = parseRefreshATags(body.aTags);
+  if (aTags.length > 0) {
+    if (scopes.includes("hackathon-badge-definitions")) {
+      for (const aTag of aTags) expire(nostrHackathonBadgeDefinitionTag(aTag));
+      if (body.blocking !== false) {
+        refreshed.hackathonBadgeDefinitions =
+          await getCachedHackathonBadgeDefinitionsSnapshot(aTags);
+      }
+    }
+    if (scopes.includes("hackathon-badge-owners")) {
+      for (const aTag of aTags) expire(nostrHackathonBadgeOwnersTag(aTag));
+      if (body.blocking !== false) {
+        refreshed.hackathonBadgeOwners = Object.fromEntries(
+          await Promise.all(
+            aTags.map(async (aTag) => [
+              aTag,
+              await getCachedHackathonBadgeOwnersSnapshot(
+                aTag,
+                body.issuerPubkey,
+              ),
+            ]),
+          ),
+        );
+      }
     }
   }
 

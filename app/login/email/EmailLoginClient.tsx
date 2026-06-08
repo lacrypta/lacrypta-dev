@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { setAuth } from "@/lib/auth";
+import { DEFAULT_LOGIN_REDIRECT, safeLoginRedirect } from "@/lib/loginRedirect";
 
 type Phase = "loading" | "success" | "error";
 
@@ -16,6 +17,10 @@ export default function EmailLoginClient() {
   useEffect(() => {
     let cancelled = false;
     const token = searchParams.get("token")?.trim();
+    const redirectTo = safeLoginRedirect(
+      searchParams.get("next"),
+      DEFAULT_LOGIN_REDIRECT,
+    );
     if (!token) {
       setPhase("error");
       setMessage("El enlace no incluye token de ingreso.");
@@ -48,8 +53,8 @@ export default function EmailLoginClient() {
           localSecret: Array.from(decoded.data as Uint8Array),
         });
         setPhase("success");
-        setMessage("Listo. Entrando a tu dashboard...");
-        window.setTimeout(() => router.replace("/dashboard"), 600);
+        setMessage("Listo. Volviendo a donde estabas...");
+        window.setTimeout(() => router.replace(redirectTo), 600);
       } catch (error) {
         if (cancelled) return;
         setPhase("error");

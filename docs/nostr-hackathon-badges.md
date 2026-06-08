@@ -41,7 +41,7 @@ Ejemplo para Commerce:
 ```json
 [
   ["d", "lacrypta.dev:hackathon-badges:commerce"],
-  ["client", "lacrypta.dev"],
+  ["client", "La Crypta Dev"],
   ["hackathon", "commerce"],
   ["schema", "lacrypta.dev/hackathon-badges", "1"],
   ["title", "Badges Commerce"],
@@ -129,6 +129,7 @@ Cada badge del catalogo debe tener una definicion NIP-58 independiente:
   "content": "",
   "tags": [
     ["d", "lacrypta.dev:badge:commerce:rank-1"],
+    ["client", "La Crypta Dev"],
     ["name", "1er Puesto"],
     ["description", "Proyecto ganador de Commerce."],
     ["image", "https://lacrypta.dev/badges/commerce/rank-1.png"],
@@ -255,7 +256,7 @@ lacrypta.dev:badge:commerce:great-pitch
   "content": "{\"version\":1,\"hackathon\":\"commerce\",\"title\":\"Badges Commerce\",\"categories\":[{\"id\":\"ranking\",\"label\":\"Ranking\"},{\"id\":\"favorites\",\"label\":\"Favoritos\"},{\"id\":\"specials\",\"label\":\"Especiales\"},{\"id\":\"streaks\",\"label\":\"Rachas\"}],\"badges\":[{\"id\":\"rank-1\",\"category\":\"ranking\",\"definition\":\"30009:<issuer-pubkey>:lacrypta.dev:badge:commerce:rank-1\",\"name\":\"1er Puesto\",\"description\":\"Proyecto ganador de Commerce.\",\"criteria\":{\"type\":\"rank\",\"position\":1}}]}",
   "tags": [
     ["d", "lacrypta.dev:hackathon-badges:commerce"],
-    ["client", "lacrypta.dev"],
+    ["client", "La Crypta Dev"],
     ["hackathon", "commerce"],
     ["schema", "lacrypta.dev/hackathon-badges", "1"],
     ["title", "Badges Commerce"],
@@ -293,6 +294,59 @@ Ejemplo:
 }
 ```
 
+Desde `/badges`, cada badge del catalogo abre un modal con:
+
+- la definicion publicada `kind: 30009`, formateada como JSON;
+- los owners actuales, leidos desde awards `kind: 8` que tienen `#a` apuntando
+  a esa definicion;
+- un flujo admin para otorgar el badge a uno o multiples usuarios.
+
+El flujo admin permite seleccionar soldados con pubkey Nostr, o agregar un
+receptor resolviendo un `nip05`. El backend no acepta pubkeys libres sin firma
+admin: el browser primero firma un request efimero y luego el backend firma los
+awards oficiales con `LACRYPTA_NSEC`.
+
+Endpoint:
+
+```txt
+POST /api/hackathon-badges/award
+```
+
+Body:
+
+```json
+{
+  "hackathonId": "zaps",
+  "badge": {
+    "id": "rank-1",
+    "definition": "30009:<issuer-pubkey>:lacrypta.dev:badge:zaps:rank-1"
+  },
+  "recipients": [
+    {
+      "pubkey": "<recipient-pubkey>",
+      "name": "Builder",
+      "nip05": "builder@example.com"
+    }
+  ],
+  "request": "<signed kind 27235 event>"
+}
+```
+
+El request `kind: 27235` debe incluir tags:
+
+```json
+[
+  ["action", "award-hackathon-badge"],
+  ["hackathon", "zaps"],
+  ["badge", "rank-1"],
+  ["a", "30009:<issuer-pubkey>:lacrypta.dev:badge:zaps:rank-1"],
+  ["p", "<recipient-pubkey>"]
+]
+```
+
+El backend devuelve los `kind: 8` firmados. El browser los publica en los relays
+de datos y vuelve a leer owners desde Nostr.
+
 ## Reglas de lectura
 
 1. Buscar el ultimo evento `kind: 30078` por `(pubkey oficial, d)`.
@@ -326,6 +380,35 @@ Flujo:
 
 El backend nunca publica directo a relays en este flujo. Solo firma los eventos.
 La publicacion queda visible y trazable desde el browser.
+
+## Creacion incremental
+
+Si el catalogo ya existe, el admin puede crear badges faltantes o un badge nuevo
+desde `/badges`. La UI compara el catalogo publicado contra la lista local de
+badges iniciales y muestra los pendientes: primer puesto, top 6, favoritos de
+Gorilator, Gorilatron, Claudio y demas defaults.
+
+Flujo:
+
+1. El admin (`NEXT_PUBLIC_LACRYPTA_ADMIN_NPUB`) firma un request Nostr efimero
+   `kind: 27235`.
+2. El frontend envia ese request a `/api/hackathon-badges/create` junto con:
+   - `hackathonId`;
+   - los badges a crear;
+   - categorias nuevas o existentes;
+   - el catalogo visible actual, si existe.
+3. El backend verifica firma, pubkey admin, expiracion y tags `badge` del
+   request.
+4. El backend firma con `LACRYPTA_NSEC`:
+   - una definicion `kind: 30009` por cada badge nuevo o actualizado;
+   - un nuevo catalogo reemplazable `kind: 30078` con badges existentes + nuevos.
+5. El frontend publica esos eventos en los relays de datos.
+6. El frontend vuelve a leer el catalogo desde Nostr.
+
+Las categorias nuevas se agregan al `content.categories` del catalogo y cada
+definicion recibe tambien un tag `category`. El `id` de badge y el `id` de
+categoria se normalizan a kebab-case para mantener estabilidad entre renders y
+eventos.
 
 ## Compatibilidad
 
