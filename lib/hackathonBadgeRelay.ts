@@ -57,43 +57,49 @@ function parseDefinitionEvent(event: SignedEvent): BadgeDefinitionEvent | null {
   };
 }
 
+type RelayPool = InstanceType<typeof import("nostr-tools/pool").SimplePool>;
+
+// Shared across calls so the WebSocket connections to the relays stay warm
+// between the catalog and definitions queries (and across server requests).
+// SimplePool reuses open sockets and auto-closes each subscription on EOSE,
+// so nothing leaks here.
+let sharedPool: RelayPool | null = null;
+
+async function getRelayPool(): Promise<RelayPool> {
+  if (!sharedPool) {
+    const { SimplePool } = await import("nostr-tools/pool");
+    sharedPool = new SimplePool();
+  }
+  return sharedPool;
+}
+
 async function collectRelayEvents(
   filter: Filter,
   relays: string[] = DEFAULT_RELAYS,
   timeoutMs = 5000,
 ): Promise<SignedEvent[]> {
-  const { SimplePool } = await import("nostr-tools/pool");
   const { verifyEvent } = await import("nostr-tools/pure");
-  const pool = new SimplePool();
+  const pool = await getRelayPool();
   const readRelays = mergeDataRelays(relays);
-  const events: SignedEvent[] = [];
   const maxCreatedAt = Math.floor(Date.now() / 1000) + 10 * 60;
-  const closer = pool.subscribe(readRelays, filter, {
-    onevent(ev: SignedEvent) {
-      if (!verifyEvent(ev) || ev.created_at > maxCreatedAt) {
-        console.warn("[hackathonBadgeRelay] dropped invalid event", {
-          id: ev.id,
-          kind: ev.kind,
-          pubkey: ev.pubkey,
-        });
-        return;
-      }
-      events.push(ev);
-    },
-  });
 
-  try {
-    await new Promise((resolve) => setTimeout(resolve, timeoutMs));
-  } finally {
-    closer.close();
-    try {
-      pool.close(readRelays);
-    } catch {
-      /* noop */
+  // Resolves as soon as every relay sends EOSE (typically <1s) instead of
+  // always burning the full timeout; `maxWait` only caps a hung relay.
+  const events = (await pool.querySync(readRelays, filter, {
+    maxWait: timeoutMs,
+  })) as SignedEvent[];
+
+  return events.filter((ev) => {
+    if (!verifyEvent(ev) || ev.created_at > maxCreatedAt) {
+      console.warn("[hackathonBadgeRelay] dropped invalid event", {
+        id: ev.id,
+        kind: ev.kind,
+        pubkey: ev.pubkey,
+      });
+      return false;
     }
-  }
-
-  return events;
+    return true;
+  });
 }
 
 export async function fetchHackathonBadgeCatalogFromRelays({
