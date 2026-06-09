@@ -1,5 +1,6 @@
 export const NOSTR_PROJECTS_TAG = "nostr:projects";
 export const NOSTR_LEGACY_SUBMISSIONS_TAG = "nostr:hackathon-submissions";
+export const NOSTR_SOLDIERS_RANKING_TAG = "nostr:soldiers-ranking";
 
 export function nostrProfileTag(pubkey: string) {
   return `nostr:profile:${pubkey}`;

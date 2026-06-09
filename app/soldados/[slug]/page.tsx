@@ -21,6 +21,9 @@ import {
 } from "@/lib/soldiers";
 import { getCachedNostrProfile } from "@/lib/nostrProfileCache";
 import { cn } from "@/lib/cn";
+import SoldierZapButton from "./SoldierZapButton";
+import SoldierFollowButton from "./SoldierFollowButton";
+import SoldierZapWall from "./SoldierZapWall";
 
 type RouteParams = { slug: string };
 
@@ -192,6 +195,20 @@ export default async function SoldierProfilePage({
                 </span>
               )}
             </div>
+            {soldier.pubkey && (
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <SoldierZapButton
+                  recipientPubkey={soldier.pubkey}
+                  recipientName={displayName}
+                  lud16={lud16}
+                />
+                <SoldierFollowButton
+                  recipientPubkey={soldier.pubkey}
+                  recipientName={displayName}
+                  recipientAvatar={avatar}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -240,6 +257,10 @@ export default async function SoldierProfilePage({
                 ))}
               </ul>
             </Card>
+
+            {soldier.pubkey && (
+              <SoldierZapWall recipientPubkey={soldier.pubkey} />
+            )}
           </div>
 
           <div className="space-y-4">

@@ -4,6 +4,7 @@ type InvoiceRequestBody = {
   endpoint?: unknown;
   amount?: unknown;
   nostr?: unknown;
+  comment?: unknown;
 };
 
 function isAllowedEndpoint(endpoint: string): boolean {
@@ -25,10 +26,19 @@ function isAllowedEndpoint(endpoint: string): boolean {
   }
 }
 
-async function resolveInvoiceCallback(endpoint: string): Promise<string> {
+type ResolvedCallback = {
+  callback: string;
+  /** Max comment length the service accepts (LUD-12), or null if unknown. */
+  commentAllowed: number | null;
+};
+
+async function resolveInvoiceCallback(
+  endpoint: string,
+): Promise<ResolvedCallback> {
   const url = new URL(endpoint);
   if (!url.pathname.toLowerCase().includes("/.well-known/lnurlp/")) {
-    return endpoint;
+    // Already a callback URL (e.g. a NIP-57 zap endpoint) — pass through.
+    return { callback: endpoint, commentAllowed: null };
   }
 
   const metadataRes = await fetch(endpoint, {
@@ -39,6 +49,7 @@ async function resolveInvoiceCallback(endpoint: string): Promise<string> {
     callback?: unknown;
     status?: unknown;
     reason?: unknown;
+    commentAllowed?: unknown;
   };
   if (!metadataRes.ok || metadata.status === "ERROR") {
     throw new Error(
@@ -50,7 +61,13 @@ async function resolveInvoiceCallback(endpoint: string): Promise<string> {
   if (typeof metadata.callback !== "string" || !isAllowedEndpoint(metadata.callback)) {
     throw new Error("La lightning address no devolvió un callback válido.");
   }
-  return metadata.callback;
+  return {
+    callback: metadata.callback,
+    commentAllowed:
+      typeof metadata.commentAllowed === "number"
+        ? metadata.commentAllowed
+        : null,
+  };
 }
 
 export async function POST(req: Request) {
@@ -67,6 +84,7 @@ export async function POST(req: Request) {
   const endpoint = typeof body.endpoint === "string" ? body.endpoint : "";
   const amount = typeof body.amount === "string" ? body.amount : "";
   const nostr = typeof body.nostr === "string" ? body.nostr : "";
+  const comment = typeof body.comment === "string" ? body.comment : "";
 
   if (!isAllowedEndpoint(endpoint)) {
     return NextResponse.json(
@@ -74,16 +92,16 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  if (!/^\d+$/.test(amount) || !nostr) {
+  if (!/^\d+$/.test(amount)) {
     return NextResponse.json(
-      { ok: false, reason: "Faltan amount o nostr." },
+      { ok: false, reason: "Falta amount." },
       { status: 400 },
     );
   }
 
-  let callback: string;
+  let resolved: ResolvedCallback;
   try {
-    callback = await resolveInvoiceCallback(endpoint);
+    resolved = await resolveInvoiceCallback(endpoint);
   } catch (error) {
     return NextResponse.json(
       {
@@ -94,9 +112,19 @@ export async function POST(req: Request) {
     );
   }
 
-  const url = new URL(callback);
+  const url = new URL(resolved.callback);
   url.searchParams.set("amount", amount);
-  url.searchParams.set("nostr", nostr);
+  if (nostr) {
+    // NIP-57 zap: the signed zap request carries the comment in its content.
+    url.searchParams.set("nostr", nostr);
+  } else if (comment) {
+    // Plain LNURL-pay (LUD-12): include the comment within the allowed length.
+    const max = resolved.commentAllowed;
+    const trimmed = max && max > 0 ? comment.slice(0, max) : comment;
+    if (max === null || max > 0) {
+      url.searchParams.set("comment", trimmed);
+    }
+  }
 
   try {
     const invoiceRes = await fetch(url.toString(), {

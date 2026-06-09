@@ -4,6 +4,11 @@ import { Trophy, Zap } from "lucide-react";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
 import type { Soldier } from "@/lib/soldiers";
+import { InlineFollowButton } from "./SoldiersFollows";
+
+function isHexPubkey(pubkey?: string): pubkey is string {
+  return !!pubkey && /^[0-9a-f]{64}$/iu.test(pubkey);
+}
 
 // Mirrors the scoring constants in lib/soldiers.ts. Kept local to render
 // the per-cell breakdown without re-exporting internals from that module.
@@ -98,6 +103,7 @@ export default function SoldiersTable({ soldiers }: { soldiers: Soldier[] }) {
             <th className="px-4 py-3 text-right tabular-nums">Medallas</th>
             <th className="px-4 py-3 text-right tabular-nums">Mejor</th>
             <th className="px-4 py-3 text-right tabular-nums">Score</th>
+            <th className="px-4 py-3 text-right" />
           </tr>
         </thead>
         <tbody>
@@ -315,6 +321,17 @@ export default function SoldiersTable({ soldiers }: { soldiers: Soldier[] }) {
                     <ScoreBreakdownTooltip soldier={s} />
                   </span>
                 </td>
+                <td className="px-4 py-3 align-middle text-right">
+                  {isHexPubkey(s.pubkey) && (
+                    <InlineFollowButton
+                      pubkey={s.pubkey}
+                      name={s.name}
+                      avatar={src}
+                      className="justify-end"
+                      compact
+                    />
+                  )}
+                </td>
               </tr>
             );
           })}
@@ -328,10 +345,10 @@ export default function SoldiersTable({ soldiers }: { soldiers: Soldier[] }) {
           const src = avatarSrc(s);
           const bp = bestPosition(s);
           return (
-            <li key={s.id}>
+            <li key={s.id} className="flex items-center">
               <Link
                 href={`/soldados/${s.slug}`}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors"
+                className="flex flex-1 min-w-0 items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors"
               >
                 <span
                   className={cn(
@@ -393,6 +410,15 @@ export default function SoldiersTable({ soldiers }: { soldiers: Soldier[] }) {
                   {s.score}
                 </span>
               </Link>
+              {isHexPubkey(s.pubkey) && (
+                <InlineFollowButton
+                  pubkey={s.pubkey}
+                  name={s.name}
+                  avatar={src}
+                  className="shrink-0 pr-3"
+                  compact
+                />
+              )}
             </li>
           );
         })}

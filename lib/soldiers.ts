@@ -11,6 +11,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { PROJECTS, type TeamMember } from "./projects";
 import {
   getAllNostrSubmissionsForSitemap,
+  type CachedNostrProject,
   type CachedNostrTeamMember,
 } from "./nostrCache";
 import { soldierProfileSlugAliases } from "./soldierProfileLinks";
@@ -18,6 +19,7 @@ import {
   NOSTR_LEGACY_SUBMISSIONS_TAG,
   NOSTR_PROJECTS_TAG,
 } from "./nostrCacheTags";
+import { getCachedSoldiersRankingSnapshot } from "./nostrSoldiersCache";
 import reportsData from "@/data/hackathons/reports.json";
 
 type ReportEntry = {
@@ -387,12 +389,16 @@ function curatedHackathonId(p: (typeof PROJECTS)[number]): string | null {
   return p.hackathon ?? null;
 }
 
-async function buildSoldiers(): Promise<Soldier[]> {
-  "use cache";
-  cacheLife("days");
-  cacheTag(NOSTR_PROJECTS_TAG);
-  cacheTag(NOSTR_LEGACY_SUBMISSIONS_TAG);
-
+/**
+ * Pure roster builder: merges curated team members (`PROJECTS` + `reports.json`,
+ * both static in-tree) with the supplied Nostr submissions, dedupes, scores and
+ * sorts. The only dynamic input is `nostrProjects`, so this is deterministic for
+ * a given relay snapshot — which is what makes the admin "recompute & publish"
+ * flow reproducible (see `app/api/soldiers/ranking/route.ts`).
+ */
+export function computeRanking(
+  nostrProjects: CachedNostrProject[],
+): Soldier[] {
   const map = new Map<string, Soldier>();
 
   // ── Curated pass ──────────────────────────────────────────────────────
@@ -448,7 +454,6 @@ async function buildSoldiers(): Promise<Soldier[]> {
   }
 
   // ── Nostr pass ────────────────────────────────────────────────────────
-  const nostrProjects = await getAllNostrSubmissionsForSitemap();
   for (const project of nostrProjects) {
     const curatedTeam =
       curatedTeamByProjectKey.get(project.id.toLowerCase()) ??
@@ -597,8 +602,38 @@ async function buildSoldiers(): Promise<Soldier[]> {
   return list;
 }
 
+/** Live roster from the cached Nostr submissions snapshot (pre-publish fallback). */
+async function buildSoldiers(): Promise<Soldier[]> {
+  "use cache";
+  cacheLife("days");
+  cacheTag(NOSTR_PROJECTS_TAG);
+  cacheTag(NOSTR_LEGACY_SUBMISSIONS_TAG);
+  return computeRanking(await getAllNostrSubmissionsForSitemap());
+}
+
+/**
+ * Roster the public pages render. Prefers the admin-published ranking snapshot
+ * (server-cached Nostr event); if community submissions arrived *after* the
+ * snapshot, recomputes live so newer projects are merged on top. Falls back to
+ * a live build before the first snapshot is ever published.
+ */
+async function getSoldiersForDisplay(): Promise<Soldier[]> {
+  const snapshot = await getCachedSoldiersRankingSnapshot();
+  if (!snapshot) return buildSoldiers();
+
+  const liveNostr = await getAllNostrSubmissionsForSitemap();
+  const hasNewer = liveNostr.some(
+    (p) => p.eventCreatedAt > snapshot.nostrCutoff,
+  );
+  // No newer community activity → serve the authoritative published snapshot.
+  if (!hasNewer) return snapshot.soldiers;
+  // Newer submissions exist → recompute (curated is static + live Nostr ⊇ the
+  // snapshot's set), so this is exactly "snapshot + newer merged".
+  return computeRanking(liveNostr);
+}
+
 export async function getSoldiers(): Promise<Soldier[]> {
-  return buildSoldiers();
+  return getSoldiersForDisplay();
 }
 
 export async function getSoldierBySlug(slug: string): Promise<Soldier | null> {
