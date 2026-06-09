@@ -3,6 +3,18 @@ import { isValidEmail, normalizeEmail } from "@/lib/emailLogin";
 
 const DEFAULT_ENDPOINT = "https://events.lacrypta.ar/api/subscribe";
 
+/** Default CRM contact list to subscribe contacts into (see API_SUBSCRIBE docs). */
+const DEFAULT_LIST_IDS = "0135a251-8a46-4f88-b5bc-315d982eb7fa";
+
+/** Parse the comma-separated list-id env var into a clean UUID array. */
+function getListIds(): string[] {
+  const raw = process.env.EVENTS_SUBSCRIBE_LISTS?.trim() || DEFAULT_LIST_IDS;
+  return raw
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
 type SubscribeBody = {
   email?: string;
   npub?: string;
@@ -72,20 +84,51 @@ export async function POST(req: Request) {
   const endpoint = process.env.EVENTS_SUBSCRIBE_URL?.trim() || DEFAULT_ENDPOINT;
   const name = body.name?.trim();
   const phone = body.phone?.trim();
+  const lists = getListIds();
 
-  try {
+  // Fields shared across every attempt; only the identity (email/npub) varies.
+  const baseFields = {
+    ...(name ? { name } : {}),
+    ...(phone ? { phone } : {}),
+    ...(lists.length ? { lists } : {}),
+  };
+
+  async function subscribe(identity: { email?: string; npub?: string }) {
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        ...(email ? { email } : {}),
-        ...(npub ? { npub } : {}),
-        ...(name ? { name } : {}),
-        ...(phone ? { phone } : {}),
-      }),
+      body: JSON.stringify({ ...identity, ...baseFields }),
+    });
+    const data = (await res.json().catch(() => ({}))) as CrmResponse;
+    return { res, data };
+  }
+
+  try {
+    let { res, data } = await subscribe({
+      ...(email ? { email } : {}),
+      ...(npub ? { npub } : {}),
     });
 
-    const data = (await res.json().catch(() => ({}))) as CrmResponse;
+    // The CRM returns `identity_conflict` when email + npub are sent together
+    // but already belong to existing/different contacts (it never links them).
+    // Fall back to subscribing each identifier on its own — preferring the
+    // email — so the contact still gets added to the list.
+    if (
+      res.status === 409 &&
+      data.error === "identity_conflict" &&
+      email &&
+      npub
+    ) {
+      for (const identity of [{ email }, { npub }]) {
+        const retry = await subscribe(identity);
+        if (retry.res.ok) {
+          res = retry.res;
+          data = retry.data;
+          break;
+        }
+      }
+    }
+
     if (!res.ok) {
       const message =
         data.error || data.message || "No se pudo crear la suscripcion.";
