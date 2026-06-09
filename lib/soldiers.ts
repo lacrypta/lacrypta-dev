@@ -9,6 +9,7 @@
 
 import { cacheLife, cacheTag } from "next/cache";
 import { PROJECTS, type TeamMember } from "./projects";
+import { allProjects } from "./hackathons";
 import {
   getAllNostrSubmissionsForSitemap,
   type CachedNostrProject,
@@ -451,6 +452,120 @@ export function computeRanking(
   for (const p of PROJECTS) {
     curatedTeamByProjectKey.set(p.id.toLowerCase(), p.team);
     curatedTeamByProjectKey.set(slugify(p.name), p.team);
+  }
+
+  // ── Hackathon-projects pass ───────────────────────────────────────────
+  // `lib/projects.ts` PROJECTS is a hand-maintained subset that drifts out of
+  // sync with the authoritative per-hackathon files (`data/hackathons/
+  // projects-<id>.json`). Those files are the source of truth for teams (incl.
+  // testers) and jury positions, so ingest them here — otherwise whole
+  // hackathons (e.g. commerce) and their winners go uncounted. Members are
+  // matched by the same multi-identity heuristic as the Nostr pass; the final
+  // dedupe collapses any project that also came through the PROJECTS pass.
+  for (const project of allProjects()) {
+    const hackathonId = project.hackathon ?? null;
+    const position =
+      (project.report?.position ?? lookupPosition(hackathonId, project.id)) ??
+      undefined;
+    const positionPoints = pointsForPosition(position);
+
+    const curatedTeam =
+      curatedTeamByProjectKey.get(project.id.toLowerCase()) ??
+      (project.name
+        ? curatedTeamByProjectKey.get(slugify(project.name))
+        : undefined);
+    const sameSizeTeam =
+      curatedTeam && curatedTeam.length === project.team.length;
+
+    for (let i = 0; i < project.team.length; i++) {
+      const m = project.team[i]!;
+      const githubLc = m.github?.trim().toLowerCase() || undefined;
+      const pubkeyLc = m.pubkey?.trim().toLowerCase() || undefined;
+      const nip05Lc = m.nip05?.trim().toLowerCase() || undefined;
+      const nip05LocalLc = nip05Lc?.split("@")[0]?.replace(/[^a-z0-9-]/g, "");
+      const nameSlug = m.name ? slugify(m.name) : undefined;
+      const inheritedGhLc =
+        sameSizeTeam && curatedTeam![i]?.github
+          ? curatedTeam![i].github.trim().toLowerCase()
+          : undefined;
+
+      const candidates: string[] = [];
+      if (githubLc) candidates.push(`gh:${githubLc}`);
+      if (inheritedGhLc && inheritedGhLc !== githubLc)
+        candidates.push(`gh:${inheritedGhLc}`);
+      if (pubkeyLc) candidates.push(`pk:${pubkeyLc}`);
+      if (nip05Lc) candidates.push(`nip05:${nip05Lc}`);
+      if (
+        nip05LocalLc &&
+        nip05LocalLc !== githubLc &&
+        nip05LocalLc !== inheritedGhLc
+      )
+        candidates.push(`gh:${nip05LocalLc}`);
+      if (
+        nameSlug &&
+        nameSlug !== githubLc &&
+        nameSlug !== inheritedGhLc &&
+        nameSlug !== nip05LocalLc
+      )
+        candidates.push(`gh:${nameSlug}`);
+      if (nameSlug) candidates.push(`name:${nameSlug}`);
+
+      let resolvedKey: string | undefined;
+      for (const c of candidates) {
+        if (map.has(c)) {
+          resolvedKey = c;
+          break;
+        }
+      }
+
+      const ref: SoldierProjectRef = {
+        hackathonId,
+        projectId: project.id,
+        projectName: project.name,
+        role: m.role,
+        source: "curated",
+        position,
+        positionPoints,
+        repo: project.repo,
+      };
+
+      if (resolvedKey) {
+        const existing = map.get(resolvedKey)!;
+        if (!existing.pubkey && pubkeyLc) existing.pubkey = pubkeyLc;
+        if (!existing.nip05 && nip05Lc) existing.nip05 = nip05Lc;
+        if (!existing.picture && m.picture) existing.picture = m.picture;
+        if (!existing.github) {
+          const gh = githubLc ?? inheritedGhLc;
+          if (gh) existing.github = gh;
+        }
+        existing.projects.push(ref);
+        pushUnique(existing.roles, m.role);
+        indexAliases(existing, map);
+      } else {
+        const k = keyFor({
+          github: githubLc ?? inheritedGhLc,
+          pubkey: pubkeyLc,
+          nip05: nip05Lc,
+          name: m.name,
+        });
+        const created: Soldier = {
+          id: k,
+          slug: toSlug(k),
+          name: m.name,
+          github: githubLc ?? inheritedGhLc,
+          pubkey: pubkeyLc,
+          nip05: nip05Lc,
+          picture: m.picture,
+          hasNostr: false,
+          roles: [m.role],
+          projects: [ref],
+          score: 0,
+          scoreBreakdown: { hackathons: 0, projects: 0, positions: 0, total: 0 },
+        };
+        map.set(k, created);
+        indexAliases(created, map);
+      }
+    }
   }
 
   // ── Nostr pass ────────────────────────────────────────────────────────

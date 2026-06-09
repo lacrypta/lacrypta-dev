@@ -105,7 +105,13 @@
       "id": "wapubot",
       "name": "wapubot",
       "description": "Quinto puesto de Commerce.",
-      "team": [],
+      "team": [
+        {
+          "name": "landaverdend",
+          "github": "landaverdend",
+          "role": "Lead Dev"
+        }
+      ],
       "tech": [
         "Lightning",
         "Commerce"
