@@ -46,7 +46,10 @@ import {
   NOSTR_SUBMISSIONS_TAG,
 } from "@/lib/nostrCache";
 import { getCachedNostrProfile } from "@/lib/nostrProfileCache";
+import { getCachedVotingPeriod } from "@/lib/votingCache";
+import { nostrVotingTag } from "@/lib/nostrCacheTags";
 import HackathonProjectsList from "./HackathonProjectsList";
+import VotingSection from "./VotingSection";
 import HackathonResultsClient from "./HackathonResultsClient";
 import PrizeBadgeButton, { type PrizeBadgeTask } from "./PrizeBadgeButton";
 import PrizeZapButton from "./PrizeZapButton";
@@ -439,6 +442,10 @@ export default async function HackathonPage({
   const { id } = await params;
   const hackathon = getHackathon(id);
   if (!hackathon) notFound();
+  // Inner "use cache" tags don't bubble in Next 16 — register the voting tag
+  // at page level so open/close revalidations refresh this page too.
+  cacheTag(nostrVotingTag(id));
+  const votingPeriod = await getCachedVotingPeriod(id);
   const status = hackathonStatus(hackathon);
   const statusMeta = STATUS_META[status];
   const projects = rankedProjects(id);
@@ -695,6 +702,15 @@ export default async function HackathonPage({
         <HackathonProjectsList
           hackathon={hackathon}
           initialNostrSubmissions={nostrSubmissions}
+        />
+      </Suspense>
+
+      {/* Community voting — same Suspense requirement as the projects list. */}
+      <Suspense fallback={null}>
+        <VotingSection
+          hackathonId={hackathon.id}
+          hackathonName={hackathon.name}
+          initialPeriod={votingPeriod}
         />
       </Suspense>
 
