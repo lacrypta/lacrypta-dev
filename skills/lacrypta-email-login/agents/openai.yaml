@@ -1,0 +1,4 @@
+interface:
+  display_name: "La Crypta Email Login"
+  short_description: "Install lacrypta.dev email Nostr login"
+  default_prompt: "Use $lacrypta-email-login to add lacrypta.dev email Nostr login to this app."

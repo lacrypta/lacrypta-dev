@@ -37,6 +37,7 @@ type NavLink = {
 const NAV_LINKS: NavLink[] = [
   { href: "/hackathons", label: "Hackatones" },
   { href: "/projects", label: "Proyectos" },
+  { href: "/skills", label: "Skills", badge: "NEW" },
   { href: "/soldados", label: "Soldados" },
 ];
 
