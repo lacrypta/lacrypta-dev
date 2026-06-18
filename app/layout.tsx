@@ -4,7 +4,10 @@ import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import DevModeBar from "@/components/DevModeBar";
 import { ToastProvider } from "@/components/Toast";
+import { isDevMode } from "@/lib/devMode";
+import { cn } from "@/lib/cn";
 import {
   GoogleTagManagerNoscript,
   GoogleTagManagerScript,
@@ -103,10 +106,13 @@ export default function RootLayout({
         <GoogleTagManagerNoscript />
         <Suspense>
           <ToastProvider>
+            {isDevMode() && <DevModeBar />}
             <Suspense>
               <Navbar />
             </Suspense>
-            <main className="flex-1">{children}</main>
+            <main className={cn("flex-1", isDevMode() && "pt-8")}>
+              {children}
+            </main>
             <Footer />
           </ToastProvider>
         </Suspense>

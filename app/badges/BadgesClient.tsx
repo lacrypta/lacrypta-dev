@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { queryProfile } from "nostr-tools/nip05";
 import { cn } from "@/lib/cn";
+import { hackathonSlugForId } from "@/lib/hackathons";
 import { useAuth, type Auth } from "@/lib/auth";
 import { fetchNostrProfile } from "@/lib/nostrProfile";
 import { DEFAULT_RELAYS, mergeDataRelays } from "@/lib/nostrRelayConfig";
@@ -484,7 +485,7 @@ export default function BadgesClient({
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Link
-          href={`/hackathons/${hackathonId}`}
+          href={`/hackathons/${hackathonSlugForId(hackathonId)}`}
           className="mb-8 inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-foreground-muted transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />

@@ -24,6 +24,11 @@ export type Auth = {
    *  private key in localStorage is inherently insecure; this method is for
    *  throwaway/test identities and dev convenience. */
   localSecret?: number[];
+  /** Dev-only: when impersonating a user via a stand-in key, this holds the
+   *  REAL pubkey being impersonated. Reads (projects, participations) key off
+   *  this so the impersonated user's data shows; signing still uses the
+   *  stand-in (`localSecret`). Ignored by the signer. See lib/devImpersonation. */
+  impersonating?: string;
 };
 
 const STORAGE_KEY = "labs:auth";

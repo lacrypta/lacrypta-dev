@@ -20,6 +20,8 @@ import {
   getHackathon,
   getProject,
   getHackathonProjects,
+  hackathonSlug,
+  hackathonSlugForId,
   prizeForProject,
 } from "@/lib/hackathons";
 import { GithubIcon } from "@/components/BrandIcons";
@@ -36,26 +38,34 @@ import {
 import NostrProjectServer from "./NostrProjectServer";
 
 export async function generateStaticParams() {
-  const curated = HACKATHONS.flatMap((h) =>
-    getHackathonProjects(h.id).map((p) => ({
-      id: h.id,
-      projectId: p.id,
-    })),
-  );
-
   const hackathonIds = new Set(HACKATHONS.map((h) => h.id));
-  const seen = new Set(curated.map((p) => `${p.id}/${p.projectId}`));
+  // Dedup keys off the canonical hackathon id; the emitted route segment is the
+  // public slug (e.g. "gaming" for the "zaps" hackathon).
+  const seen = new Set<string>();
+  const out: { id: string; projectId: string }[] = [];
+
+  for (const h of HACKATHONS) {
+    for (const p of getHackathonProjects(h.id)) {
+      const key = `${h.id}/${p.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id: hackathonSlug(h), projectId: p.id });
+    }
+  }
 
   // Prerender every Nostr-submitted project visible at build time. Without
   // this, community-only projects (no curated JSON entry) 404 in production
   // because the dynamic fallback never gets a chance to run.
   const { projects } = await getNostrSubmissionsSnapshot();
-  const community = projects
-    .filter((p) => p.hackathon && hackathonIds.has(p.hackathon))
-    .filter((p) => !seen.has(`${p.hackathon}/${p.id}`))
-    .map((p) => ({ id: p.hackathon as string, projectId: p.id }));
+  for (const p of projects) {
+    if (!p.hackathon || !hackathonIds.has(p.hackathon)) continue;
+    const key = `${p.hackathon}/${p.id}`;
+    if (seen.has(key)) continue; // dedup vs curated AND other community events
+    seen.add(key);
+    out.push({ id: hackathonSlugForId(p.hackathon), projectId: p.id });
+  }
 
-  return [...curated, ...community];
+  return out;
 }
 
 function truncate(s: string, max = 155): string {
@@ -69,9 +79,11 @@ export async function generateMetadata({
   params: Promise<{ id: string; projectId: string }>;
 }): Promise<Metadata> {
   await connection();
-  const { id, projectId } = await params;
-  const h = getHackathon(id);
+  const { id: routeParam, projectId } = await params;
+  const h = getHackathon(routeParam);
   if (!h) return { title: "Proyecto" };
+  // Data lookups key off the canonical id; the public URL uses the slug.
+  const id = h.id;
 
   const curated = getProject(id, projectId);
   let name: string | null = null;
@@ -90,7 +102,7 @@ export async function generateMetadata({
 
   if (!name) return { title: "Proyecto" };
 
-  const url = `/hackathons/${id}/${projectId}`;
+  const url = `/hackathons/${hackathonSlug(h)}/${projectId}`;
   const desc = truncate(description || `Proyecto presentado en ${h.name}.`);
   return {
     title: `${name} · ${h.name}`,
@@ -201,9 +213,11 @@ async function ProjectPageContent({
   params: Promise<ProjectPageParams>;
 }) {
   await connection();
-  const { id, projectId } = await params;
-  const hackathon = getHackathon(id);
+  const { id: routeParam, projectId } = await params;
+  const hackathon = getHackathon(routeParam);
   if (!hackathon) notFound();
+  // Data lookups key off the canonical id; public links use the slug.
+  const id = hackathon.id;
   const project = getProject(id, projectId);
   if (!project) {
     return <NostrProjectServer hackathonId={id} projectId={projectId} />;
@@ -223,18 +237,18 @@ async function ProjectPageContent({
           { name: "Hackatones", url: "https://lacrypta.dev/hackathons" },
           {
             name: hackathon.name,
-            url: `https://lacrypta.dev/hackathons/${hackathon.id}`,
+            url: `https://lacrypta.dev/hackathons/${hackathonSlug(hackathon)}`,
           },
           {
             name: project.name,
-            url: `https://lacrypta.dev/hackathons/${hackathon.id}/${project.id}`,
+            url: `https://lacrypta.dev/hackathons/${hackathonSlug(hackathon)}/${project.id}`,
           },
         ]),
         "ld-breadcrumbs",
       )}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <Link
-          href={`/hackathons/${hackathon.id}`}
+          href={`/hackathons/${hackathonSlug(hackathon)}`}
           className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-foreground-muted hover:text-foreground transition-colors mb-6"
         >
           <ArrowLeft className="h-3.5 w-3.5" />

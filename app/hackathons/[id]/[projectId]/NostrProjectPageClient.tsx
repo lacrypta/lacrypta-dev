@@ -32,7 +32,7 @@ import {
   type CommunityScanProgress,
   type RelayScanStatus,
 } from "@/lib/userProjects";
-import { getHackathon, type Hackathon, type ProjectReport } from "@/lib/hackathons";
+import { getHackathon, hackathonSlugForId, type Hackathon, type ProjectReport } from "@/lib/hackathons";
 import { useProjectReport } from "@/lib/nostrReports";
 import { useAuth } from "@/lib/auth";
 import { getSigner } from "@/lib/nostrSigner";
@@ -93,7 +93,7 @@ function ProjectRelaySearchLoading({
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <Link
-          href={`/hackathons/${hackathonId}`}
+          href={`/hackathons/${hackathonSlugForId(hackathonId)}`}
           className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-foreground-muted hover:text-foreground transition-colors mb-6"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
@@ -664,7 +664,7 @@ export default function NostrProjectPage({
       <div className="relative pt-24 pb-16">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link
-            href={`/hackathons/${hackathonId}`}
+            href={`/hackathons/${hackathonSlugForId(hackathonId)}`}
             className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-foreground-muted hover:text-foreground transition-colors mb-6"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -687,7 +687,7 @@ export default function NostrProjectPage({
         project={project}
         authorPubkey={project.author}
         authorPicture={authorPicture}
-        backHref={`/hackathons/${hackathonId}`}
+        backHref={`/hackathons/${hackathonSlugForId(hackathonId)}`}
         backLabel={hackathon?.name ?? "Hackatones"}
         contextLabel={`${hackathon?.icon ?? ""} ${hackathon?.name ?? hackathonId}${
           hackathon?.monthShort && hackathon?.year

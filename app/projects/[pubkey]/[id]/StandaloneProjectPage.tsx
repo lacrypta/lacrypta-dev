@@ -18,7 +18,7 @@ import { useAuth } from "@/lib/auth";
 import NewProjectModal, {
   type ProjectEditField,
 } from "@/components/NewProjectModal";
-import { getHackathon } from "@/lib/hackathons";
+import { getHackathon, hackathonSlugForId } from "@/lib/hackathons";
 import { projectMatchesIdentifier } from "@/lib/projectIdentity";
 import { ProjectDetailView } from "@/components/ProjectDetailView";
 
@@ -204,7 +204,7 @@ export default function StandaloneProjectPage({
     );
   }
 
-  const backHref = project.hackathon ? `/hackathons/${project.hackathon}` : "/projects";
+  const backHref = project.hackathon ? `/hackathons/${hackathonSlugForId(project.hackathon)}` : "/projects";
   const hackathon = project.hackathon ? getHackathon(project.hackathon) : null;
   const backLabel = hackathon?.name ?? (project.hackathon ? project.hackathon.toUpperCase() : "Proyectos");
   const contextLabel = hackathon

@@ -86,7 +86,7 @@ export default function GamingHackathonBanner() {
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
             <Link
-              href="/hackathons/zaps"
+              href="/hackathons/gaming"
               className="group inline-flex items-center justify-center gap-3 rounded-2xl bg-bitcoin px-7 py-4 font-display text-base font-black uppercase tracking-wide text-black shadow-[0_0_42px_rgba(247,147,26,0.38)] transition-all hover:scale-[1.025] hover:shadow-[0_0_64px_rgba(247,147,26,0.55)] active:scale-[0.98]"
             >
               Ver hackaton

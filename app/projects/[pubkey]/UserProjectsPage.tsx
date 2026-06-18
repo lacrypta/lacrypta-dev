@@ -11,6 +11,7 @@ import {
 } from "@/lib/userProjects";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
+import { hackathonSlugForId } from "@/lib/hackathons";
 import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -85,7 +86,7 @@ export default function UserProjectsPage({ pubkey }: { pubkey: string }) {
           <div className="space-y-3">
             {projects.map((p) => {
               const href = p.hackathon
-                ? `/hackathons/${p.hackathon}/${p.id}`
+                ? `/hackathons/${hackathonSlugForId(p.hackathon)}/${p.id}`
                 : `/projects/${pubkey}/${p.id}`;
               const team = dedupeSoldierProfileMembers(p.team);
               return (

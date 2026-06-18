@@ -1,0 +1,39 @@
+# nostr-rs-relay — La Crypta Labs local dev relay.
+# Schema per scsibug/nostr-rs-relay. Ephemeral, non-production.
+
+[info]
+relay_url = "ws://localhost:7777/"
+name = "La Crypta Labs (dev)"
+description = "Local development relay. Ephemeral, isolated from production."
+# pubkey  = ""   # optional admin contact (hex) — unset for dev
+# contact = ""   # optional admin contact URI
+
+[database]
+engine = "sqlite"
+# NOTE: the published image's CMD passes `--db /usr/src/app/db`, which OVERRIDES
+# this at runtime. Kept in sync for clarity / non-default commands.
+data_directory = "/usr/src/app/db"
+
+[network]
+# Bind all interfaces inside the container; the host reaches it via the
+# 7777:8080 port mapping. These are nostr-rs-relay's defaults.
+address = "0.0.0.0"
+port = 8080
+
+[options]
+# Reject events timestamped further than this many seconds into the future.
+# Generous so mild dev-machine clock skew never silently drops a ballot.
+reject_future_seconds = 1800
+
+[limits]
+# Unlimited for a single-developer relay so rapid re-vote (ballot replacement)
+# testing is never throttled. max_event_bytes left at the 128 KB default.
+messages_per_sec = 0
+max_event_bytes = 131072
+
+[authorization]
+# No whitelist / no NIP-42: arbitrary test pubkeys must be able to publish
+# kind-30078 ballots. Do NOT add an allowlist (it would have to enumerate every
+# kind the app uses). Parameterized-replaceable (kind 30078) handling is
+# compiled in — re-votes replace the prior ballot by author + kind + d-tag.
+# pubkey_whitelist = []

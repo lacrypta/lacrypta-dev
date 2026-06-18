@@ -5,32 +5,51 @@ import { getSoldiers } from "@/lib/soldiers";
 import {
   getHackathon,
   mergeWithSubmissions,
+  primaryProjectPubkey,
   type HackathonSubmission,
 } from "@/lib/hackathons";
 import { getNostrHackathonSubmissions } from "@/lib/nostrCache";
 import { DEFAULT_RELAYS } from "@/lib/nostrRelayConfig";
+import { isDevMode } from "@/lib/devMode";
+import { devPubkeyForPubkey } from "@/lib/devImpersonation";
 import { nostrVotingTag } from "@/lib/nostrCacheTags";
 import {
   fetchVotingPeriodFromRelays,
   getCachedVotingPeriod,
 } from "@/lib/votingCache";
 import {
+  VOTE_ENC,
   VOTING_KIND,
   VOTING_SCHEMA_VERSION,
   VOTING_T_TAG,
   buildEligibleVoters,
+  computeVotingRanking,
   isVotingTestNamespace,
+  parseBallotContent,
   serializeVotingPeriod,
-  tallyBallots,
+  tallyDecryptedBallots,
   voteDTag,
   votingPeriodDTag,
+  type DecryptedBallot,
   type VotingEligibleVoter,
   type VotingPeriod,
   type VotingProjectRef,
+  type VotingResults,
+  type VotingWinner,
 } from "@/lib/voting";
 
 const OPEN_ACTION = "open-voting";
+/** Legacy single-shot close (kept as an alias for close-confirm). */
 const CLOSE_ACTION = "close-voting";
+/** Step 1: decrypt + tally + return preview (no publish). */
+const CLOSE_PREVIEW_ACTION = "close-preview";
+/** Step 2: re-validate the confirmed set, sign + publish the frozen result. */
+const CLOSE_CONFIRM_ACTION = "close-confirm";
+const CLOSE_ACTIONS = new Set([
+  CLOSE_ACTION,
+  CLOSE_PREVIEW_ACTION,
+  CLOSE_CONFIRM_ACTION,
+]);
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
@@ -192,12 +211,144 @@ async function votableProjects(
   return mergeWithSubmissions(hackathonId, nostr);
 }
 
+/** Decrypts a ballot's content with LACRYPTA_NSEC. v2 = NIP-44 (nip04 fallback);
+ *  v1 plaintext passes through. Returns null if it can't be read. */
+async function decryptBallotContent(
+  secret: Uint8Array,
+  ev: SignedEvent,
+): Promise<string | null> {
+  const enc = ev.tags.find((t) => t[0] === "enc")?.[1];
+  if (enc !== VOTE_ENC) return ev.content; // v1 plaintext (migration)
+  try {
+    const nip44 = await import("nostr-tools/nip44");
+    return nip44.decrypt(ev.content, nip44.getConversationKey(secret, ev.pubkey));
+  } catch {
+    try {
+      const nip04 = await import("nostr-tools/nip04");
+      return await nip04.decrypt(secret, ev.pubkey, ev.content);
+    } catch {
+      return null;
+    }
+  }
+}
+
+export type ClosePreview = {
+  tally: VotingResults;
+  winners: VotingWinner[];
+  countedBallotIds: string[];
+  perVoter: {
+    pubkey: string;
+    name: string;
+    allocations: Record<string, number>;
+    total: number;
+  }[];
+  rejected: { pubkey: string; reason: string }[];
+};
+
+/**
+ * Authoritative close pipeline (admin-only): verify each posted ballot's
+ * signature, decrypt with LACRYPTA_NSEC, re-validate eligibility + budget, tally
+ * and rank. Returns the preview the admin reviews and the exact result the
+ * backend will sign on confirm. Does NOT publish.
+ */
+async function buildClosePreview(
+  hackathonId: string,
+  period: VotingPeriod,
+  ballots: SignedEvent[],
+  secret: Uint8Array,
+  closedAt: number,
+): Promise<ClosePreview> {
+  const { verifyEvent } = await import("nostr-tools/pure");
+  const dTag = voteDTag(hackathonId);
+
+  const decrypted: DecryptedBallot[] = [];
+  const earlyRejected: { pubkey: string; reason: string }[] = [];
+  for (const ev of ballots) {
+    // Never trust client-supplied events: signature + envelope first.
+    if (ev.kind !== VOTING_KIND || ev.tags.find((t) => t[0] === "d")?.[1] !== dTag) {
+      continue;
+    }
+    if (!verifyEvent(ev)) {
+      earlyRejected.push({ pubkey: ev.pubkey, reason: "bad-signature" });
+      continue;
+    }
+    const plaintext = await decryptBallotContent(secret, ev);
+    if (plaintext === null) {
+      earlyRejected.push({ pubkey: ev.pubkey, reason: "undecryptable" });
+      continue;
+    }
+    const content = parseBallotContent(plaintext);
+    if (!content || content.hackathonId !== hackathonId) {
+      earlyRejected.push({ pubkey: ev.pubkey, reason: "content" });
+      continue;
+    }
+    decrypted.push({
+      id: ev.id,
+      pubkey: ev.pubkey,
+      created_at: ev.created_at,
+      tags: ev.tags,
+      allocations: content.allocations,
+    });
+  }
+
+  const { results, byVoter, rejected } = tallyDecryptedBallots(
+    decrypted,
+    period,
+    { closedAt },
+  );
+
+  // Resolve each project's primary recipient pubkey (dev → stand-in).
+  const projects = await votableProjects(hackathonId);
+  const byProjectId = new Map(projects.map((p) => [p.id, p]));
+  const recipientCache = new Map<string, string | null>();
+  const resolveRecipient = (projectId: string): string | null => {
+    if (recipientCache.has(projectId)) return recipientCache.get(projectId)!;
+    const project = byProjectId.get(projectId);
+    const real = project ? primaryProjectPubkey(project) : null;
+    recipientCache.set(projectId, real); // dev remap applied below (async)
+    return real;
+  };
+  let winners = computeVotingRanking(results.tally, resolveRecipient);
+  if (isDevMode()) {
+    winners = await Promise.all(
+      winners.map(async (w) => ({
+        ...w,
+        recipientPubkey: w.recipientPubkey
+          ? await devPubkeyForPubkey(w.recipientPubkey)
+          : null,
+      })),
+    );
+  }
+
+  const eligibleByPubkey = new Map(period.eligible.map((v) => [v.pubkey, v]));
+  const perVoter = [...byVoter.entries()].map(([pubkey, allocations]) => ({
+    pubkey,
+    name: eligibleByPubkey.get(pubkey)?.name ?? `${pubkey.slice(0, 8)}…`,
+    allocations,
+    total: Object.values(allocations).reduce((s, n) => s + n, 0),
+  }));
+
+  return {
+    tally: { ...results, winners },
+    winners,
+    countedBallotIds: results.countedBallotIds ?? [],
+    perVoter,
+    rejected: [
+      ...earlyRejected,
+      ...rejected.map((r) => ({ pubkey: r.pubkey, reason: r.reason })),
+    ],
+  };
+}
+
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await ctx.params;
-  if (!getHackathon(id)) return jsonError("Hackatón desconocido.", 404);
+  const { id: routeParam } = await ctx.params;
+  const hackathon = getHackathon(routeParam);
+  if (!hackathon) return jsonError("Hackatón desconocido.", 404);
+  // Normalize slug → canonical id so voting data keys off "zaps", not "gaming".
+  const id = hackathon.id;
   try {
     const period = await getCachedVotingPeriod(id);
     return NextResponse.json({ period });
@@ -213,18 +364,24 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await ctx.params;
-  const hackathon = getHackathon(id);
+  const { id: routeParam } = await ctx.params;
+  const hackathon = getHackathon(routeParam);
   if (!hackathon) return jsonError("Hackatón desconocido.", 404);
+  // Normalize slug → canonical id so voting data keys off "zaps", not "gaming".
+  const id = hackathon.id;
 
-  let body: { request?: SignedEvent };
+  let body: { request?: SignedEvent; ballots?: SignedEvent[] };
   try {
-    body = (await req.json()) as { request?: SignedEvent };
+    body = (await req.json()) as {
+      request?: SignedEvent;
+      ballots?: SignedEvent[];
+    };
   } catch {
     return jsonError("Body JSON invalido.");
   }
   const request = body.request;
   if (!request) return jsonError("Falta request firmado.");
+  const postedBallots = Array.isArray(body.ballots) ? body.ballots : [];
 
   try {
     const { finalizeEvent, verifyEvent } = await import("nostr-tools/pure");
@@ -241,12 +398,30 @@ export async function POST(
     if (Math.abs(Math.floor(Date.now() / 1000) - request.created_at) > 10 * 60) {
       return jsonError("Request expirado.", 401);
     }
-    const action = requestTagValue(request, "action");
-    if (action !== OPEN_ACTION && action !== CLOSE_ACTION) {
+    const action = requestTagValue(request, "action") ?? "";
+    if (action !== OPEN_ACTION && !CLOSE_ACTIONS.has(action)) {
       return jsonError("Request no autorizado para administrar la votación.", 401);
     }
     if (requestTagValue(request, "h") !== id) {
       return jsonError("El request no corresponde a este hackatón.", 401);
+    }
+
+    // ── Close step 1: decrypt + tally + return preview (admin-gated, no publish) ──
+    if (action === CLOSE_PREVIEW_ACTION) {
+      const existing = await fetchVotingPeriodFromRelays(id);
+      if (!existing || existing.period.status !== "open") {
+        return jsonError("No hay una votación abierta para previsualizar.", 409);
+      }
+      const ballots =
+        postedBallots.length > 0 ? postedBallots : await fetchBallotEvents(id);
+      const preview = await buildClosePreview(
+        id,
+        existing.period,
+        ballots,
+        secret,
+        Math.floor(Date.now() / 1000),
+      );
+      return NextResponse.json({ ok: true, preview });
     }
 
     const existing = await fetchVotingPeriodFromRelays(id);
@@ -274,13 +449,27 @@ export async function POST(
         name: p.name,
       }));
       const soldiers = await getSoldiers().catch(() => []);
-      const eligible = buildEligibleVoters(soldiers, id);
+      let eligible = buildEligibleVoters(soldiers, id);
+      // Block self-votes using real pubkeys before any dev remap.
+      applyTeamPubkeyBlocks(eligible, projects);
+      if (isDevMode()) {
+        // Real users never share secret keys, so dev impersonation signs with a
+        // deterministic stand-in key derived from each pubkey. Remap eligibility
+        // to those stand-ins so impersonated soldiers can cast valid ballots
+        // against the local relay. Budgets and blocks are preserved.
+        eligible = await Promise.all(
+          eligible.map(async (v) => ({
+            ...v,
+            pubkey: await devPubkeyForPubkey(v.pubkey),
+          })),
+        );
+      }
+      // Env testers carry their own dev keys — merge after the remap.
       for (const extra of testExtraVoters()) {
         if (!eligible.some((v) => v.pubkey === extra.pubkey)) {
           eligible.push(extra);
         }
       }
-      applyTeamPubkeyBlocks(eligible, projects);
 
       period = {
         version: VOTING_SCHEMA_VERSION,
@@ -296,16 +485,26 @@ export async function POST(
         results: null,
       };
     } else {
+      // close-confirm (and the close-voting alias): re-validate the confirmed
+      // ballot set and freeze the signed result.
       if (!existing || existing.period.status !== "open") {
         return jsonError("No hay una votación abierta para cerrar.", 409);
       }
-      const ballots = await fetchBallotEvents(id);
-      const { results } = tallyBallots(ballots, existing.period, now);
+      const ballots =
+        postedBallots.length > 0 ? postedBallots : await fetchBallotEvents(id);
+      const preview = await buildClosePreview(
+        id,
+        existing.period,
+        ballots,
+        secret,
+        now,
+      );
       period = {
         ...existing.period,
         status: "closed",
         closedAt: now,
-        results,
+        // tally already carries winners + countedBallotIds (the FREEZE set).
+        results: preview.tally,
       };
     }
 

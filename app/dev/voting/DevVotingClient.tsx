@@ -3,41 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Copy, KeyRound, Plus, Trash2, UserCheck } from "lucide-react";
 import { HACKATHONS, hackathonStatus } from "@/lib/hackathons";
-import { useAuth, setAuth, clearAuth } from "@/lib/auth";
-import { useToast } from "@/components/Toast";
+import { useAuth, clearAuth } from "@/lib/auth";
+import { useDevIdentities } from "@/lib/useDevIdentities";
 import { cn } from "@/lib/cn";
 import type { VotingPeriod } from "@/lib/voting";
 import VotingSection from "@/app/hackathons/[id]/VotingSection";
-
-type DevIdentity = {
-  label: string;
-  pubkey: string;
-  npub: string;
-  /** 32-byte secret as plain array (same encoding as Auth.localSecret). */
-  secret: number[];
-};
-
-const STORAGE_KEY = "labs:dev:voting-voters:v1";
-
-function loadIdentities(): DevIdentity[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as DevIdentity[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveIdentities(identities: DevIdentity[]) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(identities));
-  } catch {
-    /* quota */
-  }
-}
 
 export default function DevVotingClient({
   testNamespace,
@@ -45,20 +15,16 @@ export default function DevVotingClient({
   testNamespace: boolean;
 }) {
   const { auth } = useAuth();
-  const { push } = useToast();
+  const { identities, generateIdentity, removeIdentity, loginAs, copy } =
+    useDevIdentities();
 
   const activeHackathon = useMemo(
     () => HACKATHONS.find((h) => hackathonStatus(h) === "active") ?? HACKATHONS[0],
     [],
   );
   const [hackathonId, setHackathonId] = useState(activeHackathon.id);
-  const [identities, setIdentities] = useState<DevIdentity[]>([]);
   const [period, setPeriod] = useState<VotingPeriod | null>(null);
   const [loadingPeriod, setLoadingPeriod] = useState(false);
-
-  useEffect(() => {
-    setIdentities(loadIdentities());
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,52 +44,6 @@ export default function DevVotingClient({
       cancelled = true;
     };
   }, [hackathonId]);
-
-  async function generateIdentity() {
-    const { generateSecretKey, getPublicKey } = await import(
-      "nostr-tools/pure"
-    );
-    const { npubEncode } = await import("nostr-tools/nip19");
-    const secret = generateSecretKey();
-    const pubkey = getPublicKey(secret);
-    const identity: DevIdentity = {
-      label: `Identidad ${identities.length + 1}`,
-      pubkey,
-      npub: npubEncode(pubkey),
-      secret: Array.from(secret),
-    };
-    const next = [...identities, identity];
-    setIdentities(next);
-    saveIdentities(next);
-  }
-
-  function removeIdentity(pubkey: string) {
-    const next = identities.filter((i) => i.pubkey !== pubkey);
-    setIdentities(next);
-    saveIdentities(next);
-  }
-
-  function loginAs(identity: DevIdentity) {
-    setAuth({
-      method: "local",
-      pubkey: identity.pubkey,
-      localSecret: identity.secret,
-    });
-    push({
-      kind: "success",
-      title: `Sesión iniciada como ${identity.label}`,
-      description: identity.npub.slice(0, 20) + "…",
-    });
-  }
-
-  async function copy(text: string, what: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      push({ kind: "info", title: `${what} copiado` });
-    } catch {
-      push({ kind: "error", title: "No se pudo copiar" });
-    }
-  }
 
   return (
     <div className="mt-8 space-y-8">

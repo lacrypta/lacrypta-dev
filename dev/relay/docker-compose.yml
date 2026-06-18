@@ -1,0 +1,26 @@
+# Local Nostr relay for La Crypta Labs dev.
+#
+# Fully isolated: nothing published here ever reaches a public relay, so you can
+# exercise voting / projects / badges without permanently polluting production
+# (Nostr events can't be deleted once they hit a real relay).
+#
+#   pnpm relay:up     # start  (ws://localhost:7777)
+#   pnpm relay:logs   # tail
+#   pnpm relay:down   # stop
+#
+# Point the app at it with NEXT_PUBLIC_NOSTR_RELAYS=ws://localhost:7777
+services:
+  nostr-relay:
+    image: scsibug/nostr-rs-relay:latest
+    container_name: labs-nostr-relay
+    restart: unless-stopped
+    # Host 7777 -> container 8080 (nostr-rs-relay's default listen port).
+    ports:
+      - "7777:8080"
+    volumes:
+      # Config is read from ./config.toml relative to WORKDIR /usr/src/app.
+      # Read-only so the container can't rewrite our checked-in config.
+      - ./config.toml:/usr/src/app/config.toml:ro
+      # SQLite DB dir. The image CMD hardcodes `--db /usr/src/app/db`, which
+      # overrides config's data_directory — so the DB volume MUST mount here.
+      - ./data:/usr/src/app/db

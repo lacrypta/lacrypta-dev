@@ -340,6 +340,16 @@ export class Nip46Client {
     return JSON.parse(resp) as SignedEvent;
   }
 
+  /** NIP-46 remote NIP-44 encrypt: bunker encrypts `plaintext` to `peer`. */
+  async nip44Encrypt(peer: string, plaintext: string): Promise<string> {
+    return this.sendRequest("nip44_encrypt", [peer, plaintext]);
+  }
+
+  /** NIP-46 remote NIP-44 decrypt: bunker decrypts `ciphertext` from `peer`. */
+  async nip44Decrypt(peer: string, ciphertext: string): Promise<string> {
+    return this.sendRequest("nip44_decrypt", [peer, ciphertext]);
+  }
+
   async close(): Promise<void> {
     this.isOpen = false;
     for (const id of Object.keys(this.listeners)) {
