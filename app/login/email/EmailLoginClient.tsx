@@ -19,7 +19,7 @@ export default function EmailLoginClient() {
     let cancelled = false;
     let redirectTimer: number | undefined;
     const token = searchParams.get("token")?.trim();
-    const redirectTo = safeLoginRedirect(
+    const fallbackRedirectTo = safeLoginRedirect(
       searchParams.get("next"),
       DEFAULT_LOGIN_REDIRECT,
     );
@@ -40,10 +40,15 @@ export default function EmailLoginClient() {
           error?: string;
           nsec?: string;
           pubkey?: string;
+          redirectTo?: string;
         };
         if (!res.ok || !data.nsec || !data.pubkey) {
           throw new Error(data.error || "No se pudo validar el enlace.");
         }
+        const redirectTo = safeLoginRedirect(
+          data.redirectTo,
+          fallbackRedirectTo,
+        );
 
         const { decode } = await import("nostr-tools/nip19");
         const decoded = decode(data.nsec);

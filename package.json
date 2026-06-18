@@ -7,6 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:email-login": "node --import tsx --test tests/emailLogin.test.ts",
     "gen:dev-keys": "node scripts/gen-dev-keys.mjs",
     "relay:up": "docker compose -f dev/relay/docker-compose.yml up -d",
     "relay:down": "docker compose -f dev/relay/docker-compose.yml down",
@@ -32,6 +33,7 @@
     "@types/react-dom": "^19",
     "js-yaml": "^4.1.1",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }

@@ -1,15 +1,22 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
+import {
+  type EmailLoginDestination,
+  validateEmailLoginTokenDestination,
+} from "./emailLoginDestinations";
 
 const DERIVATION_CONTEXT = "lacrypta.dev:email-login:derive:v1";
 const ENCRYPTION_CONTEXT = "lacrypta.dev:email-login:encrypt:v1";
 const TOKEN_PURPOSE = "lacrypta-email-login";
-const TOKEN_VERSION = "1";
+const TOKEN_VERSION = "2";
 export const EMAIL_LOGIN_TTL_SECONDS = 15 * 60;
 
 type TokenPayload = {
+  audOrigin: string;
+  callbackUrl: string;
   email: string;
   exp: number;
   nsec: string;
+  redirectTo: string;
 };
 
 type EncryptedContent = {
@@ -102,7 +109,14 @@ function decryptPayload(rootSecret: Uint8Array, content: string): TokenPayload {
   decipher.setAuthTag(authTag);
   const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   const payload = JSON.parse(plaintext.toString("utf8")) as Partial<TokenPayload>;
-  if (!payload.email || !payload.nsec || typeof payload.exp !== "number") {
+  if (
+    !payload.audOrigin ||
+    !payload.callbackUrl ||
+    !payload.email ||
+    !payload.nsec ||
+    !payload.redirectTo ||
+    typeof payload.exp !== "number"
+  ) {
     throw new Error("Token de email invalido.");
   }
   return payload as TokenPayload;
@@ -115,11 +129,13 @@ function eventTag(event: SignedEvent, name: string): string | null {
 export async function createEmailLoginToken(
   rootSecret: Uint8Array,
   email: string,
+  destination: EmailLoginDestination,
   now = Math.floor(Date.now() / 1000),
 ): Promise<{ exp: number; nsec: string; pubkey: string; token: string }> {
   const { nsecEncode } = await import("nostr-tools/nip19");
   const { finalizeEvent, getPublicKey } = await import("nostr-tools/pure");
-  const userSecret = deriveEmailSecret(rootSecret, email);
+  const normalizedEmail = normalizeEmail(email);
+  const userSecret = deriveEmailSecret(rootSecret, normalizedEmail);
   const nsec = nsecEncode(userSecret);
   const pubkey = getPublicKey(userSecret);
   const exp = now + EMAIL_LOGIN_TTL_SECONDS;
@@ -131,8 +147,16 @@ export async function createEmailLoginToken(
         ["purpose", TOKEN_PURPOSE],
         ["v", TOKEN_VERSION],
         ["exp", String(exp)],
+        ["aud", destination.audOrigin],
       ],
-      content: encryptPayload(rootSecret, { email, exp, nsec }),
+      content: encryptPayload(rootSecret, {
+        audOrigin: destination.audOrigin,
+        callbackUrl: destination.callbackUrl,
+        email: normalizedEmail,
+        exp,
+        nsec,
+        redirectTo: destination.redirectTo,
+      }),
     },
     rootSecret,
   );
@@ -148,7 +172,15 @@ export async function consumeEmailLoginToken(
   rootSecret: Uint8Array,
   token: string,
   now = Math.floor(Date.now() / 1000),
-): Promise<{ email: string; exp: number; nsec: string; pubkey: string }> {
+): Promise<{
+  audOrigin: string;
+  callbackUrl: string;
+  email: string;
+  exp: number;
+  nsec: string;
+  pubkey: string;
+  redirectTo: string;
+}> {
   let event: SignedEvent;
   try {
     event = JSON.parse(base64UrlDecode(token).toString("utf8")) as SignedEvent;
@@ -175,13 +207,25 @@ export async function consumeEmailLoginToken(
   if (payload.exp !== tagExp || payload.exp < now) {
     throw new Error("El enlace de email expiro.");
   }
+  if (eventTag(event, "aud") !== payload.audOrigin) {
+    throw new Error("Token de email invalido.");
+  }
+  validateEmailLoginTokenDestination({
+    audOrigin: payload.audOrigin,
+    callbackUrl: payload.callbackUrl,
+    redirectTo: payload.redirectTo,
+    siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+  });
 
   const decoded = decode(payload.nsec);
   if (decoded.type !== "nsec") throw new Error("Token de email invalido.");
   return {
+    audOrigin: payload.audOrigin,
+    callbackUrl: payload.callbackUrl,
     email: payload.email,
     exp: payload.exp,
     nsec: payload.nsec,
     pubkey: getPublicKey(decoded.data as Uint8Array),
+    redirectTo: payload.redirectTo,
   };
 }

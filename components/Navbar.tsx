@@ -38,19 +38,13 @@ type NavLink = {
 const NAV_LINKS: NavLink[] = [
   { href: "/hackathons", label: "Hackatones" },
   { href: "/projects", label: "Proyectos" },
+  { href: "/skills", label: "Skills", badge: "NEW" },
   { href: "/soldados", label: "Soldados" },
-  { href: "/badges", label: "Reconocimientos", badge: "NEW" },
 ];
-
-function isBadgesPath(pathname: string) {
-  return pathname === "/badges";
-}
 
 function isActiveNavLink(link: NavLink, pathname: string) {
   if (link.external) return false;
   if (link.href === "/") return pathname === "/";
-  if (link.href === "/badges") return isBadgesPath(pathname);
-  if (link.href === "/hackathons" && isBadgesPath(pathname)) return false;
   return pathname === link.href || pathname.startsWith(`${link.href}/`);
 }
 

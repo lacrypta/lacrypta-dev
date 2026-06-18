@@ -103,12 +103,12 @@ export async function fetchLacryptaBadgePubkeys(): Promise<{
     publisherPubkey?: string;
     error?: string;
   };
-  if (!res.ok || !data.adminPubkey || !data.publisherPubkey) {
+  if (!res.ok || !data.adminPubkey) {
     throw new Error(data.error || "No se pudo resolver pubkeys de La Crypta.");
   }
   return {
     adminPubkey: data.adminPubkey,
-    publisherPubkey: data.publisherPubkey,
+    publisherPubkey: data.publisherPubkey ?? "",
   };
 }
 

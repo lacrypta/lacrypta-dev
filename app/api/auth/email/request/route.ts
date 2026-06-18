@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import {
+  assertEmailLoginOriginMatchesAudience,
+  emailLoginCorsHeaders,
+  EmailLoginDestinationError,
+  resolveEmailLoginDestination,
+} from "@/lib/emailLoginDestinations";
+import {
   createEmailLoginToken,
   getLacryptaSecret,
   isValidEmail,
@@ -8,12 +14,19 @@ import {
 import { DEFAULT_LOGIN_REDIRECT, safeLoginRedirect } from "@/lib/loginRedirect";
 
 type RequestBody = {
+  callbackUrl?: string;
   email?: string;
   redirectTo?: string;
 };
 
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status });
+function jsonError(message: string, status = 400, origin?: string | null) {
+  return NextResponse.json(
+    { error: message },
+    {
+      headers: emailLoginCorsHeaders(origin ?? null, process.env.NEXT_PUBLIC_SITE_URL),
+      status,
+    },
+  );
 }
 
 function requiredEnv(name: string): string {
@@ -30,9 +43,10 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function emailHtml(link: string, email: string): string {
+function emailHtml(link: string, email: string, appOrigin: string): string {
   const safeLink = escapeHtml(link);
   const safeEmail = escapeHtml(email);
+  const safeAppOrigin = escapeHtml(appOrigin);
   return `<!doctype html>
 <html>
   <body style="margin:0;background:#05070e;color:#f4f4f5;font-family:Inter,Arial,sans-serif;">
@@ -57,12 +71,12 @@ function emailHtml(link: string, email: string): string {
                       </table>
 
                       <h1 style="margin:28px 0 12px;color:#ffffff;font-size:30px;line-height:1.1;font-weight:800;letter-spacing:0;">Tu acceso está listo</h1>
-                      <p style="margin:0 0 22px;color:#b8bdcc;font-size:15px;line-height:1.65;">Recibimos un pedido para iniciar sesión como <strong style="color:#ffffff;">${safeEmail}</strong>. El botón genera tu sesión Nostr local y expira en 15 minutos.</p>
+                      <p style="margin:0 0 22px;color:#b8bdcc;font-size:15px;line-height:1.65;">Recibimos un pedido para iniciar sesión como <strong style="color:#ffffff;">${safeEmail}</strong> en <strong style="color:#ffffff;">${safeAppOrigin}</strong>. El botón genera tu sesión Nostr local y expira en 15 minutos.</p>
 
                       <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 24px;">
                         <tr>
                           <td style="border-radius:14px;background:#f7931a;">
-                            <a href="${safeLink}" style="display:inline-block;color:#05070e;text-decoration:none;font-size:15px;font-weight:900;border-radius:14px;padding:15px 22px;">Ingresar a La Crypta Dev</a>
+                            <a href="${safeLink}" style="display:inline-block;color:#05070e;text-decoration:none;font-size:15px;font-weight:900;border-radius:14px;padding:15px 22px;">Ingresar con La Crypta Dev</a>
                           </td>
                         </tr>
                       </table>
@@ -92,29 +106,46 @@ function emailHtml(link: string, email: string): string {
 </html>`;
 }
 
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, {
+    headers: emailLoginCorsHeaders(req.headers.get("origin"), process.env.NEXT_PUBLIC_SITE_URL),
+    status: 204,
+  });
+}
+
 export async function POST(req: Request) {
+  const origin = req.headers.get("origin");
   let body: RequestBody;
   try {
     body = (await req.json()) as RequestBody;
   } catch {
-    return jsonError("Body JSON invalido.");
+    return jsonError("Body JSON invalido.", 400, origin);
   }
 
   const email = normalizeEmail(body.email ?? "");
-  if (!isValidEmail(email)) return jsonError("Correo electronico invalido.");
+  if (!isValidEmail(email)) return jsonError("Correo electronico invalido.", 400, origin);
 
   try {
+    const siteUrl = requiredEnv("NEXT_PUBLIC_SITE_URL").replace(/\/+$/u, "");
+    const destination = resolveEmailLoginDestination({
+      callbackUrl: body.callbackUrl,
+      redirectTo: body.redirectTo,
+      siteUrl,
+    });
+    if (origin) {
+      assertEmailLoginOriginMatchesAudience(origin, destination.audOrigin);
+    }
+
     const resendApiKey = requiredEnv("RESEND_API_KEY");
     const from = requiredEnv("RESEND_FROM_EMAIL");
-    const siteUrl = requiredEnv("NEXT_PUBLIC_SITE_URL").replace(/\/+$/u, "");
     const rootSecret = await getLacryptaSecret();
-    const { token } = await createEmailLoginToken(rootSecret, email);
-    const params = new URLSearchParams({ token });
-    params.set(
+    const { token } = await createEmailLoginToken(rootSecret, email, destination);
+    const link = new URL(destination.callbackUrl);
+    link.searchParams.set("token", token);
+    link.searchParams.set(
       "next",
-      safeLoginRedirect(body.redirectTo, DEFAULT_LOGIN_REDIRECT),
+      safeLoginRedirect(destination.redirectTo, DEFAULT_LOGIN_REDIRECT),
     );
-    const link = `${siteUrl}/login/email?${params.toString()}`;
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -126,21 +157,33 @@ export async function POST(req: Request) {
         from,
         to: [email],
         subject: "Ingresá a La Crypta Dev",
-        html: emailHtml(link, email),
+        html: emailHtml(link.toString(), email, destination.audOrigin),
         tags: [{ name: "category", value: "email_login" }],
       }),
     });
 
     const data = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
     if (!res.ok) {
-      return jsonError(data.message || "No se pudo enviar el email.", 502);
+      return jsonError(data.message || "No se pudo enviar el email.", 502, origin);
     }
 
-    return NextResponse.json({ ok: true, id: data.id ?? null });
+    return NextResponse.json(
+      {
+        callbackUrl: destination.callbackUrl,
+        id: data.id ?? null,
+        ok: true,
+      },
+      {
+        headers: emailLoginCorsHeaders(origin, siteUrl),
+      },
+    );
   } catch (error) {
+    const status =
+      error instanceof EmailLoginDestinationError ? error.status : 500;
     return jsonError(
       error instanceof Error ? error.message : "No se pudo enviar el email.",
-      500,
+      status,
+      origin,
     );
   }
 }

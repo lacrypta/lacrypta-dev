@@ -664,7 +664,7 @@ function MissingCatalog({
           <button
             type="button"
             onClick={onBootstrap}
-            disabled={!signerReady || busy}
+            disabled={!signerReady || busy || !hasPublisher}
             className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-bitcoin/40 bg-bitcoin px-5 py-3 text-sm font-bold text-black transition-colors hover:bg-lightning disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? (

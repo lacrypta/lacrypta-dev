@@ -6,7 +6,6 @@ import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
-  Award,
   BookOpen,
   Calendar,
   Trophy,
@@ -52,6 +51,7 @@ import { nostrVotingTag } from "@/lib/nostrCacheTags";
 import HackathonProjectsList from "./HackathonProjectsList";
 import VotingSection from "./VotingSection";
 import HackathonResultsClient from "./HackathonResultsClient";
+import AdminBadgesLink from "./AdminBadgesLink";
 import PrizeBadgeButton, { type PrizeBadgeTask } from "./PrizeBadgeButton";
 import PrizeZapButton from "./PrizeZapButton";
 import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
@@ -564,15 +564,7 @@ export default async function HackathonPage({
                   <HackathonInscripcionButton hackathonId={hackathon.id} />
                 </div>
               )}
-              <div className="mt-4">
-                <Link
-                  href="/badges"
-                  className="inline-flex items-center gap-2 rounded-xl border border-bitcoin/30 bg-bitcoin/10 px-4 py-2 text-sm font-semibold text-bitcoin transition-colors hover:bg-bitcoin/15"
-                >
-                  <Award className="h-4 w-4" />
-                  Ver badges
-                </Link>
-              </div>
+              <AdminBadgesLink />
             </div>
           </div>
 
