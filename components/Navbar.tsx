@@ -40,19 +40,9 @@ const NAV_LINKS: NavLink[] = [
   { href: "/soldados", label: "Soldados" },
 ];
 
-const ADMIN_NAV_LINKS: NavLink[] = [
-  { href: "/badges", label: "Reconocimientos", badge: "NEW" },
-];
-
-function isBadgesPath(pathname: string) {
-  return pathname === "/badges";
-}
-
 function isActiveNavLink(link: NavLink, pathname: string) {
   if (link.external) return false;
   if (link.href === "/") return pathname === "/";
-  if (link.href === "/badges") return isBadgesPath(pathname);
-  if (link.href === "/hackathons" && isBadgesPath(pathname)) return false;
   return pathname === link.href || pathname.startsWith(`${link.href}/`);
 }
 
@@ -69,7 +59,6 @@ export default function Navbar() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const { push: pushToast } = useToast();
   const isAdmin = !!auth?.pubkey && !!adminPubkey && auth.pubkey === adminPubkey;
-  const navLinks = isAdmin ? [...NAV_LINKS, ...ADMIN_NAV_LINKS] : NAV_LINKS;
 
   const { scrollY } = useScroll();
 
@@ -157,7 +146,7 @@ export default function Navbar() {
           </Link>
 
           <div className="hidden lg:flex items-center gap-1">
-            {navLinks.map((link) => {
+            {NAV_LINKS.map((link) => {
               const active = isActiveNavLink(link, pathname);
               const className = cn(
                 "relative px-4 py-2 text-sm font-medium rounded-lg transition-colors",
@@ -338,7 +327,7 @@ export default function Navbar() {
               className="absolute top-0 right-0 bottom-0 w-[85%] max-w-sm glass-strong border-l border-border pt-20 pb-8 px-6 flex flex-col"
             >
               <div className="flex flex-col gap-1 mb-8">
-                {navLinks.map((link, i) => {
+                {NAV_LINKS.map((link, i) => {
                   const active = isActiveNavLink(link, pathname);
                   const itemClass = cn(
                     "flex items-center justify-between gap-2 px-4 py-3 rounded-lg text-base font-medium transition-colors",
