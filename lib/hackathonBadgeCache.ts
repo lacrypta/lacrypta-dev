@@ -47,6 +47,14 @@ async function publisherPubkeyFromNsec(): Promise<string> {
   return getPublicKey(decoded.data as Uint8Array);
 }
 
+async function optionalPublisherPubkeyFromNsec(): Promise<string> {
+  try {
+    return await publisherPubkeyFromNsec();
+  } catch {
+    return "";
+  }
+}
+
 function plainEvent(event: SignedEvent): SignedEvent {
   return {
     id: event.id,
@@ -99,7 +107,7 @@ function plainAwardOwner(owner: BadgeAwardOwner): BadgeAwardOwner {
 export async function getCachedHackathonBadgePublisherPubkey(): Promise<string> {
   "use cache";
   cacheLife("hours");
-  return publisherPubkeyFromNsec();
+  return optionalPublisherPubkeyFromNsec();
 }
 
 export async function getCachedHackathonBadgeCatalogSnapshot(
@@ -109,7 +117,16 @@ export async function getCachedHackathonBadgeCatalogSnapshot(
   cacheLife("hours");
   cacheTag(nostrHackathonBadgesTag(hackathonId));
 
-  const publisherPubkey = await publisherPubkeyFromNsec();
+  const publisherPubkey = await optionalPublisherPubkeyFromNsec();
+  if (!publisherPubkey) {
+    return {
+      hackathonId,
+      publisherPubkey: "",
+      catalogEvent: null,
+      generatedAt: new Date().toISOString(),
+      relays: DEFAULT_RELAYS,
+    };
+  }
   try {
     return {
       hackathonId,

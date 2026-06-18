@@ -30,11 +30,17 @@ function getAdminNpub(): string {
 export async function GET() {
   try {
     await connection();
-    const [adminPubkey, publisherPubkey] = await Promise.all([
-      decodeNpub(getAdminNpub()),
-      publisherPubkeyFromNsec(),
-    ]);
-    return NextResponse.json({ adminPubkey, publisherPubkey });
+    const adminPubkey = await decodeNpub(getAdminNpub());
+    try {
+      const publisherPubkey = await publisherPubkeyFromNsec();
+      return NextResponse.json({ adminPubkey, publisherPubkey });
+    } catch (error) {
+      return NextResponse.json({
+        adminPubkey,
+        publisherError:
+          error instanceof Error ? error.message : "No se pudo resolver publisher.",
+      });
+    }
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Config invalida." },
