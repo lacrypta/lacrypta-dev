@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { UserPlus } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { hackathonSlugForId } from "@/lib/hackathons";
 import LoginModal from "./LoginModal";
 import NewProjectModal from "./NewProjectModal";
 
@@ -52,7 +53,7 @@ export default function HackathonInscripcionButton({
           // out of nowhere.
           setPendingInscription(false);
         }}
-        redirectTo={`/hackathons/${hackathonId}`}
+        redirectTo={`/hackathons/${hackathonSlugForId(hackathonId)}`}
       />
       <NewProjectModal
         hackathonId={hackathonId}

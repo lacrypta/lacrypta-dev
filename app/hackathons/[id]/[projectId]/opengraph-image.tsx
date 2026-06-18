@@ -5,6 +5,8 @@ import {
   getHackathon,
   getHackathonProjects,
   getProject,
+  hackathonSlug,
+  hackathonSlugForId,
   prizeForProject,
 } from "@/lib/hackathons";
 import {
@@ -17,20 +19,30 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export async function generateStaticParams() {
-  const curated = HACKATHONS.flatMap((h) =>
-    getHackathonProjects(h.id).map((p) => ({ id: h.id, projectId: p.id })),
-  );
-
   const hackathonIds = new Set(HACKATHONS.map((h) => h.id));
-  const seen = new Set(curated.map((p) => `${p.id}/${p.projectId}`));
+  // Dedup keys off the canonical id; the route segment is the public slug.
+  const seen = new Set<string>();
+  const out: { id: string; projectId: string }[] = [];
+
+  for (const h of HACKATHONS) {
+    for (const p of getHackathonProjects(h.id)) {
+      const key = `${h.id}/${p.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id: hackathonSlug(h), projectId: p.id });
+    }
+  }
 
   const { projects } = await getNostrSubmissionsSnapshot();
-  const community = projects
-    .filter((p) => p.hackathon && hackathonIds.has(p.hackathon))
-    .filter((p) => !seen.has(`${p.hackathon}/${p.id}`))
-    .map((p) => ({ id: p.hackathon as string, projectId: p.id }));
+  for (const p of projects) {
+    if (!p.hackathon || !hackathonIds.has(p.hackathon)) continue;
+    const key = `${p.hackathon}/${p.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id: hackathonSlugForId(p.hackathon), projectId: p.id });
+  }
 
-  return [...curated, ...community];
+  return out;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -54,12 +66,14 @@ export default async function Image({
 }: {
   params: Promise<{ id: string; projectId: string }>;
 }) {
-  const { id, projectId } = await params;
-  const h = getHackathon(id);
+  const { id: routeParam, projectId } = await params;
+  const h = getHackathon(routeParam);
   if (!h) {
     const { default: DefaultOG } = await import("../../../opengraph-image");
     return DefaultOG();
   }
+  // Data lookups key off the canonical id, not the slug.
+  const id = h.id;
 
   const curated = getProject(id, projectId);
   let name: string;

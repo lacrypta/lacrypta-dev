@@ -25,6 +25,7 @@ import { cn } from "@/lib/cn";
 import { useAuth, clearAuth, readAndClearLogoutReason } from "@/lib/auth";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { useNostrProfile } from "@/lib/nostrProfile";
+import { isDevMode } from "@/lib/devMode";
 import { useToast } from "./Toast";
 
 type NavLink = {
@@ -139,7 +140,8 @@ export default function Navbar() {
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
         className={cn(
-          "fixed top-0 inset-x-0 z-50 h-16",
+          // Dev mode adds a 32px strip above the header; shift it down to clear it.
+          isDevMode() ? "fixed top-8 inset-x-0 z-50 h-16" : "fixed top-0 inset-x-0 z-50 h-16",
           "transition-[background-color,border-color,box-shadow] duration-300 ease-in-out",
           scrolled
             ? "glass-strong border-b border-border"
@@ -331,7 +333,11 @@ export default function Navbar() {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="absolute top-0 right-0 bottom-0 w-[85%] max-w-sm glass-strong border-l border-border pt-20 pb-8 px-6 flex flex-col"
+              className={cn(
+                "absolute top-0 right-0 bottom-0 w-[85%] max-w-sm glass-strong border-l border-border pb-8 px-6 flex flex-col",
+                // Clear the header; in dev also clear the 32px DEV MODE strip.
+                isDevMode() ? "pt-28" : "pt-20",
+              )}
             >
               <div className="flex flex-col gap-1 mb-8">
                 {NAV_LINKS.map((link, i) => {

@@ -1,4 +1,5 @@
 import type { Hackathon, HackathonProject } from "./hackathons";
+import { hackathonSlug } from "./hackathons";
 import { dedupeSoldierProfileMembers } from "./soldierProfileLinks";
 
 const BASE_URL = "https://lacrypta.dev";
@@ -39,7 +40,7 @@ function eventEndDate(h: Hackathon): string | undefined {
 }
 
 export function eventLd(h: Hackathon): JsonLdValue {
-  const url = `${BASE_URL}/hackathons/${h.id}`;
+  const url = `${BASE_URL}/hackathons/${hackathonSlug(h)}`;
   const start = eventStartDate(h);
   const end = eventEndDate(h);
 
@@ -78,7 +79,7 @@ export function creativeWorkLd(
   project: HackathonProject,
   hackathon: Hackathon,
 ): JsonLdValue {
-  const url = `${BASE_URL}/hackathons/${hackathon.id}/${project.id}`;
+  const url = `${BASE_URL}/hackathons/${hackathonSlug(hackathon)}/${project.id}`;
   return {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -93,7 +94,7 @@ export function creativeWorkLd(
     isPartOf: {
       "@type": "Event",
       name: `${hackathon.name} — Hackatón #${hackathon.number}`,
-      url: `${BASE_URL}/hackathons/${hackathon.id}`,
+      url: `${BASE_URL}/hackathons/${hackathonSlug(hackathon)}`,
     },
     author: dedupeSoldierProfileMembers(project.team).map((m) => ({
       "@type": "Person",

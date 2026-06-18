@@ -4,6 +4,7 @@ import {
   PROGRAM,
   formatSats,
   getHackathon,
+  hackathonSlug,
 } from "@/lib/hackathons";
 
 export const alt = "Hackatón · La Crypta Dev";
@@ -11,7 +12,7 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export function generateStaticParams() {
-  return HACKATHONS.map((h) => ({ id: h.id }));
+  return HACKATHONS.map((h) => ({ id: hackathonSlug(h) }));
 }
 
 const DIFFICULTY_COLOR: Record<string, string> = {

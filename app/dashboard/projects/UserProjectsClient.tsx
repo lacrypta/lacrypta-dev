@@ -26,6 +26,7 @@ import { NIP05_REGEX, queryProfile } from "nostr-tools/nip05";
 import { GithubIcon } from "@/components/BrandIcons";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/auth";
+import { isDevMode } from "@/lib/devMode";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { getSigner } from "@/lib/nostrSigner";
 import {
@@ -41,7 +42,7 @@ import {
   type TeamMember,
   type UserProject,
 } from "@/lib/userProjects";
-import { HACKATHONS } from "@/lib/hackathons";
+import { HACKATHONS, hackathonSlugForId } from "@/lib/hackathons";
 import { useNostrProfile } from "@/lib/nostrProfile";
 import { mergeDataRelays } from "@/lib/nostrRelayConfig";
 
@@ -272,8 +273,13 @@ export default function UserProjectsClient() {
   useEffect(() => {
     if (!auth) return;
 
+    // In dev mode, when impersonating a user, read THEIR projects (the real
+    // pubkey) rather than the stand-in session key.
+    const readPubkey =
+      isDevMode() && auth.impersonating ? auth.impersonating : auth.pubkey;
+
     // Hydrate from cache synchronously — no flicker, no loading state.
-    const cached = getCachedUserProjects(auth.pubkey);
+    const cached = getCachedUserProjects(readPubkey);
     if (cached) {
       setDoc(cached);
       setLoading(false);
@@ -285,7 +291,7 @@ export default function UserProjectsClient() {
     let cancelled = false;
     setRefreshing(true);
     setError(null);
-    fetchUserProjects(auth.pubkey, relays)
+    fetchUserProjects(readPubkey, relays)
       .then((fresh) => {
         if (cancelled) return;
         setDoc((prev) => {
@@ -849,7 +855,7 @@ function ProjectCard({
   disabled: boolean;
 }) {
   const detailHref = project.hackathon
-    ? `/hackathons/${project.hackathon}/${project.id}`
+    ? `/hackathons/${hackathonSlugForId(project.hackathon)}/${project.id}`
     : pubkey
       ? `/projects/${pubkey}/${project.id}`
       : null;

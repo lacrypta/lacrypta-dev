@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# local dev nostr relay data (sqlite db + wal/shm)
+/dev/relay/data/
+
 # vercel
 .vercel
 

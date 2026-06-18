@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Trophy, Loader2 } from "lucide-react";
 import { useHackathonResults, type HackathonResults } from "@/lib/nostrReports";
-import { formatSats } from "@/lib/hackathons";
+import { formatSats, hackathonSlugForId } from "@/lib/hackathons";
 import { cn } from "@/lib/cn";
 
 function medal(position: number): string {
@@ -149,7 +149,7 @@ function PrizeList({
         .map((w) => (
           <li key={w.projectId}>
             <Link
-              href={`/hackathons/${hackathonId}/${w.projectId}`}
+              href={`/hackathons/${hackathonSlugForId(hackathonId)}/${w.projectId}`}
               className={cn(
                 "group flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
                 w.position === 1

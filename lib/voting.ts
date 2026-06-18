@@ -19,7 +19,10 @@ import type { Soldier } from "./soldiers";
 export const VOTING_KIND = 30078;
 export const VOTING_T_TAG = "lacrypta-dev-voting";
 export const VOTE_T_TAG = "lacrypta-dev-vote";
-export const VOTING_SCHEMA_VERSION = 1;
+/** v2 = NIP-44-encrypted ballots (allocations hidden on relays). v1 = plaintext. */
+export const VOTING_SCHEMA_VERSION = 2;
+/** Value of the ballot's `["enc", …]` tag when the content is NIP-44 ciphertext. */
+export const VOTE_ENC = "nip44";
 
 /**
  * Dev/test isolation: with `NEXT_PUBLIC_VOTING_NS=test` every d-tag moves to
@@ -65,11 +68,40 @@ export type VotingTallyRow = {
   voters: number;
 };
 
+/** A ranked winner in the closed result. Ranking only — prize amounts and
+ *  payout are handled separately (manual via existing tooling). */
+export type VotingWinner = {
+  /** 1-based rank in the final result. */
+  position: number;
+  projectId: string;
+  projectName: string;
+  votes: number;
+  voters: number;
+  /** Primary team pubkey to send prizes to, resolved at close (null if none). */
+  recipientPubkey: string | null;
+};
+
 export type VotingResults = {
   tally: VotingTallyRow[];
   ballotsCounted: number;
   ballotsRejected: number;
   totalVotesCast: number;
+  /** Ranking of projects with at least one vote (present on v2 closes). */
+  winners?: VotingWinner[];
+  /** The exact ballot event ids counted into this result — the FREEZE set.
+   *  Ballots re-published after close (new ids) are never in this set. */
+  countedBallotIds?: string[];
+};
+
+/** A ballot whose encrypted content has already been decrypted (by the backend
+ *  with LACRYPTA_NSEC, or by the voter with their own key). Lets validate/tally
+ *  run in this pure module without any crypto. */
+export type DecryptedBallot = {
+  id: string;
+  pubkey: string;
+  created_at: number;
+  tags: string[][];
+  allocations: Record<string, number>;
 };
 
 export type VotingPeriod = {
@@ -193,27 +225,28 @@ export function parseBallotContent(content: string): BallotContent | null {
   }
 }
 
-function eventTagValue(ev: VotingEventLike, name: string): string | null {
-  return ev.tags.find((t) => t[0] === name)?.[1] ?? null;
-}
 
 export type BallotValidation =
   | { ok: true; allocations: Record<string, number> }
   | { ok: false; reason: string };
 
 /**
- * A ballot counts iff its `d` tag matches the hackathon, its author is in the
- * frozen eligibility snapshot, it was created inside the voting window, every
- * allocation targets a votable (non-blocked) project with a positive integer
- * amount, and the total stays within the voter's budget.
+ * Content-independent ballot gate: correct `d` tag, eligible author, and within
+ * the voting window. Returns the matched eligible voter on success. Reused by
+ * both the plaintext (v1) path and the decrypted (v2) path.
  */
-export function validateBallot(
-  ev: VotingEventLike,
+export function ballotEnvelopeOk(
+  ev: { pubkey: string; kind: number; created_at: number; tags: string[][] },
   period: VotingPeriod,
   opts: { closedAt?: number | null } = {},
-): BallotValidation {
+):
+  | { ok: true; voter: VotingEligibleVoter }
+  | { ok: false; reason: string } {
   if (ev.kind !== VOTING_KIND) return { ok: false, reason: "kind" };
-  if (eventTagValue(ev, "d") !== voteDTag(period.hackathonId)) {
+  if (
+    (ev.tags.find((t) => t[0] === "d")?.[1] ?? null) !==
+    voteDTag(period.hackathonId)
+  ) {
     return { ok: false, reason: "d-tag" };
   }
   const voter = period.eligible.find(
@@ -225,16 +258,24 @@ export function validateBallot(
   if (closedAt !== null && closedAt !== undefined && ev.created_at > closedAt) {
     return { ok: false, reason: "too-late" };
   }
+  return { ok: true, voter };
+}
 
-  const content = parseBallotContent(ev.content);
-  if (!content || content.hackathonId !== period.hackathonId) {
-    return { ok: false, reason: "content" };
-  }
-
+/**
+ * Validates already-decrypted allocations against the period + voter budget:
+ * positive integers, votable (non-blocked) projects, total within budget.
+ * This is the AUTHORITATIVE budget check (the plaintext `["votes"]` tag on a
+ * ballot is never trusted — only this counts).
+ */
+export function validateAllocations(
+  allocations: Record<string, number>,
+  voter: VotingEligibleVoter,
+  period: VotingPeriod,
+): BallotValidation {
   const projectIds = new Set(period.projects.map((p) => p.id));
   let total = 0;
-  const allocations: Record<string, number> = {};
-  for (const [projectId, votes] of Object.entries(content.allocations)) {
+  const out: Record<string, number> = {};
+  for (const [projectId, votes] of Object.entries(allocations)) {
     if (!Number.isInteger(votes) || votes < 1) {
       return { ok: false, reason: "invalid-amount" };
     }
@@ -244,13 +285,31 @@ export function validateBallot(
     if (voter.blocked.includes(projectId)) {
       return { ok: false, reason: "self-vote" };
     }
-    allocations[projectId] = votes;
+    out[projectId] = votes;
     total += votes;
   }
   if (total === 0) return { ok: false, reason: "empty" };
   if (total > voter.maxVotes) return { ok: false, reason: "over-budget" };
+  return { ok: true, allocations: out };
+}
 
-  return { ok: true, allocations };
+/**
+ * Validates a PLAINTEXT (v1) ballot event end-to-end. Kept for backward compat
+ * with un-encrypted ballots; v2 encrypted ballots are decrypted first and run
+ * through `ballotEnvelopeOk` + `validateAllocations`.
+ */
+export function validateBallot(
+  ev: VotingEventLike,
+  period: VotingPeriod,
+  opts: { closedAt?: number | null } = {},
+): BallotValidation {
+  const envelope = ballotEnvelopeOk(ev, period, opts);
+  if (!envelope.ok) return { ok: false, reason: envelope.reason };
+  const content = parseBallotContent(ev.content);
+  if (!content || content.hackathonId !== period.hackathonId) {
+    return { ok: false, reason: "content" };
+  }
+  return validateAllocations(content.allocations, envelope.voter, period);
 }
 
 /**
@@ -274,6 +333,131 @@ export function dedupeBallots(events: VotingEventLike[]): VotingEventLike[] {
   return [...byAuthor.values()];
 }
 
+/** Latest-per-author dedupe over any event-like with id/pubkey/created_at. */
+function pickLatestPerAuthor<
+  T extends { id: string; pubkey: string; created_at: number },
+>(events: T[]): T[] {
+  const byAuthor = new Map<string, T>();
+  for (const ev of events) {
+    const key = ev.pubkey.toLowerCase();
+    const prev = byAuthor.get(key);
+    if (
+      !prev ||
+      ev.created_at > prev.created_at ||
+      (ev.created_at === prev.created_at && ev.id < prev.id)
+    ) {
+      byAuthor.set(key, ev);
+    }
+  }
+  return [...byAuthor.values()];
+}
+
+/**
+ * Builds tally rows + per-project voter counts from a `byVoter` map.
+ */
+function tallyFromByVoter(
+  byVoter: Map<string, Record<string, number>>,
+  period: VotingPeriod,
+): { tally: VotingTallyRow[]; totalVotesCast: number } {
+  const votesByProject = new Map<string, { votes: number; voters: number }>();
+  let totalVotesCast = 0;
+  for (const allocations of byVoter.values()) {
+    for (const [projectId, votes] of Object.entries(allocations)) {
+      const row = votesByProject.get(projectId) ?? { votes: 0, voters: 0 };
+      row.votes += votes;
+      row.voters += 1;
+      votesByProject.set(projectId, row);
+      totalVotesCast += votes;
+    }
+  }
+  const tally: VotingTallyRow[] = period.projects
+    .map((p) => ({
+      projectId: p.id,
+      name: p.name,
+      votes: votesByProject.get(p.id)?.votes ?? 0,
+      voters: votesByProject.get(p.id)?.voters ?? 0,
+    }))
+    .sort((a, b) => b.votes - a.votes || a.name.localeCompare(b.name));
+  return { tally, totalVotesCast };
+}
+
+/**
+ * The AUTHORITATIVE tally — run by the backend over ballots whose content has
+ * already been decrypted (with LACRYPTA_NSEC). Dedupes latest-per-author,
+ * re-checks envelope + allocations (eligibility + budget + projects), and
+ * returns the survivors plus the FREEZE set (`countedBallotIds`).
+ */
+export function tallyDecryptedBallots(
+  ballots: DecryptedBallot[],
+  period: VotingPeriod,
+  opts: { closedAt?: number | null } = {},
+): {
+  results: Omit<VotingResults, "winners">;
+  byVoter: Map<string, Record<string, number>>;
+  counted: DecryptedBallot[];
+  rejected: { id: string; pubkey: string; reason: string }[];
+} {
+  const deduped = pickLatestPerAuthor(ballots);
+  const byVoter = new Map<string, Record<string, number>>();
+  const counted: DecryptedBallot[] = [];
+  const rejected: { id: string; pubkey: string; reason: string }[] = [];
+
+  for (const ev of deduped) {
+    const envelope = ballotEnvelopeOk(
+      { pubkey: ev.pubkey, kind: VOTING_KIND, created_at: ev.created_at, tags: ev.tags },
+      period,
+      opts,
+    );
+    if (!envelope.ok) {
+      rejected.push({ id: ev.id, pubkey: ev.pubkey, reason: envelope.reason });
+      continue;
+    }
+    const validation = validateAllocations(ev.allocations, envelope.voter, period);
+    if (!validation.ok) {
+      rejected.push({ id: ev.id, pubkey: ev.pubkey, reason: validation.reason });
+      continue;
+    }
+    byVoter.set(ev.pubkey.toLowerCase(), validation.allocations);
+    counted.push(ev);
+  }
+
+  const { tally, totalVotesCast } = tallyFromByVoter(byVoter, period);
+  return {
+    results: {
+      tally,
+      ballotsCounted: byVoter.size,
+      ballotsRejected: rejected.length,
+      totalVotesCast,
+      countedBallotIds: counted.map((b) => b.id),
+    },
+    byVoter,
+    counted,
+    rejected,
+  };
+}
+
+/**
+ * Ranks projects with at least one vote (tally is already sorted votes desc,
+ * name asc). `resolveRecipient` injects the project's primary team pubkey for
+ * later (manual) prize payout. Ranking only — no prize amounts.
+ */
+export function computeVotingRanking(
+  tally: VotingTallyRow[],
+  resolveRecipient: (projectId: string) => string | null,
+): VotingWinner[] {
+  return tally
+    .filter((row) => row.votes > 0)
+    .map((row, i) => ({
+      position: i + 1,
+      projectId: row.projectId,
+      projectName: row.name,
+      votes: row.votes,
+      voters: row.voters,
+      recipientPubkey: resolveRecipient(row.projectId),
+    }));
+}
+
+/** @deprecated v1 plaintext live tally. v2 hides the tally until close. */
 export function tallyBallots(
   events: VotingEventLike[],
   period: VotingPeriod,

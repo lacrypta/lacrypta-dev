@@ -54,9 +54,28 @@ export function mergeNonAuthRelays(
   return withoutAuthOnlyRelays([...(baseRelays ?? []), ...(extraRelays ?? [])]);
 }
 
-export const DEFAULT_RELAYS = [...LACRYPTA_DEFAULT_RELAYS];
-export const FAST_USER_RELAYS = [...LACRYPTA_FAST_USER_RELAYS];
-export const NIP46_LOGIN_RELAYS = [...LACRYPTA_NIP46_LOGIN_RELAYS];
+/**
+ * Dev-only relay override. Set NEXT_PUBLIC_NOSTR_RELAYS (comma-separated) to
+ * route ALL publish/read traffic through a different relay set — typically a
+ * local relay (ws://localhost:7777) for fully-isolated testing. When unset,
+ * the hardcoded La Crypta defaults are used. Single chokepoint: every importer
+ * of DEFAULT_RELAYS / FAST_USER_RELAYS / NIP46_LOGIN_RELAYS inherits it.
+ */
+function parseEnvRelays(): string[] | null {
+  const raw = process.env.NEXT_PUBLIC_NOSTR_RELAYS;
+  if (!raw) return null;
+  const list = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list.length ? list : null;
+}
+
+const ENV_RELAYS = parseEnvRelays();
+
+export const DEFAULT_RELAYS = ENV_RELAYS ?? [...LACRYPTA_DEFAULT_RELAYS];
+export const FAST_USER_RELAYS = ENV_RELAYS ?? [...LACRYPTA_FAST_USER_RELAYS];
+export const NIP46_LOGIN_RELAYS = ENV_RELAYS ?? [...LACRYPTA_NIP46_LOGIN_RELAYS];
 
 function normalizeRelayForPolicy(raw: string): string | null {
   const trimmed = raw.trim();

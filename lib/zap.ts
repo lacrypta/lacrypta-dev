@@ -183,6 +183,14 @@ export async function createAnonymousSigner(): Promise<UserSigner> {
         sk,
       );
     },
+    async nip44Encrypt(peer, plaintext) {
+      const nip44 = await import("nostr-tools/nip44");
+      return nip44.encrypt(plaintext, nip44.getConversationKey(sk, peer));
+    },
+    async nip44Decrypt(peer, ciphertext) {
+      const nip44 = await import("nostr-tools/nip44");
+      return nip44.decrypt(ciphertext, nip44.getConversationKey(sk, peer));
+    },
   };
 }
 

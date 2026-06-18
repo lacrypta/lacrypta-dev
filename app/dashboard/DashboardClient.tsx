@@ -224,6 +224,30 @@ export default function DashboardClient() {
               </div>
             </Link>
 
+            <Link
+              href="/dashboard/hackathones"
+              className="group relative block overflow-hidden rounded-2xl border border-nostr/30 bg-gradient-to-br from-nostr/10 to-bitcoin/10 p-6 hover:border-nostr/60 transition-all"
+            >
+              <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-nostr/20 blur-3xl group-hover:bg-nostr/30 transition-colors pointer-events-none" />
+              <div className="relative flex items-start gap-4">
+                <div className="shrink-0 h-11 w-11 rounded-xl bg-nostr/20 border border-nostr/40 flex items-center justify-center">
+                  <Award className="h-5 w-5 text-nostr" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="inline-flex items-center gap-1 text-[10px] font-mono tracking-widest text-nostr mb-1">
+                    PARTICIPACIONES
+                  </div>
+                  <div className="font-display font-bold text-lg leading-tight">
+                    Mis hackatones
+                  </div>
+                  <div className="text-sm text-foreground-muted mt-1">
+                    En qué hackatones participaste y con qué proyectos.
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 text-nostr shrink-0 group-hover:translate-x-0.5 transition-transform mt-1" />
+              </div>
+            </Link>
+
             <Card title="Identidad" icon={<Key className="h-4 w-4" />}>
               <div className="grid grid-cols-1 gap-3">
                 <InfoRow label="npub" value={npub ?? "…"} copy mono />
