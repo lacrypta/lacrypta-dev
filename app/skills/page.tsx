@@ -153,12 +153,12 @@ export default function SkillsPage() {
                   <ArrowRight className="h-4 w-4" />
                 </a>
                 <a
-                  href="https://github.com/lacrypta/lacrypta-dev/tree/main/skills/lacrypta-email-login"
+                  href="https://github.com/lacrypta/lacrypta-dev/blob/main/skills/lacrypta-email-login/SKILL.md"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 rounded-lg border border-bitcoin/35 bg-bitcoin/10 px-4 py-2 text-sm font-semibold text-bitcoin transition-colors hover:bg-bitcoin/15"
                 >
-                  Abrir skill en GitHub
+                  Ver SKILL.md
                   <ArrowRight className="h-4 w-4" />
                 </a>
               </div>
