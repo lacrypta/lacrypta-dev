@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import {
   ArrowRight,
   Bot,
   CheckCircle2,
   Download,
   FileCode2,
+  Fingerprint,
+  Globe2,
   KeyRound,
+  Mail,
+  Server,
   ShieldCheck,
   Terminal,
+  WalletCards,
   Wrench,
 } from "lucide-react";
 import PageHero from "@/components/ui/PageHero";
@@ -49,6 +55,27 @@ const checks = [
   "Usa https://lacrypta.dev como issuer por defecto.",
   "Integra Figus con importLocalNsec(data.nsec).",
   "Mantiene NIP-07, NIP-46 y claves locales existentes.",
+];
+
+const magicLoginSteps = [
+  {
+    title: "Email",
+    label: "usuario@mail.com",
+    body: "El usuario pide un magic link desde cualquier app integrada.",
+    icon: <Mail className="h-5 w-5" />,
+  },
+  {
+    title: "lacrypta.dev",
+    label: "issuer central",
+    body: "Normaliza el mail y genera siempre la misma nsec para esa persona.",
+    icon: <Server className="h-5 w-5" />,
+  },
+  {
+    title: "Subdominio",
+    label: "*.lacrypta.dev",
+    body: "Consume el token con CORS y recibe la identidad Nostr local.",
+    icon: <Globe2 className="h-5 w-5" />,
+  },
 ];
 
 export default function SkillsPage() {
@@ -187,7 +214,36 @@ export default function SkillsPage() {
         </div>
       </section>
 
-      <section className="border-t border-border bg-background-elevated/25 py-14">
+      <section className="border-y border-border bg-background-elevated/25 py-14">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-8 max-w-3xl">
+            <p className="font-mono text-xs font-bold uppercase tracking-widest text-bitcoin">
+              Magic login temporal
+            </p>
+            <h2 className="mt-2 font-display text-3xl font-bold">
+              Mismo mail, misma identidad Nostr
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-foreground-muted sm:text-base">
+              lacrypta.dev genera la
+              <code className="mx-1 rounded border border-border bg-black/20 px-1 py-0.5 font-mono text-[0.9em] text-foreground">
+                nsec
+              </code>
+              desde el email normalizado y los subdominios la recuperan a través
+              del issuer central. Así los nuevos usuarios pueden entrar a varias
+              apps sin perder su identidad, y migrar más adelante a una
+              <span className="text-foreground">
+                {" "}
+                nsec self-custodial
+              </span>{" "}
+              cuando estén preparados.
+            </p>
+          </div>
+
+          <MagicLoginImage />
+        </div>
+      </section>
+
+      <section className="bg-background-elevated/25 py-14">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-8">
             <p className="font-mono text-xs font-bold uppercase tracking-widest text-foreground-subtle">
@@ -235,6 +291,152 @@ export default function SkillsPage() {
           </div>
         </div>
       </section>
+    </>
+  );
+}
+
+function MagicLoginImage() {
+  return (
+    <figure
+      role="img"
+      aria-label="Proceso de magic login: un email entra a lacrypta.dev, se deriva la misma nsec y los subdominios la usan para iniciar sesión sin que el usuario pierda identidad."
+      className="relative overflow-hidden rounded-lg border border-border bg-background-card/70 p-5 shadow-2xl shadow-black/20 sm:p-6"
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_18%,rgba(255,153,0,0.14),transparent_30%),radial-gradient(circle_at_82%_20%,rgba(0,245,255,0.12),transparent_28%)]" />
+      <div className="relative grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.38fr)]">
+        <div className="rounded-lg border border-border bg-black/20 p-4 sm:p-5">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-foreground-subtle">
+                Flujo browser CORS
+              </p>
+              <h3 className="mt-1 font-display text-2xl font-bold">
+                Magic Login Nostr
+              </h3>
+            </div>
+            <span className="inline-flex items-center gap-2 rounded-lg border border-bitcoin/35 bg-bitcoin/10 px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest text-bitcoin">
+              <Fingerprint className="h-3.5 w-3.5" />
+              nsec estable
+            </span>
+          </div>
+
+          <div className="grid items-stretch gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr]">
+            {magicLoginSteps.map((step, index) => (
+              <MagicLoginNode key={step.title} step={step} index={index} />
+            ))}
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-bitcoin/30 bg-bitcoin/[0.08] p-4">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-bitcoin">
+                <KeyRound className="h-4 w-4" />
+                Mismo mail = misma nsec
+              </div>
+              <p className="text-sm leading-relaxed text-foreground-muted">
+                Si una persona entra con el mismo email en Figus u otro
+                subdominio, lacrypta.dev entrega la misma identidad Nostr.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-cyan/30 bg-cyan/[0.08] p-4">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-cyan">
+                <WalletCards className="h-4 w-4" />
+                Puente hacia self-custody
+              </div>
+              <p className="text-sm leading-relaxed text-foreground-muted">
+                Es una solución de onboarding para usuarios nuevos. Cuando estén
+                listos, pueden migrar a una nsec propia y autocustodiada.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col justify-between gap-4 rounded-lg border border-border bg-white/[0.025] p-4">
+          <div>
+            <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-foreground-subtle">
+              Contrato de confianza
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-foreground-muted">
+              El subdominio no inventa otra clave: usa el callback autorizado,
+              consume el token y guarda localmente la identidad recibida.
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-border bg-black/30 p-4">
+            <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-bitcoin">
+              identidad
+            </p>
+            <div className="mt-3 space-y-2 font-mono text-xs text-foreground-muted">
+              <div className="flex items-center justify-between gap-3">
+                <span>email</span>
+                <span className="truncate text-foreground">hash normalizado</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>nsec</span>
+                <span className="text-foreground">nsec••••misma</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>pubkey</span>
+                <span className="text-foreground">npub••••misma</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-lightning/30 bg-lightning/[0.08] p-4">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-lightning">
+              <ShieldCheck className="h-4 w-4" />
+              Temporal, no final
+            </div>
+            <p className="text-sm leading-relaxed text-foreground-muted">
+              Sirve para que nadie pierda su identidad al empezar. La meta sigue
+              siendo que cada usuario custodie su propia clave.
+            </p>
+          </div>
+        </div>
+      </div>
+    </figure>
+  );
+}
+
+function MagicLoginNode({
+  step,
+  index,
+}: {
+  step: {
+    title: string;
+    label: string;
+    body: string;
+    icon: ReactNode;
+  };
+  index: number;
+}) {
+  return (
+    <>
+      <div className="flex min-h-56 flex-col rounded-lg border border-border bg-background-card/80 p-4">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-white/[0.04] text-bitcoin">
+            {step.icon}
+          </span>
+          <span className="font-mono text-[11px] font-bold text-foreground-subtle">
+            0{index + 1}
+          </span>
+        </div>
+        <h4 className="font-display text-xl font-bold">{step.title}</h4>
+        <p className="mt-1 font-mono text-xs font-bold uppercase tracking-widest text-cyan">
+          {step.label}
+        </p>
+        <p className="mt-4 text-sm leading-relaxed text-foreground-muted">
+          {step.body}
+        </p>
+      </div>
+
+      {index < magicLoginSteps.length - 1 ? (
+        <div className="hidden items-center justify-center md:flex">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-bitcoin/35 bg-bitcoin/10 text-bitcoin">
+            <ArrowRight className="h-4 w-4" />
+          </span>
+        </div>
+      ) : null}
     </>
   );
 }
