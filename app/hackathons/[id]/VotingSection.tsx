@@ -27,6 +27,7 @@ import { useScrollLock } from "@/lib/useScrollLock";
 import { cn } from "@/lib/cn";
 import {
   isVotingTestNamespace,
+  VOTES_PER_HACKATHON,
   type VotingPeriod,
   type VotingResults,
   type VotingWinner,
@@ -354,7 +355,7 @@ export default function VotingSection({
             <>
               <p className="text-sm text-foreground-muted">
                 {period.status === "open"
-                  ? "La comunidad elige a los ganadores. Vota cualquiera que haya participado de algún hackatón y tenga su identidad Nostr vinculada — 1 voto por hackatón participado, repartidos como quieras."
+                  ? `La comunidad elige a los ganadores. Vota cualquiera que haya participado de algún hackatón y tenga su identidad Nostr vinculada — ${VOTES_PER_HACKATHON} votos por hackatón participado, repartidos como quieras.`
                   : "La votación está cerrada. Estos son los resultados oficiales."}
               </p>
 
