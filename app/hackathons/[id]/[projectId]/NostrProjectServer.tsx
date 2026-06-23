@@ -1,5 +1,5 @@
 import { getNostrProject } from "@/lib/nostrCache";
-import { getHackathon } from "@/lib/hackathons";
+import { getHackathon, hackathonSlugForId } from "@/lib/hackathons";
 import { breadcrumbLd, jsonLdScript } from "@/lib/jsonld";
 import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
 import NostrProjectPageClient from "./NostrProjectPageClient";
@@ -36,7 +36,10 @@ export default async function NostrProjectServer({
   }
 
   const hackathon = getHackathon(hackathonId);
-  const url = `https://lacrypta.dev/hackathons/${hackathonId}/${projectId}`;
+  // Public URLs use the slug (e.g. "gaming"); data lookups above use the
+  // canonical id ("zaps") that published events reference.
+  const slug = hackathonSlugForId(hackathonId);
+  const url = `https://lacrypta.dev/hackathons/${slug}/${projectId}`;
   const team = dedupeSoldierProfileMembers(project.team);
 
   const projectLd = {
@@ -54,7 +57,7 @@ export default async function NostrProjectServer({
       ? {
           "@type": "Event",
           name: `${hackathon.name} — Hackatón #${hackathon.number}`,
-          url: `https://lacrypta.dev/hackathons/${hackathon.id}`,
+          url: `https://lacrypta.dev/hackathons/${slug}`,
         }
       : undefined,
     author: team.map((m) => ({
@@ -77,7 +80,7 @@ export default async function NostrProjectServer({
             ? [
                 {
                   name: hackathon.name,
-                  url: `https://lacrypta.dev/hackathons/${hackathon.id}`,
+                  url: `https://lacrypta.dev/hackathons/${slug}`,
                 },
               ]
             : []),

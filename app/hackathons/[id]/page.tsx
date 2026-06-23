@@ -28,6 +28,7 @@ import {
   PROGRAM,
   formatSats,
   getHackathon,
+  hackathonSlug,
   hackathonStatus,
   primaryProjectPubkey,
   prizedProjects,
@@ -45,7 +46,10 @@ import {
   NOSTR_SUBMISSIONS_TAG,
 } from "@/lib/nostrCache";
 import { getCachedNostrProfile } from "@/lib/nostrProfileCache";
+import { getCachedVotingPeriod } from "@/lib/votingCache";
+import { nostrVotingTag } from "@/lib/nostrCacheTags";
 import HackathonProjectsList from "./HackathonProjectsList";
+import VotingSection from "./VotingSection";
 import HackathonResultsClient from "./HackathonResultsClient";
 import AdminBadgesLink from "./AdminBadgesLink";
 import PrizeBadgeButton, { type PrizeBadgeTask } from "./PrizeBadgeButton";
@@ -53,7 +57,8 @@ import PrizeZapButton from "./PrizeZapButton";
 import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
 
 export function generateStaticParams() {
-  return HACKATHONS.map((h) => ({ id: h.id }));
+  // The dynamic segment is the public slug (falls back to id).
+  return HACKATHONS.map((h) => ({ id: hackathonSlug(h) }));
 }
 
 function truncate(s: string, max = 155): string {
@@ -70,7 +75,7 @@ export async function generateMetadata({
   const h = getHackathon(id);
   if (!h) return { title: "Hackatón" };
   const description = truncate(`${h.focus}. ${h.description}`);
-  const url = `/hackathons/${h.id}`;
+  const url = `/hackathons/${hackathonSlug(h)}`;
   return {
     title: `${h.name} · Hackatón #${h.number}`,
     description,
@@ -436,9 +441,16 @@ export default async function HackathonPage({
   "use cache";
   cacheTag(NOSTR_PROJECTS_TAG);
   cacheTag(NOSTR_SUBMISSIONS_TAG);
-  const { id } = await params;
-  const hackathon = getHackathon(id);
+  const { id: routeParam } = await params;
+  const hackathon = getHackathon(routeParam);
   if (!hackathon) notFound();
+  // The route segment is the public slug; all data ops key off the canonical id
+  // (e.g. "zaps"), which never changes because published events reference it.
+  const id = hackathon.id;
+  // Inner "use cache" tags don't bubble in Next 16 — register the voting tag
+  // at page level so open/close revalidations refresh this page too.
+  cacheTag(nostrVotingTag(id));
+  const votingPeriod = await getCachedVotingPeriod(id);
   const status = hackathonStatus(hackathon);
   const statusMeta = STATUS_META[status];
   const projects = rankedProjects(id);
@@ -489,7 +501,7 @@ export default async function HackathonPage({
           { name: "Hackatones", url: "https://lacrypta.dev/hackathons" },
           {
             name: hackathon.name,
-            url: `https://lacrypta.dev/hackathons/${hackathon.id}`,
+            url: `https://lacrypta.dev/hackathons/${hackathonSlug(hackathon)}`,
           },
         ]),
         "ld-breadcrumbs",
@@ -594,7 +606,7 @@ export default async function HackathonPage({
                           className="flex items-center gap-2"
                         >
                           <Link
-                            href={`/hackathons/${hackathon.id}/${a.project.id}`}
+                            href={`/hackathons/${hackathonSlug(hackathon)}/${a.project.id}`}
                             className={cn(
                               "group flex min-w-0 flex-1 items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
                               a.position === 1
@@ -687,6 +699,15 @@ export default async function HackathonPage({
         <HackathonProjectsList
           hackathon={hackathon}
           initialNostrSubmissions={nostrSubmissions}
+        />
+      </Suspense>
+
+      {/* Community voting — same Suspense requirement as the projects list. */}
+      <Suspense fallback={null}>
+        <VotingSection
+          hackathonId={hackathon.id}
+          hackathonName={hackathon.name}
+          initialPeriod={votingPeriod}
         />
       </Suspense>
 

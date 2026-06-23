@@ -42,7 +42,7 @@ import {
   TOP10_RELAYS,
   type CommunityProject,
 } from "@/lib/userProjects";
-import { formatSats } from "@/lib/hackathons";
+import { formatSats, hackathonSlugForId } from "@/lib/hackathons";
 import { useHackathonResults, type WinnerEntry } from "@/lib/nostrReports";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
@@ -127,7 +127,7 @@ export default function HackathonProjectsList({
   );
 
   useLayoutEffect(() => {
-    return restoreScrollPosition(`/hackathons/${hackathon.id}`);
+    return restoreScrollPosition(`/hackathons/${hackathonSlugForId(hackathon.id)}`);
   }, [hackathon.id]);
 
   const awards = useMemo<PrizedProject[]>(
@@ -465,7 +465,7 @@ function ProjectRow({
   const score = project.report?.finalScore ?? null;
   const prize = award?.prize ?? nostrWinner?.sats ?? null;
   const isNostr = !!project.nostrEventId;
-  const href = `/hackathons/${hackathonId}/${project.id}`;
+  const href = `/hackathons/${hackathonSlugForId(hackathonId)}/${project.id}`;
   const authorDisplayName = isNostr
     ? displayNameForNostrProject(project)
     : null;
@@ -485,7 +485,7 @@ function ProjectRow({
       ) {
         return;
       }
-      rememberScrollPosition(`/hackathons/${hackathonId}`);
+      rememberScrollPosition(`/hackathons/${hackathonSlugForId(hackathonId)}`);
     },
   };
 

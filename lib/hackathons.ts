@@ -38,7 +38,12 @@ export type Sponsor = {
 };
 
 export type Hackathon = {
+  /** Internal, stable id — used as the key for submissions, voting and badges.
+   *  NEVER rename: published Nostr events reference it. */
   id: string;
+  /** Optional URL slug. When set, the public route is `/hackathons/<slug>` but
+   *  all data keeps using `id`. Defaults to `id` when absent. */
+  slug?: string;
   number: number;
   name: string;
   focus: string;
@@ -198,8 +203,21 @@ const PROJECTS_BY_HACKATHON: Record<string, HackathonProject[]> = {
   ),
 };
 
-export function getHackathon(id: string): Hackathon | null {
-  return HACKATHONS.find((h) => h.id === id) ?? null;
+/** Resolve a hackathon by its internal id OR its URL slug (both routes work). */
+export function getHackathon(idOrSlug: string): Hackathon | null {
+  return (
+    HACKATHONS.find((h) => h.id === idOrSlug || h.slug === idOrSlug) ?? null
+  );
+}
+
+/** Public URL segment for a hackathon — the slug when set, else the id. */
+export function hackathonSlug(h: Hackathon): string {
+  return h.slug ?? h.id;
+}
+
+/** Public URL segment for a hackathon id (used when only the id is in hand). */
+export function hackathonSlugForId(id: string): string {
+  return getHackathon(id)?.slug ?? id;
 }
 
 export function getHackathonProjects(id: string): HackathonProject[] {
@@ -283,7 +301,27 @@ export function mergeWithSubmissions(
     });
 
   uniqueNostr.sort((a, b) => (b.nostrCreatedAt ?? 0) - (a.nostrCreatedAt ?? 0));
-  return [...curated, ...uniqueNostr];
+
+  // Dedup community submissions against EACH OTHER (freshest wins). Two events
+  // can share a project id/repo/name across different authors — e.g. the same
+  // project republished, or dev dummy data regenerated under fresh keys — which
+  // would otherwise collide on React keys and render twice.
+  const seenIds = new Set<string>();
+  const seenRepos = new Set<string>();
+  const seenNames = new Set<string>();
+  const dedupedNostr = uniqueNostr.filter((s) => {
+    const repo = comparableRepo(s.repo);
+    const name = comparableProjectName(s.name);
+    if (seenIds.has(s.id) || (repo && seenRepos.has(repo)) || seenNames.has(name)) {
+      return false;
+    }
+    seenIds.add(s.id);
+    if (repo) seenRepos.add(repo);
+    seenNames.add(name);
+    return true;
+  });
+
+  return [...curated, ...dedupedNostr];
 }
 
 /** Returns projects ordered by jury position asc (winners first). */

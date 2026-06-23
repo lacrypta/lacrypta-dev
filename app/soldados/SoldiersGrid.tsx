@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Zap, Trophy } from "lucide-react";
 import { GithubIcon } from "@/components/BrandIcons";
+import { hackathonSlugForId } from "@/lib/hackathons";
 import { HACKATHON_LABELS } from "@/lib/projects";
 import { getCachedProfile, type NostrProfile } from "@/lib/nostrProfile";
 import { cn } from "@/lib/cn";
@@ -394,7 +395,7 @@ function SoldierCard({
             {hackathons.map((h) => (
               <Link
                 key={h}
-                href={`/hackathons/${h}`}
+                href={`/hackathons/${hackathonSlugForId(h)}`}
                 className="inline-flex items-center gap-1 rounded-full border border-bitcoin/30 bg-bitcoin/[0.06] px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest text-bitcoin hover:bg-bitcoin/[0.14] hover:border-bitcoin/60 transition-colors"
               >
                 <Trophy className="h-2.5 w-2.5" />
@@ -407,7 +408,7 @@ function SoldierCard({
         <ul className="flex flex-col gap-1">
           {soldier.projects.slice(0, 4).map((p, i) => {
             const href = p.hackathonId
-              ? `/hackathons/${p.hackathonId}/${p.projectId}`
+              ? `/hackathons/${hackathonSlugForId(p.hackathonId)}/${p.projectId}`
               : p.source === "nostr" && p.authorPubkey
                 ? `/projects/${p.authorPubkey}/${p.projectId}`
                 : `/projects/${p.projectId}`;

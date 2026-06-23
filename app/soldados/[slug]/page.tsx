@@ -12,6 +12,7 @@ import {
   Zap,
 } from "lucide-react";
 import { GithubIcon } from "@/components/BrandIcons";
+import { hackathonSlugForId } from "@/lib/hackathons";
 import { HACKATHON_LABELS } from "@/lib/projects";
 import {
   getSoldierBySlug,
@@ -21,9 +22,11 @@ import {
 } from "@/lib/soldiers";
 import { getCachedNostrProfile } from "@/lib/nostrProfileCache";
 import { cn } from "@/lib/cn";
+import { isDevMode } from "@/lib/devMode";
 import SoldierZapButton from "./SoldierZapButton";
 import SoldierFollowButton from "./SoldierFollowButton";
 import SoldierZapWall from "./SoldierZapWall";
+import ImpersonateButton from "./ImpersonateButton";
 
 type RouteParams = { slug: string };
 
@@ -207,6 +210,12 @@ export default async function SoldierProfilePage({
                   recipientName={displayName}
                   recipientAvatar={avatar}
                 />
+                {isDevMode() && (
+                  <ImpersonateButton
+                    pubkey={soldier.pubkey}
+                    name={displayName}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -273,7 +282,7 @@ export default async function SoldierProfilePage({
                   {[...hackathons].map((h) => (
                     <li key={h}>
                       <Link
-                        href={`/hackathons/${h}`}
+                        href={`/hackathons/${hackathonSlugForId(h)}`}
                         className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-bitcoin/30 bg-bitcoin/[0.06] text-bitcoin text-xs font-mono uppercase tracking-widest hover:bg-bitcoin/[0.12] transition-colors"
                       >
                         <Trophy className="h-3 w-3" />
@@ -425,7 +434,7 @@ function Card({
 function projectHref(project: SoldierProjectRef): string {
   // 1. Hackathon-scoped project → /hackathons/<h>/<projectId>
   if (project.hackathonId) {
-    return `/hackathons/${project.hackathonId}/${project.projectId}`;
+    return `/hackathons/${hackathonSlugForId(project.hackathonId)}/${project.projectId}`;
   }
   // 2. Nostr-only project with known author → /projects/<author>/<projectId>
   if (project.source === "nostr" && project.authorPubkey) {

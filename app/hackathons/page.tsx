@@ -16,6 +16,7 @@ import {
   HACKATHONS,
   PROGRAM,
   formatSats,
+  hackathonSlug,
   hackathonStatus,
 } from "@/lib/hackathons";
 import { cn } from "@/lib/cn";
@@ -325,7 +326,7 @@ function FeaturedHackathon({
       </div>
 
       <Link
-        href={`/hackathons/${h.id}`}
+        href={`/hackathons/${hackathonSlug(h)}`}
         className={cn(
           "group relative block overflow-hidden rounded-3xl border bg-background-card transition-all",
           accent.ring,
@@ -475,7 +476,7 @@ function HackathonCard({
   const lastDate = h.dates[h.dates.length - 1]?.date;
   return (
     <Link
-      href={`/hackathons/${h.id}`}
+      href={`/hackathons/${hackathonSlug(h)}`}
       className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-background-card hover:border-border-strong hover:-translate-y-1 transition-all"
     >
       <div className="absolute inset-0 bg-gradient-to-br from-bitcoin/[0.04] via-transparent to-nostr/[0.04] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />

@@ -18,6 +18,10 @@ export function nostrReportsTag(hackathonId: string) {
   return `nostr:reports:${hackathonId}`;
 }
 
+export function nostrVotingTag(hackathonId: string) {
+  return `nostr:voting:${hackathonId}`;
+}
+
 export function nostrHackathonBadgesTag(hackathonId: string) {
   return `nostr:hackathon-badges:${hackathonId}`;
 }

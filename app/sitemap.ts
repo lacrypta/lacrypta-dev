@@ -2,6 +2,8 @@ import type { MetadataRoute } from "next";
 import {
   HACKATHONS,
   getHackathonProjects,
+  hackathonSlug,
+  hackathonSlugForId,
   hackathonStatus,
 } from "@/lib/hackathons";
 import { getAllNostrSubmissionsForSitemap } from "@/lib/nostrCache";
@@ -67,7 +69,7 @@ function staticSitemap(): MetadataRoute.Sitemap {
     const lastDate = h.dates[h.dates.length - 1]?.date;
     const status = hackathonStatus(h, now);
     entries.push({
-      url: `${BASE_URL}/hackathons/${h.id}`,
+      url: `${BASE_URL}/hackathons/${hackathonSlug(h)}`,
       lastModified: lastDate ? new Date(lastDate) : now,
       changeFrequency: status === "closed" ? "yearly" : "weekly",
       priority: 0.8,
@@ -76,7 +78,7 @@ function staticSitemap(): MetadataRoute.Sitemap {
       const projectMod =
         project.submittedAt ? new Date(project.submittedAt) : lastDate ? new Date(lastDate) : now;
       entries.push({
-        url: `${BASE_URL}/hackathons/${h.id}/${project.id}`,
+        url: `${BASE_URL}/hackathons/${hackathonSlug(h)}/${project.id}`,
         lastModified: projectMod,
         changeFrequency: "monthly",
         priority: 0.7,
@@ -108,7 +110,7 @@ async function nostrSitemap(): Promise<MetadataRoute.Sitemap> {
     const key = `${s.hackathon}/${s.id}`;
     if (curatedKeys.has(key)) continue;
     entries.push({
-      url: `${BASE_URL}/hackathons/${s.hackathon}/${s.id}`,
+      url: `${BASE_URL}/hackathons/${hackathonSlugForId(s.hackathon)}/${s.id}`,
       lastModified: new Date(s.eventCreatedAt * 1000),
       changeFrequency: "daily",
       priority: 0.6,

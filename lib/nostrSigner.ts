@@ -23,6 +23,12 @@ export type SignedEvent = {
 export type UserSigner = {
   pubkey: string;
   signEvent: (event: UnsignedEvent) => Promise<SignedEvent>;
+  /** NIP-44 encrypt `plaintext` to `peerPubkeyHex` (e.g. La Crypta's key for
+   *  encrypted ballots). Throws a clear error if the method can't encrypt. */
+  nip44Encrypt: (peerPubkeyHex: string, plaintext: string) => Promise<string>;
+  /** NIP-44 decrypt `ciphertext` from `peerPubkeyHex`. The conversation key is
+   *  symmetric, so a voter can decrypt their own ballot (peer = La Crypta). */
+  nip44Decrypt: (peerPubkeyHex: string, ciphertext: string) => Promise<string>;
   close?: () => Promise<void>;
 };
 
@@ -31,9 +37,16 @@ declare global {
     nostr?: {
       getPublicKey: () => Promise<string>;
       signEvent?: (event: UnsignedEvent) => Promise<SignedEvent>;
+      nip44?: {
+        encrypt?: (pubkey: string, plaintext: string) => Promise<string>;
+        decrypt?: (pubkey: string, ciphertext: string) => Promise<string>;
+      };
     };
   }
 }
+
+const NIP44_UNSUPPORTED =
+  "Tu firmante no soporta cifrado NIP-44. Usá una extensión actualizada (Alby/nos2x) o una identidad local.";
 
 export type GetSignerOptions = {
   /** Called by the bunker when it requires user approval in its web UI */
@@ -75,6 +88,18 @@ export async function getSigner(
         const signed = await ext.signEvent!(event);
         return signed;
       },
+      async nip44Encrypt(peer, plaintext) {
+        if (typeof ext.nip44?.encrypt !== "function") {
+          throw new Error(NIP44_UNSUPPORTED);
+        }
+        return ext.nip44.encrypt(peer, plaintext);
+      },
+      async nip44Decrypt(peer, ciphertext) {
+        if (typeof ext.nip44?.decrypt !== "function") {
+          throw new Error(NIP44_UNSUPPORTED);
+        }
+        return ext.nip44.decrypt(peer, ciphertext);
+      },
     };
   }
 
@@ -107,6 +132,14 @@ export async function getSigner(
           created_at: event.created_at,
         };
         return finalizeEvent(template, sk);
+      },
+      async nip44Encrypt(peer, plaintext) {
+        const nip44 = await import("nostr-tools/nip44");
+        return nip44.encrypt(plaintext, nip44.getConversationKey(sk, peer));
+      },
+      async nip44Decrypt(peer, ciphertext) {
+        const nip44 = await import("nostr-tools/nip44");
+        return nip44.decrypt(ciphertext, nip44.getConversationKey(sk, peer));
       },
     };
   }
@@ -175,6 +208,14 @@ export async function getSigner(
           });
           return signed;
         },
+        async nip44Encrypt(peer, plaintext) {
+          await ensureConnected();
+          return client.nip44Encrypt(peer, plaintext);
+        },
+        async nip44Decrypt(peer, ciphertext) {
+          await ensureConnected();
+          return client.nip44Decrypt(peer, ciphertext);
+        },
         async close() {
           try {
             await Promise.race([
@@ -232,6 +273,10 @@ export async function getSigner(
     // Kick it off immediately so first signEvent is faster
     ensureConnected();
 
+    const innerEnc = inner as unknown as {
+      nip44Encrypt?: (peer: string, text: string) => Promise<string>;
+      nip44Decrypt?: (peer: string, text: string) => Promise<string>;
+    };
     return {
       pubkey: auth.pubkey,
       async signEvent(event) {
@@ -242,6 +287,20 @@ export async function getSigner(
           id: signed.id?.slice(0, 12),
         });
         return signed;
+      },
+      async nip44Encrypt(peer, plaintext) {
+        if (typeof innerEnc.nip44Encrypt !== "function") {
+          throw new Error(NIP44_UNSUPPORTED);
+        }
+        await ensureConnected();
+        return innerEnc.nip44Encrypt(peer, plaintext);
+      },
+      async nip44Decrypt(peer, ciphertext) {
+        if (typeof innerEnc.nip44Decrypt !== "function") {
+          throw new Error(NIP44_UNSUPPORTED);
+        }
+        await ensureConnected();
+        return innerEnc.nip44Decrypt(peer, ciphertext);
       },
       async close() {
         // Don't block the UI — close with a hard cap
