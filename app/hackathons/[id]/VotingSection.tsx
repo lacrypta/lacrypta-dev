@@ -2,13 +2,17 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   CheckCircle2,
+  Coins,
   Loader2,
   Lock,
   Megaphone,
   Minus,
+  PartyPopper,
   Plus,
+  Radio,
   Trophy,
   Vote,
   X,
@@ -282,7 +286,7 @@ export default function VotingSection({
     : null;
 
   return (
-    <section className="pb-12">
+    <section id="votar" className="scroll-mt-24 pb-12">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="rounded-2xl border border-nostr/30 bg-background-card p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
@@ -353,6 +357,13 @@ export default function VotingSection({
                   ? "La comunidad elige a los ganadores. Vota cualquiera que haya participado de algún hackatón y tenga su identidad Nostr vinculada — 1 voto por hackatón participado, repartidos como quieras."
                   : "La votación está cerrada. Estos son los resultados oficiales."}
               </p>
+
+              {period.status === "open" && (
+                <VotingProgressBar
+                  voted={totals.votedCount}
+                  eligible={totals.eligibleCount}
+                />
+              )}
 
               {period.status === "open" && ready && (
                 <div className="mt-4">
@@ -564,6 +575,40 @@ function Stat({
       </div>
       <div className="text-[9px] font-mono uppercase tracking-widest text-foreground-subtle mt-1">
         {label}
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────── Live progress ───────────────────────── */
+
+function VotingProgressBar({
+  voted,
+  eligible,
+}: {
+  voted: number;
+  eligible: number;
+}) {
+  const pct = eligible > 0 ? Math.round((voted / eligible) * 100) : 0;
+  return (
+    <div className="mt-4 rounded-xl border border-border bg-black/20 px-4 py-3">
+      <div className="flex items-center justify-between text-[11px] font-mono">
+        <span className="inline-flex items-center gap-1.5 font-bold uppercase tracking-[0.18em] text-success">
+          <Radio className="h-3 w-3 animate-pulse" />
+          Votación en vivo
+        </span>
+        <span className="tabular-nums text-foreground-muted">
+          <span className="font-bold text-success">{voted}</span> / {eligible}{" "}
+          votaron · <span className="font-bold text-foreground">{pct}%</span>
+        </span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/[0.06]">
+        <motion.div
+          className="h-full rounded-full bg-gradient-to-r from-nostr via-bitcoin to-lightning"
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+        />
       </div>
     </div>
   );
@@ -1023,6 +1068,7 @@ function BallotEditor({
     initialAllocations ?? {},
   );
   const [publishing, setPublishing] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
   // Refresh steppers when our relay ballot arrives, but never clobber edits.
   const dirty = useRef(false);
   useEffect(() => {
@@ -1067,6 +1113,8 @@ function BallotEditor({
       );
       dirty.current = false;
       onPublished(ev);
+      setCelebrate(true);
+      window.setTimeout(() => setCelebrate(false), 2400);
       push({
         kind: "success",
         title: hasPrev ? "Votos actualizados" : "Votos publicados",
@@ -1086,13 +1134,42 @@ function BallotEditor({
 
   return (
     <div className="rounded-xl border border-border bg-white/[0.02] p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <span className="text-xs font-mono font-semibold tracking-wider text-foreground">
-          Tenés {maxVotes} {maxVotes === 1 ? "voto" : "votos"} ·{" "}
-          <span className={cn(remaining === 0 ? "text-bitcoin" : "text-success")}>
-            te {remaining === 1 ? "queda" : "quedan"} {remaining}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-lightning/30 bg-lightning/[0.06] px-3 py-2">
+          <span className="inline-flex items-center gap-2">
+            <Coins className="h-4 w-4 text-lightning" />
+            <span className="font-display text-base font-black tabular-nums">
+              {remaining}
+              <span className="text-foreground-subtle">/{maxVotes}</span>
+            </span>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-foreground-muted">
+              {remaining === 0
+                ? "todo repartido"
+                : `${remaining === 1 ? "voto" : "votos"} por repartir`}
+            </span>
           </span>
-        </span>
+          <span className="flex items-center gap-1.5">
+            {Array.from({ length: Math.min(maxVotes, 10) }).map((_, i) => {
+              const spent = i >= remaining;
+              return (
+                <span
+                  key={i}
+                  className={cn(
+                    "h-2.5 w-2.5 rounded-full border transition-colors",
+                    spent
+                      ? "border-border bg-white/5"
+                      : "border-lightning/60 bg-lightning shadow-[0_0_8px_rgba(255,215,0,0.55)]",
+                  )}
+                />
+              );
+            })}
+            {maxVotes > 10 && (
+              <span className="text-[10px] font-mono font-bold text-lightning">
+                +{maxVotes - 10}
+              </span>
+            )}
+          </span>
+        </div>
         {voterPubkey && hasPrev && (
           <span className="inline-flex items-center gap-1 text-[10px] font-mono text-foreground-subtle">
             <CheckCircle2 className="h-3 w-3 text-success" />
@@ -1135,14 +1212,18 @@ function BallotEditor({
                   >
                     <Minus className="h-3.5 w-3.5" />
                   </button>
-                  <span
+                  <motion.span
+                    key={count}
+                    initial={{ scale: 1.5 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 20 }}
                     className={cn(
                       "w-6 text-center text-sm font-mono font-bold tabular-nums",
                       count > 0 ? "text-nostr" : "text-foreground-subtle",
                     )}
                   >
                     {count}
-                  </span>
+                  </motion.span>
                   <button
                     type="button"
                     onClick={() => adjust(p.id, 1)}
@@ -1159,12 +1240,25 @@ function BallotEditor({
         })}
       </ul>
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex items-center gap-3">
+        <AnimatePresence>
+          {celebrate && (
+            <motion.span
+              initial={{ opacity: 0, scale: 0.85, y: 6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.85 }}
+              className="mr-auto inline-flex items-center gap-1.5 rounded-lg border border-success/40 bg-success/10 px-3 py-1.5 text-xs font-mono font-bold text-success"
+            >
+              <PartyPopper className="h-4 w-4" />
+              ¡Voto firmado y publicado!
+            </motion.span>
+          )}
+        </AnimatePresence>
         <button
           type="button"
           onClick={handlePublish}
           disabled={publishing || used === 0 || used > maxVotes}
-          className="inline-flex items-center gap-2 rounded-lg border border-nostr/40 bg-nostr/10 px-4 py-2 text-sm font-semibold text-nostr hover:bg-nostr/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="ml-auto inline-flex items-center gap-2 rounded-lg border border-nostr/40 bg-nostr/10 px-4 py-2 text-sm font-semibold text-nostr hover:bg-nostr/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {publishing ? (
             <Loader2 className="h-4 w-4 animate-spin" />

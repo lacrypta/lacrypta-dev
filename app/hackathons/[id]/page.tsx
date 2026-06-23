@@ -50,6 +50,7 @@ import { getCachedVotingPeriod } from "@/lib/votingCache";
 import { nostrVotingTag } from "@/lib/nostrCacheTags";
 import HackathonProjectsList from "./HackathonProjectsList";
 import VotingSection from "./VotingSection";
+import VotingHero from "@/components/voting/VotingHero";
 import HackathonResultsClient from "./HackathonResultsClient";
 import AdminBadgesLink from "./AdminBadgesLink";
 import PrizeBadgeButton, { type PrizeBadgeTask } from "./PrizeBadgeButton";
@@ -695,6 +696,20 @@ export default async function HackathonPage({
        * comes back missing the entire projects section. The fallback renders
        * the SSR skeleton; client takes over on hydration.
        */}
+      {/* Community voting hero — promotes the vote; "Votar ahora" scrolls to
+       *  the ballot (#votar) rendered by VotingSection below. Renders nothing
+       *  until voting has been opened at least once. */}
+      <Suspense fallback={null}>
+        <div className="pb-14">
+          <VotingHero
+            hackathonId={hackathon.id}
+            hackathonName={hackathon.name}
+            initialPeriod={votingPeriod}
+            variant="page"
+          />
+        </div>
+      </Suspense>
+
       <Suspense fallback={null}>
         <HackathonProjectsList
           hackathon={hackathon}
