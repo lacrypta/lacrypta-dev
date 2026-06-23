@@ -14,9 +14,13 @@ import {
   Vote,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { hackathonSlugForId } from "@/lib/hackathons";
+import { hackathonSlugForId, prizeForPosition, formatSats } from "@/lib/hackathons";
 import { useVotingLive } from "@/lib/useVotingLive";
-import type { VotingPeriod } from "@/lib/voting";
+import {
+  VOTES_PER_HACKATHON,
+  type VotingPeriod,
+  type VotingWinner,
+} from "@/lib/voting";
 import { cn } from "@/lib/cn";
 
 /**
@@ -80,14 +84,6 @@ export default function VotingHero({
               )}
             />
             <div className="absolute -bottom-28 -right-20 h-72 w-72 rounded-full bg-cyan/10 blur-3xl" />
-            <div
-              className="absolute inset-0 opacity-[0.07]"
-              style={{
-                backgroundImage:
-                  "linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)",
-                backgroundSize: "28px 28px",
-              }}
-            />
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-nostr/70 to-transparent" />
           </div>
 
@@ -147,8 +143,9 @@ function OpenHero({
           {hackathonName}
         </h2>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-foreground-muted sm:text-base">
-          1 voto por hackatón en el que participaste. Repartilos como quieras —
-          tus votos van cifrados y se revelan recién al cerrar.
+          {VOTES_PER_HACKATHON} votos por hackatón en el que participaste.
+          Repartilos como quieras — tus votos van cifrados y se revelan recién al
+          cerrar.
         </p>
 
         {/* Vote wallet */}
@@ -294,6 +291,30 @@ function ParticipationGauge({
 
 /* ───────────────────────── Closed state ───────────────────────── */
 
+const MEDAL = ["🥇", "🥈", "🥉"];
+
+/** Per-rank visual tone for the podium (gold / silver / bronze). */
+const RANK_TONE: Record<
+  number,
+  { card: string; accent: string; chip: string }
+> = {
+  1: {
+    card: "border-bitcoin/50 bg-bitcoin/[0.1] shadow-[0_0_44px_-12px_rgba(247,147,26,0.75)]",
+    accent: "text-bitcoin",
+    chip: "border-bitcoin/40 bg-bitcoin/10 text-bitcoin",
+  },
+  2: {
+    card: "border-zinc-400/40 bg-zinc-400/[0.07]",
+    accent: "text-zinc-300",
+    chip: "border-zinc-400/40 bg-zinc-400/10 text-zinc-200",
+  },
+  3: {
+    card: "border-amber-600/40 bg-amber-600/[0.07]",
+    accent: "text-amber-500",
+    chip: "border-amber-600/40 bg-amber-600/10 text-amber-400",
+  },
+};
+
 function ClosedHero({
   period,
   hackathonId,
@@ -305,25 +326,34 @@ function ClosedHero({
   ballotHref: string;
   onCta: (e: React.MouseEvent) => void;
 }) {
-  const winners = (period.results?.winners ?? []).slice(0, 3);
   const slug = hackathonSlugForId(hackathonId);
-  const MEDAL = ["🥇", "🥈", "🥉"];
+  // Up to 6 prize positions; the top 3 go on the podium, 4–6 in the list below.
+  const winners = (period.results?.winners ?? []).slice(0, 6);
+  const podium = winners.slice(0, 3);
+  const runnersUp = winners.slice(3, 6);
+  // Classic podium reading order on wide screens: 2nd · 1st · 3rd (1st centered).
+  const podiumOrder =
+    podium.length === 3 ? [1, 0, 2] : podium.map((_, i) => i);
 
   return (
-    <div className="relative grid gap-6 lg:grid-cols-[1fr_320px] lg:items-center">
-      <div className="min-w-0">
-        <div className="inline-flex items-center gap-2 rounded-full border border-bitcoin/40 bg-bitcoin/10 px-3 py-1.5 text-[10px] font-mono font-black uppercase tracking-[0.22em] text-bitcoin">
-          <Trophy className="h-3 w-3" />
-          Resultados publicados
+    <div className="relative space-y-7">
+      {/* Header + CTA */}
+      <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div className="min-w-0">
+          <div className="inline-flex items-center gap-2 rounded-full border border-bitcoin/40 bg-bitcoin/10 px-3 py-1.5 text-[10px] font-mono font-black uppercase tracking-[0.22em] text-bitcoin">
+            <Trophy className="h-3 w-3" />
+            Resultados publicados
+          </div>
+          <h2 className="mt-4 font-display text-3xl font-black leading-[0.95] tracking-tight sm:text-4xl">
+            La comunidad ya <span className="text-gradient-bitcoin">eligió</span>
+          </h2>
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-foreground-muted sm:text-base">
+            La votación cerró y el resultado quedó firmado por La Crypta en
+            Nostr. Estos son los proyectos que se llevaron los votos —y los
+            premios— de la comunidad.
+          </p>
         </div>
-        <h2 className="mt-4 font-display text-3xl font-black leading-[0.95] tracking-tight sm:text-4xl">
-          La comunidad ya <span className="text-gradient-bitcoin">eligió</span>
-        </h2>
-        <p className="mt-3 max-w-xl text-sm leading-relaxed text-foreground-muted sm:text-base">
-          La votación cerró y el resultado quedó firmado por La Crypta en Nostr.
-          Mirá quiénes se llevaron los votos de la comunidad.
-        </p>
-        <div className="mt-6">
+        <div className="lg:pb-1">
           <CtaButton
             href={ballotHref}
             onClick={onCta}
@@ -334,37 +364,144 @@ function ClosedHero({
         </div>
       </div>
 
-      {winners.length > 0 && (
-        <ol className="space-y-2">
-          {winners.map((w, i) => (
-            <motion.li
-              key={w.projectId}
-              initial={{ opacity: 0, x: 12 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.08, duration: 0.4 }}
-            >
-              <Link
-                href={`/hackathons/${slug}/${w.projectId}`}
-                className={cn(
-                  "group flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors",
-                  i === 0
-                    ? "border-bitcoin/40 bg-bitcoin/[0.08] hover:bg-bitcoin/[0.14]"
-                    : "border-border bg-white/[0.02] hover:bg-white/[0.05]",
-                )}
-              >
-                <span className="text-xl leading-none">{MEDAL[i] ?? `${w.position}°`}</span>
-                <span className="flex-1 min-w-0 text-sm font-semibold truncate group-hover:text-bitcoin">
-                  {w.projectName}
-                </span>
-                <span className="text-sm font-mono font-bold text-nostr tabular-nums">
-                  {w.votes}
-                </span>
-              </Link>
-            </motion.li>
-          ))}
-        </ol>
+      {winners.length === 0 ? (
+        <p className="rounded-2xl border border-border bg-white/[0.02] px-4 py-6 text-center text-sm text-foreground-subtle">
+          La votación cerró sin votos registrados.
+        </p>
+      ) : (
+        <div className="space-y-2.5">
+          {/* Podium — top 3, large */}
+          <div className="grid grid-cols-3 items-end gap-2.5 sm:gap-4">
+            {podiumOrder
+              .filter((idx) => podium[idx])
+              .map((idx) => (
+                <PodiumCard
+                  key={podium[idx].projectId}
+                  winner={podium[idx]}
+                  slug={slug}
+                />
+              ))}
+          </div>
+
+          {/* Positions 4–6 */}
+          {runnersUp.length > 0 && (
+            <ol className="space-y-2">
+              {runnersUp.map((w, i) => (
+                <RunnerRow key={w.projectId} winner={w} slug={slug} index={i} />
+              ))}
+            </ol>
+          )}
+        </div>
       )}
     </div>
+  );
+}
+
+function PodiumCard({ winner, slug }: { winner: VotingWinner; slug: string }) {
+  const pos = winner.position;
+  const isFirst = pos === 1;
+  const prize = prizeForPosition(pos);
+  const tone = RANK_TONE[pos] ?? RANK_TONE[3];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: (pos - 1) * 0.1, duration: 0.45, ease: "easeOut" }}
+      className={cn(
+        "relative flex flex-col items-center rounded-2xl border text-center",
+        tone.card,
+        isFirst ? "px-2.5 pb-4 pt-7 sm:pt-8" : "px-2 pb-3 pt-4 sm:pt-5",
+      )}
+    >
+      {isFirst && (
+        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-bitcoin/50 bg-background-card px-2.5 py-0.5 text-[8px] font-mono font-black uppercase tracking-[0.2em] text-bitcoin">
+          Ganador
+        </span>
+      )}
+      <span
+        className={cn(
+          "leading-none",
+          isFirst ? "text-4xl sm:text-5xl" : "text-3xl sm:text-4xl",
+        )}
+      >
+        {MEDAL[pos - 1] ?? "🏅"}
+      </span>
+      <span
+        className={cn(
+          "mt-1 font-display font-black tabular-nums",
+          tone.accent,
+          isFirst ? "text-lg" : "text-base",
+        )}
+      >
+        {pos}°
+      </span>
+      <Link
+        href={`/hackathons/${slug}/${winner.projectId}`}
+        title={winner.projectName}
+        className={cn(
+          "mt-1.5 block w-full truncate px-1 font-semibold hover:underline",
+          isFirst ? "text-sm sm:text-base" : "text-xs sm:text-sm",
+        )}
+      >
+        {winner.projectName}
+      </Link>
+      <span className="mt-1 text-[11px] font-mono text-foreground-subtle tabular-nums">
+        {winner.votes} {winner.votes === 1 ? "voto" : "votos"}
+      </span>
+      {prize != null && (
+        <span
+          className={cn(
+            "mt-2 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-mono font-bold tabular-nums",
+            tone.chip,
+          )}
+        >
+          <Coins className="h-3 w-3" />
+          {formatSats(prize)} sats
+        </span>
+      )}
+    </motion.div>
+  );
+}
+
+function RunnerRow({
+  winner,
+  slug,
+  index,
+}: {
+  winner: VotingWinner;
+  slug: string;
+  index: number;
+}) {
+  const prize = prizeForPosition(winner.position);
+
+  return (
+    <motion.li
+      initial={{ opacity: 0, x: 10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 0.32 + index * 0.07, duration: 0.4 }}
+    >
+      <Link
+        href={`/hackathons/${slug}/${winner.projectId}`}
+        className="group flex items-center gap-3 rounded-xl border border-border bg-white/[0.02] px-3 py-2.5 transition-colors hover:bg-white/[0.05]"
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-white/[0.03] font-display text-sm font-black tabular-nums text-foreground-muted">
+          {winner.position}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold group-hover:text-bitcoin">
+          {winner.projectName}
+        </span>
+        {prize != null && (
+          <span className="hidden items-center gap-1 rounded-full border border-border bg-white/[0.03] px-2 py-0.5 text-[10px] font-mono font-bold tabular-nums text-lightning sm:inline-flex">
+            <Coins className="h-3 w-3" />
+            {formatSats(prize)} sats
+          </span>
+        )}
+        <span className="text-sm font-mono font-bold tabular-nums text-nostr">
+          {winner.votes} {winner.votes === 1 ? "voto" : "votos"}
+        </span>
+      </Link>
+    </motion.li>
   );
 }
 

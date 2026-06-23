@@ -23,6 +23,10 @@ export const VOTE_T_TAG = "lacrypta-dev-vote";
 export const VOTING_SCHEMA_VERSION = 2;
 /** Value of the ballot's `["enc", …]` tag when the content is NIP-44 ciphertext. */
 export const VOTE_ENC = "nip44";
+/** Votes a voter gets per distinct hackathon they participated in. Budget =
+ *  (distinct hackathons) × this, so a voter can spread votes across several
+ *  different projects rather than backing a single one. */
+export const VOTES_PER_HACKATHON = 5;
 
 /**
  * Dev/test isolation: with `NEXT_PUBLIC_VOTING_NS=test` every d-tag moves to
@@ -49,7 +53,7 @@ export function voteDTag(hackathonId: string): string {
 export type VotingEligibleVoter = {
   pubkey: string;
   name: string;
-  /** 1 vote per distinct hackathon the voter participated in. */
+  /** VOTES_PER_HACKATHON votes per distinct hackathon the voter participated in. */
   maxVotes: number;
   /** Project ids in the current hackathon the voter cannot vote for (own projects). */
   blocked: string[];
@@ -514,9 +518,9 @@ export function tallyBallots(
 
 /**
  * Builds the frozen eligibility snapshot from the soldiers roster: anyone with
- * a Nostr pubkey who participated in at least one hackathon. Vote budget = 1
- * per distinct hackathon participated in; `blocked` = the voter's own projects
- * in the hackathon being voted (no self-votes).
+ * a Nostr pubkey who participated in at least one hackathon. Vote budget =
+ * VOTES_PER_HACKATHON per distinct hackathon participated in; `blocked` = the
+ * voter's own projects in the hackathon being voted (no self-votes).
  */
 export function buildEligibleVoters(
   soldiers: Soldier[],
@@ -541,13 +545,16 @@ export function buildEligibleVoters(
     if (existing) {
       // Same pubkey reachable from two roster entries — keep the larger budget
       // and union the blocked lists.
-      existing.maxVotes = Math.max(existing.maxVotes, hackathons.size);
+      existing.maxVotes = Math.max(
+        existing.maxVotes,
+        hackathons.size * VOTES_PER_HACKATHON,
+      );
       existing.blocked = [...new Set([...existing.blocked, ...blocked])];
     } else {
       byPubkey.set(pubkey, {
         pubkey,
         name: s.name,
-        maxVotes: hackathons.size,
+        maxVotes: hackathons.size * VOTES_PER_HACKATHON,
         blocked,
       });
     }
