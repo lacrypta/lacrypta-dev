@@ -1,7 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CheckCircle2,
@@ -20,6 +29,7 @@ import {
   ListChecks,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import type { Auth } from "@/lib/auth";
 import { hackathonSlugForId } from "@/lib/hackathons";
 import { getSigner, type SignedEvent } from "@/lib/nostrSigner";
 import { useToast } from "@/components/Toast";
@@ -67,6 +77,55 @@ type VoterRow = {
   voted: boolean;
 };
 
+type VotingTotals = {
+  budget: number;
+  used: number;
+  remaining: number;
+  votedCount: number;
+  eligibleCount: number;
+};
+
+type VotingContextValue = {
+  hackathonId: string;
+  hackathonName: string;
+  auth: Auth | null;
+  ready: boolean;
+  pubkeys: Pubkeys;
+  period: VotingPeriod | null;
+  setPeriod: (period: VotingPeriod) => void;
+  ballots: Map<string, SignedEvent>;
+  isAdmin: boolean;
+  admin: AdminVoting;
+  voterRows: VoterRow[];
+  totals: VotingTotals;
+  results: VotingResults | null;
+  voter: VotingPeriod["eligible"][number] | null;
+  allocations: Record<string, number>;
+  maxVotes: number;
+  used: number;
+  remaining: number;
+  blocked: string[];
+  publishing: boolean;
+  celebrate: boolean;
+  hasPrev: boolean;
+  adjustProjectVote: (projectId: string, delta: number) => void;
+  publishVotes: () => Promise<void>;
+};
+
+const VotingContext = createContext<VotingContextValue | null>(null);
+
+function useVotingContext() {
+  const context = useContext(VotingContext);
+  if (!context) {
+    throw new Error("Voting components must be rendered inside VotingProvider.");
+  }
+  return context;
+}
+
+function useOptionalVotingContext() {
+  return useContext(VotingContext);
+}
+
 /**
  * Community voting for the hackathon's projects. Eligibility, vote budgets and
  * the votable project list come frozen inside the period event La Crypta
@@ -75,16 +134,19 @@ type VoterRow = {
  * relay ballots; once closed the embedded official results are rendered
  * verbatim (the freeze rule — late ballots can't change a signed result).
  */
-export default function VotingSection({
+export function VotingProvider({
   hackathonId,
   hackathonName,
   initialPeriod,
+  children,
 }: {
   hackathonId: string;
   hackathonName: string;
   initialPeriod: VotingPeriod | null;
+  children: ReactNode;
 }) {
   const { auth, ready } = useAuth();
+  const { push } = useToast();
 
   const [pubkeys, setPubkeys] = useState<Pubkeys>({
     adminPubkey: null,
@@ -197,7 +259,6 @@ export default function VotingSection({
     auth.pubkey === pubkeys.adminPubkey;
 
   const admin = useAdminVoting(hackathonId, setPeriod);
-  const [detailOpen, setDetailOpen] = useState(false);
 
   // Ballots are NIP-44 encrypted, so the client can't tally them. While open we
   // only surface WHO voted + their DECLARED count (the plaintext ["votes"] tag);
@@ -267,9 +328,6 @@ export default function VotingSection({
     };
   }, [voterRows]);
 
-  // Nothing to show before the first opening (admins see the open button).
-  if (!period && !isAdmin) return null;
-
   // Results stay hidden while open (ballots are encrypted); only the closed,
   // signed period carries the canonical tally + winners.
   const results: VotingResults | null =
@@ -286,8 +344,190 @@ export default function VotingSection({
     ? (ballots.get(auth.pubkey.toLowerCase()) ?? null)
     : null;
 
+  const [allocations, setAllocations] = useState<Record<string, number>>({});
+  const [publishing, setPublishing] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
+  const dirty = useRef(false);
+  const maxVotes = voter?.maxVotes ?? 0;
+  const blocked = useMemo(() => voter?.blocked ?? [], [voter]);
+  const used = Object.values(allocations).reduce((sum, n) => sum + n, 0);
+  const remaining = Math.max(0, maxVotes - used);
+  const hasPrev = (ownBallotEvent?.created_at ?? 0) > 0 || !!ownAllocations;
+  const resetKey = `${period?.openedAt ?? 0}:${auth?.pubkey ?? ""}`;
+  const ownAllocationsKey = JSON.stringify(ownAllocations ?? {});
+
+  useEffect(() => {
+    dirty.current = false;
+    setAllocations(ownAllocations ?? {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
+
+  useEffect(() => {
+    if (!dirty.current) {
+      setAllocations(ownAllocations ?? {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownAllocationsKey]);
+
+  const adjustProjectVote = useCallback(
+    (projectId: string, delta: number) => {
+      if (!voter || publishing || blocked.includes(projectId)) return;
+      dirty.current = true;
+      setAllocations((prev) => {
+        const current = prev[projectId] ?? 0;
+        const next = current + delta;
+        if (next < 0) return prev;
+        const prevUsed = Object.values(prev).reduce((sum, n) => sum + n, 0);
+        if (delta > 0 && prevUsed >= maxVotes) return prev;
+        const out = { ...prev };
+        if (next === 0) delete out[projectId];
+        else out[projectId] = next;
+        return out;
+      });
+    },
+    [blocked, maxVotes, publishing, voter],
+  );
+
+  const publishVotes = useCallback(async () => {
+    if (
+      !auth ||
+      publishing ||
+      used === 0 ||
+      used > maxVotes ||
+      !pubkeys.publisherPubkey
+    ) {
+      return;
+    }
+    setPublishing(true);
+    try {
+      const signer = await getSigner(auth);
+      const ev = await publishBallot(
+        signer,
+        hackathonId,
+        allocations,
+        pubkeys.publisherPubkey,
+        ownBallotEvent?.created_at ?? 0,
+      );
+      dirty.current = false;
+      setBallots((prev) => {
+        const next = new Map(prev);
+        next.set(ev.pubkey.toLowerCase(), ev);
+        return next;
+      });
+      setCelebrate(true);
+      window.setTimeout(() => setCelebrate(false), 2400);
+      push({
+        kind: "success",
+        title: hasPrev ? "Votos actualizados" : "Votos publicados",
+        description: `Repartiste ${used} ${used === 1 ? "voto" : "votos"} firmados con tu clave Nostr.`,
+      });
+    } catch (error) {
+      push({
+        kind: "error",
+        title: "No se pudo publicar tu voto",
+        description:
+          error instanceof Error ? error.message : "Error desconocido.",
+      });
+    } finally {
+      setPublishing(false);
+    }
+  }, [
+    allocations,
+    auth,
+    hackathonId,
+    hasPrev,
+    maxVotes,
+    ownBallotEvent?.created_at,
+    pubkeys.publisherPubkey,
+    publishing,
+    push,
+    used,
+  ]);
+
   return (
-    <section id="votar" className="scroll-mt-24 pb-12">
+    <VotingContext.Provider
+      value={{
+        hackathonId,
+        hackathonName,
+        auth,
+        ready,
+        pubkeys,
+        period,
+        setPeriod,
+        ballots,
+        isAdmin,
+        admin,
+        voterRows,
+        totals,
+        results,
+        voter,
+        allocations,
+        maxVotes,
+        used,
+        remaining,
+        blocked,
+        publishing,
+        celebrate,
+        hasPrev,
+        adjustProjectVote,
+        publishVotes,
+      }}
+    >
+      {children}
+    </VotingContext.Provider>
+  );
+}
+
+type VotingSectionProps = {
+  hackathonId: string;
+  hackathonName: string;
+  initialPeriod: VotingPeriod | null;
+};
+
+export default function VotingSection(props: Partial<VotingSectionProps> = {}) {
+  const context = useOptionalVotingContext();
+  if (!context) {
+    if (
+      !props.hackathonId ||
+      !props.hackathonName ||
+      !("initialPeriod" in props)
+    ) {
+      throw new Error("VotingSection requires VotingProvider or voting props.");
+    }
+    return (
+      <VotingProvider
+        hackathonId={props.hackathonId}
+        hackathonName={props.hackathonName}
+        initialPeriod={props.initialPeriod ?? null}
+      >
+        <VotingSectionInner />
+      </VotingProvider>
+    );
+  }
+  return <VotingSectionInner />;
+}
+
+function VotingSectionInner() {
+  const {
+    hackathonId,
+    hackathonName,
+    auth,
+    ready,
+    period,
+    isAdmin,
+    admin,
+    voterRows,
+    totals,
+    results,
+    voter,
+  } = useVotingContext();
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  // Nothing to show before the first opening (admins see the open button).
+  if (!period && !isAdmin) return null;
+
+  return (
+    <section id="votacion-comunitaria" className="scroll-mt-24 pb-12">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="rounded-2xl border border-nostr/30 bg-background-card p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
@@ -372,31 +612,12 @@ export default function VotingSection({
                     <p className="text-xs font-mono text-foreground-subtle">
                       Iniciá sesión con Nostr para votar.
                     </p>
-                  ) : voter ? (
-                    <BallotEditor
-                      key={`${period.openedAt}:${auth.pubkey}`}
-                      hackathonId={hackathonId}
-                      period={period}
-                      voterPubkey={auth.pubkey.toLowerCase()}
-                      maxVotes={voter.maxVotes}
-                      blocked={voter.blocked}
-                      lacryptaPubkey={pubkeys.publisherPubkey ?? ""}
-                      initialAllocations={ownAllocations}
-                      prevBallotCreatedAt={ownBallotEvent?.created_at ?? 0}
-                      onPublished={(ev) => {
-                        setBallots((prev) => {
-                          const next = new Map(prev);
-                          next.set(ev.pubkey.toLowerCase(), ev);
-                          return next;
-                        });
-                      }}
-                    />
-                  ) : (
+                  ) : !voter ? (
                     <p className="text-xs font-mono text-foreground-subtle">
                       Solo pueden votar quienes participaron de algún hackatón y
                       tienen su identidad Nostr vinculada.
                     </p>
-                  )}
+                  ) : null}
                 </div>
               )}
 
@@ -671,6 +892,11 @@ function useAdminVoting(
           ok?: boolean;
           status?: "open" | "closed";
           eligibleCount?: number;
+          notifications?: {
+            attempted: number;
+            delivered: number;
+            failed: number;
+          } | null;
           error?: string;
         };
         if (!res.ok || !data.ok) {
@@ -680,10 +906,13 @@ function useAdminVoting(
           `/api/hackathons/${hackathonId}/voting`,
         ).then((r) => (r.ok ? r.json() : null));
         if (fresh?.period) onPeriod(fresh.period as VotingPeriod);
+        const notices = data.notifications
+          ? ` NIP-04: ${data.notifications.delivered}/${data.notifications.attempted} enviados.`
+          : "";
         push({
           kind: "success",
           title: "Votación abierta",
-          description: `${data.eligibleCount ?? 0} votantes habilitados.`,
+          description: `${data.eligibleCount ?? 0} votantes habilitados.${notices}`,
         });
       } catch (error) {
         push({
@@ -1040,240 +1269,166 @@ function CloseReviewModal({
   );
 }
 
-/* ───────────────────────── Ballot editor ───────────────────────── */
+/* ───────────────────────── Project-list voting controls ───────────────────────── */
 
-function BallotEditor({
-  hackathonId,
-  period,
-  voterPubkey,
-  maxVotes,
-  blocked,
-  lacryptaPubkey,
-  initialAllocations,
-  prevBallotCreatedAt,
-  onPublished,
-}: {
-  hackathonId: string;
-  period: VotingPeriod;
-  voterPubkey: string;
-  maxVotes: number;
-  blocked: string[];
-  lacryptaPubkey: string;
-  initialAllocations: Record<string, number> | null;
-  prevBallotCreatedAt: number;
-  onPublished: (ev: SignedEvent) => void;
-}) {
-  const { auth } = useAuth();
-  const { push } = useToast();
-  const [allocations, setAllocations] = useState<Record<string, number>>(
-    initialAllocations ?? {},
-  );
-  const [publishing, setPublishing] = useState(false);
-  const [celebrate, setCelebrate] = useState(false);
-  // Refresh steppers when our relay ballot arrives, but never clobber edits.
-  const dirty = useRef(false);
-  useEffect(() => {
-    if (!dirty.current && initialAllocations) {
-      setAllocations(initialAllocations);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(initialAllocations)]);
-
-  const used = Object.values(allocations).reduce((sum, n) => sum + n, 0);
-  const remaining = maxVotes - used;
-  const hasPrev = prevBallotCreatedAt > 0 || !!initialAllocations;
-
-  function adjust(projectId: string, delta: number) {
-    dirty.current = true;
-    setAllocations((prev) => {
-      const current = prev[projectId] ?? 0;
-      const next = current + delta;
-      if (next < 0) return prev;
-      // Compute against `prev`, not the rendered `remaining` — rapid clicks
-      // batched into one render would otherwise overshoot the budget.
-      const prevUsed = Object.values(prev).reduce((sum, n) => sum + n, 0);
-      if (delta > 0 && prevUsed >= maxVotes) return prev;
-      const out = { ...prev };
-      if (next === 0) delete out[projectId];
-      else out[projectId] = next;
-      return out;
-    });
-  }
-
-  async function handlePublish() {
-    if (!auth || publishing || used === 0 || used > maxVotes) return;
-    setPublishing(true);
-    try {
-      const signer = await getSigner(auth);
-      const ev = await publishBallot(
-        signer,
-        hackathonId,
-        allocations,
-        lacryptaPubkey,
-        prevBallotCreatedAt,
-      );
-      dirty.current = false;
-      onPublished(ev);
-      setCelebrate(true);
-      window.setTimeout(() => setCelebrate(false), 2400);
-      push({
-        kind: "success",
-        title: hasPrev ? "Votos actualizados" : "Votos publicados",
-        description: `Repartiste ${used} ${used === 1 ? "voto" : "votos"} firmados con tu clave Nostr.`,
-      });
-    } catch (error) {
-      push({
-        kind: "error",
-        title: "No se pudo publicar tu voto",
-        description:
-          error instanceof Error ? error.message : "Error desconocido.",
-      });
-    } finally {
-      setPublishing(false);
-    }
+export function ProjectVotingToolbar() {
+  const voting = useOptionalVotingContext();
+  if (
+    !voting?.period ||
+    voting.period.status !== "open" ||
+    !voting.ready ||
+    !voting.auth ||
+    !voting.voter
+  ) {
+    return null;
   }
 
   return (
-    <div className="rounded-xl border border-border bg-white/[0.02] p-4">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-lightning/30 bg-lightning/[0.06] px-3 py-2">
-          <span className="inline-flex items-center gap-2">
-            <Coins className="h-4 w-4 text-lightning" />
-            <span className="font-display text-base font-black tabular-nums">
-              {remaining}
-              <span className="text-foreground-subtle">/{maxVotes}</span>
-            </span>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-foreground-muted">
-              {remaining === 0
-                ? "todo repartido"
-                : `${remaining === 1 ? "voto" : "votos"} por repartir`}
-            </span>
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-lightning/30 bg-lightning/[0.06] px-3 py-3">
+      <div className="inline-flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="inline-flex items-center gap-2">
+          <Coins className="h-4 w-4 text-lightning" />
+          <span className="font-display text-base font-black tabular-nums">
+            {voting.remaining}
+            <span className="text-foreground-subtle">/{voting.maxVotes}</span>
           </span>
-          <span className="flex items-center gap-1.5">
-            {Array.from({ length: Math.min(maxVotes, 10) }).map((_, i) => {
-              const spent = i >= remaining;
-              return (
-                <span
-                  key={i}
-                  className={cn(
-                    "h-2.5 w-2.5 rounded-full border transition-colors",
-                    spent
-                      ? "border-border bg-white/5"
-                      : "border-lightning/60 bg-lightning shadow-[0_0_8px_rgba(255,215,0,0.55)]",
-                  )}
-                />
-              );
-            })}
-            {maxVotes > 10 && (
-              <span className="text-[10px] font-mono font-bold text-lightning">
-                +{maxVotes - 10}
-              </span>
-            )}
+          <span className="text-[10px] font-mono uppercase tracking-widest text-foreground-muted">
+            {voting.remaining === 0
+              ? "todo repartido"
+              : `${voting.remaining === 1 ? "voto" : "votos"} por repartir`}
           </span>
-        </div>
-        {voterPubkey && hasPrev && (
+        </span>
+        <span className="flex items-center gap-1.5">
+          {Array.from({ length: Math.min(voting.maxVotes, 10) }).map((_, i) => {
+            const spent = i >= voting.remaining;
+            return (
+              <span
+                key={i}
+                className={cn(
+                  "h-2.5 w-2.5 rounded-full border transition-colors",
+                  spent
+                    ? "border-border bg-white/5"
+                    : "border-lightning/60 bg-lightning shadow-[0_0_8px_rgba(255,215,0,0.55)]",
+                )}
+              />
+            );
+          })}
+          {voting.maxVotes > 10 && (
+            <span className="text-[10px] font-mono font-bold text-lightning">
+              +{voting.maxVotes - 10}
+            </span>
+          )}
+        </span>
+        {voting.hasPrev && (
           <span className="inline-flex items-center gap-1 text-[10px] font-mono text-foreground-subtle">
             <CheckCircle2 className="h-3 w-3 text-success" />
-            Ya votaste — podés cambiar tu voto
+            Ya votaste
           </span>
         )}
       </div>
 
-      <ul className="space-y-1.5">
-        {period.projects.map((p) => {
-          const isBlocked = blocked.includes(p.id);
-          const count = allocations[p.id] ?? 0;
-          return (
-            <li
-              key={p.id}
-              className={cn(
-                "flex items-center gap-3 rounded-lg border px-3 py-2",
-                isBlocked
-                  ? "border-border bg-white/[0.01] opacity-60"
-                  : count > 0
-                    ? "border-nostr/40 bg-nostr/5"
-                    : "border-border bg-white/[0.02]",
-              )}
-            >
-              <span className="flex-1 min-w-0 text-sm font-semibold truncate">
-                {p.name}
-              </span>
-              {isBlocked ? (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-border text-[9px] font-mono font-semibold tracking-widest text-foreground-subtle uppercase">
-                  Tu proyecto
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => adjust(p.id, -1)}
-                    disabled={publishing || count === 0}
-                    aria-label={`Quitar voto a ${p.name}`}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <Minus className="h-3.5 w-3.5" />
-                  </button>
-                  <motion.span
-                    key={count}
-                    initial={{ scale: 1.5 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: "spring", stiffness: 500, damping: 20 }}
-                    className={cn(
-                      "w-6 text-center text-sm font-mono font-bold tabular-nums",
-                      count > 0 ? "text-nostr" : "text-foreground-subtle",
-                    )}
-                  >
-                    {count}
-                  </motion.span>
-                  <button
-                    type="button"
-                    onClick={() => adjust(p.id, 1)}
-                    disabled={publishing || remaining <= 0}
-                    aria-label={`Sumar voto a ${p.name}`}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-
-      <div className="mt-4 flex items-center gap-3">
+      <div className="flex items-center gap-3">
         <AnimatePresence>
-          {celebrate && (
+          {voting.celebrate && (
             <motion.span
               initial={{ opacity: 0, scale: 0.85, y: 6 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.85 }}
-              className="mr-auto inline-flex items-center gap-1.5 rounded-lg border border-success/40 bg-success/10 px-3 py-1.5 text-xs font-mono font-bold text-success"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-success/40 bg-success/10 px-3 py-1.5 text-xs font-mono font-bold text-success"
             >
               <PartyPopper className="h-4 w-4" />
-              ¡Voto firmado y publicado!
+              ¡Voto publicado!
             </motion.span>
           )}
         </AnimatePresence>
         <button
           type="button"
-          onClick={handlePublish}
-          disabled={publishing || used === 0 || used > maxVotes}
-          className="ml-auto inline-flex items-center gap-2 rounded-lg border border-nostr/40 bg-nostr/10 px-4 py-2 text-sm font-semibold text-nostr hover:bg-nostr/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          onClick={voting.publishVotes}
+          disabled={
+            voting.publishing ||
+            voting.used === 0 ||
+            voting.used > voting.maxVotes
+          }
+          className="inline-flex items-center gap-2 rounded-lg border border-nostr/40 bg-nostr/10 px-4 py-2 text-sm font-semibold text-nostr hover:bg-nostr/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {publishing ? (
+          {voting.publishing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Vote className="h-4 w-4" />
           )}
-          {publishing
+          {voting.publishing
             ? "Publicando…"
-            : hasPrev
-              ? "Actualizar mis votos"
-              : "Publicar mis votos"}
+            : voting.hasPrev
+              ? "Actualizar votos"
+              : "Publicar votos"}
         </button>
       </div>
     </div>
+  );
+}
+
+export function ProjectVotingControls({
+  projectId,
+  projectName,
+}: {
+  projectId: string;
+  projectName: string;
+}) {
+  const voting = useOptionalVotingContext();
+  if (
+    !voting?.period ||
+    voting.period.status !== "open" ||
+    !voting.ready ||
+    !voting.auth ||
+    !voting.voter ||
+    !voting.period.projects.some((project) => project.id === projectId)
+  ) {
+    return null;
+  }
+
+  const isBlocked = voting.blocked.includes(projectId);
+  const count = voting.allocations[projectId] ?? 0;
+  if (isBlocked) {
+    return (
+      <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-[9px] font-mono font-semibold uppercase tracking-widest text-foreground-subtle">
+        Tu proyecto
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2 rounded-lg border border-border bg-white/[0.02] px-2 py-1">
+      <button
+        type="button"
+        onClick={() => voting.adjustProjectVote(projectId, -1)}
+        disabled={voting.publishing || count === 0}
+        aria-label={`Quitar voto a ${projectName}`}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        <Minus className="h-3.5 w-3.5" />
+      </button>
+      <motion.span
+        key={count}
+        initial={{ scale: 1.4 }}
+        animate={{ scale: 1 }}
+        transition={{ type: "spring", stiffness: 500, damping: 20 }}
+        className={cn(
+          "w-6 text-center text-sm font-mono font-bold tabular-nums",
+          count > 0 ? "text-nostr" : "text-foreground-subtle",
+        )}
+      >
+        {count}
+      </motion.span>
+      <button
+        type="button"
+        onClick={() => voting.adjustProjectVote(projectId, 1)}
+        disabled={voting.publishing || voting.remaining <= 0}
+        aria-label={`Sumar voto a ${projectName}`}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </button>
+    </span>
   );
 }
 

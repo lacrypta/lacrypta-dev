@@ -351,6 +351,39 @@ export function hackathonStatus(
   return "active";
 }
 
+function firstDateOfType(h: Hackathon, type: HackathonEventType): string | null {
+  const dates = h.dates
+    .filter((event) => event.type === type)
+    .map((event) => event.date)
+    .sort();
+  return dates[0] ?? null;
+}
+
+export function hackathonInscriptionDeadline(h: Hackathon): string | null {
+  return (
+    firstDateOfType(h, "cierre") ??
+    firstDateOfType(h, "pitch-final") ??
+    firstDateOfType(h, "pitch") ??
+    firstDateOfType(h, "premios") ??
+    null
+  );
+}
+
+export function isHackathonInscriptionOpen(
+  h: Hackathon,
+  now: Date = new Date(),
+): boolean {
+  const dates = [...h.dates].sort((a, b) => a.date.localeCompare(b.date));
+  if (dates.length === 0) return false;
+
+  const first = firstDateOfType(h, "apertura") ?? dates[0].date;
+  const deadline = hackathonInscriptionDeadline(h);
+  if (!deadline) return false;
+
+  const today = now.toISOString().slice(0, 10);
+  return today >= first && today <= deadline;
+}
+
 export function formatSats(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}k`;

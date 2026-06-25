@@ -20,7 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import {
-  hackathonStatus,
+  isHackathonInscriptionOpen,
   mergeWithSubmissions,
   prizedProjects,
   type Hackathon,
@@ -51,6 +51,10 @@ import {
   rememberScrollPosition,
   restoreScrollPosition,
 } from "@/lib/scrollMemory";
+import {
+  ProjectVotingControls,
+  ProjectVotingToolbar,
+} from "./VotingSection";
 
 function medal(position: number | null | undefined) {
   if (position === 1) return "🥇";
@@ -359,7 +363,11 @@ export default function HackathonProjectsList({
         : "PROYECTOS INSCRIPTOS";
 
   return (
-    <section ref={sectionRef} className="py-12 border-t border-border">
+    <section
+      id="votar"
+      ref={sectionRef}
+      className="scroll-mt-24 py-12 border-t border-border"
+    >
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-start justify-between gap-3 mb-6 flex-wrap">
           <div>
@@ -385,7 +393,7 @@ export default function HackathonProjectsList({
             </h2>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {hackathonStatus(hackathon) !== "closed" && (
+            {isHackathonInscriptionOpen(hackathon) && (
               <HackathonInscripcionButton hackathonId={hackathon.id} />
             )}
             <button
@@ -407,22 +415,25 @@ export default function HackathonProjectsList({
             Aún no hay proyectos inscriptos para {hackathon.name}.
           </div>
         ) : (
-          <div className="space-y-2">
-            {merged.map((p) => (
-              <ProjectRow
-                key={p.nostrEventId ?? p.id}
-                project={p}
-                hackathonId={hackathon.id}
-                award={prizeByProjectId.get(p.id) ?? null}
-                nostrWinner={nostrWinnerByProjectId.get(p.id) ?? null}
-                authorPicture={
-                  p.nostrAuthor
-                    ? authorPictures.get(p.nostrAuthor)
-                    : undefined
-                }
-              />
-            ))}
-          </div>
+          <>
+            <ProjectVotingToolbar />
+            <div className="space-y-2">
+              {merged.map((p) => (
+                <ProjectRow
+                  key={p.nostrEventId ?? p.id}
+                  project={p}
+                  hackathonId={hackathon.id}
+                  award={prizeByProjectId.get(p.id) ?? null}
+                  nostrWinner={nostrWinnerByProjectId.get(p.id) ?? null}
+                  authorPicture={
+                    p.nostrAuthor
+                      ? authorPictures.get(p.nostrAuthor)
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </section>
@@ -471,8 +482,7 @@ function ProjectRow({
     : null;
   const team = dedupeSoldierProfileMembers(project.team);
 
-  const Wrapper: React.ElementType = Link;
-  const wrapperProps = {
+  const linkProps = {
     href,
     onClick(event: MouseEvent<HTMLAnchorElement>) {
       if (
@@ -490,114 +500,122 @@ function ProjectRow({
   };
 
   return (
-    <Wrapper
-      {...wrapperProps}
-      className="group flex items-stretch gap-4 rounded-xl border border-border bg-background-card hover:border-border-strong hover:-translate-y-0.5 transition-all overflow-hidden"
-    >
-      <div className="flex flex-col items-center justify-center w-16 sm:w-20 shrink-0 border-r border-border bg-black/30 py-3">
-        {pos ? (
-          <>
-            <div className="text-2xl leading-none">{medal(pos) || `#${pos}`}</div>
-            {!(pos >= 1 && pos <= 3) && (
-              <div className="text-[10px] font-mono text-foreground-subtle mt-1">
-                #{pos}
+    <div className="group flex items-stretch rounded-xl border border-border bg-background-card hover:border-border-strong hover:-translate-y-0.5 transition-all overflow-hidden">
+      <Link
+        {...linkProps}
+        className="flex min-w-0 flex-1 items-stretch gap-4"
+      >
+        <div className="flex flex-col items-center justify-center w-16 sm:w-20 shrink-0 border-r border-border bg-black/30 py-3">
+          {pos ? (
+            <>
+              <div className="text-2xl leading-none">
+                {medal(pos) || `#${pos}`}
               </div>
-            )}
-            {score != null && (
-              <div className="text-[10px] font-mono tabular-nums text-foreground-muted mt-1">
-                {score.toFixed(2)}
-              </div>
-            )}
-          </>
-        ) : isNostr ? (
-          <>
-            {authorPicture ? (
-              <img
-                src={authorPicture}
-                alt=""
-                className="h-8 w-8 rounded-full object-cover ring-1 ring-nostr/40"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                  e.currentTarget.nextElementSibling?.classList.remove(
-                    "hidden",
-                  );
-                }}
-              />
-            ) : null}
-            <CircleDashed
-              className={cn(
-                "h-4 w-4 text-nostr",
-                authorPicture && "hidden",
+              {!(pos >= 1 && pos <= 3) && (
+                <div className="text-[10px] font-mono text-foreground-subtle mt-1">
+                  #{pos}
+                </div>
               )}
-            />
+              {score != null && (
+                <div className="text-[10px] font-mono tabular-nums text-foreground-muted mt-1">
+                  {score.toFixed(2)}
+                </div>
+              )}
+            </>
+          ) : isNostr ? (
+            <>
+              {authorPicture ? (
+                <img
+                  src={authorPicture}
+                  alt=""
+                  className="h-8 w-8 rounded-full object-cover ring-1 ring-nostr/40"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                    e.currentTarget.nextElementSibling?.classList.remove(
+                      "hidden",
+                    );
+                  }}
+                />
+              ) : null}
+              <CircleDashed
+                className={cn(
+                  "h-4 w-4 text-nostr",
+                  authorPicture && "hidden",
+                )}
+              />
+              <div
+                className="mt-1 max-w-[3.75rem] truncate px-1 text-center text-[10px] font-mono font-semibold leading-tight text-nostr sm:max-w-[4.5rem]"
+                title={authorDisplayName ?? undefined}
+              >
+                {authorDisplayName}
+              </div>
+            </>
+          ) : (
             <div
-              className="mt-1 max-w-[3.75rem] truncate px-1 text-center text-[10px] font-mono font-semibold leading-tight text-nostr sm:max-w-[4.5rem]"
-              title={authorDisplayName ?? undefined}
+              className={cn(
+                "inline-flex items-center justify-center px-1.5 py-0.5 rounded-full border text-[8px] font-mono font-bold uppercase tracking-widest",
+                STATUS_BADGE[project.status] ??
+                  "bg-white/5 text-foreground-muted border-border",
+              )}
             >
-              {authorDisplayName}
+              {project.status}
             </div>
-          </>
-        ) : (
-          <div
-            className={cn(
-              "inline-flex items-center justify-center px-1.5 py-0.5 rounded-full border text-[8px] font-mono font-bold uppercase tracking-widest",
-              STATUS_BADGE[project.status] ??
-                "bg-white/5 text-foreground-muted border-border",
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0 py-3 pr-3 sm:pr-4 flex flex-col justify-center">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-display text-base sm:text-lg font-bold leading-tight group-hover:text-bitcoin transition-colors truncate">
+                {project.name}
+              </h3>
+              <p className="text-xs text-foreground-muted mt-1 line-clamp-2">
+                {project.description}
+              </p>
+            </div>
+            {prize && (
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-bitcoin/10 border border-bitcoin/30 text-[10px] font-mono font-bold tabular-nums text-bitcoin whitespace-nowrap shrink-0">
+                <Trophy className="h-3 w-3" />
+                {formatSats(prize)} sats
+              </span>
             )}
-          >
-            {project.status}
           </div>
-        )}
-      </div>
-
-      <div className="flex-1 min-w-0 py-3 pr-3 sm:pr-4 flex flex-col justify-center">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="font-display text-base sm:text-lg font-bold leading-tight group-hover:text-bitcoin transition-colors truncate">
-              {project.name}
-            </h3>
-            <p className="text-xs text-foreground-muted mt-1 line-clamp-2">
-              {project.description}
-            </p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-foreground-subtle">
+            {team.length > 0 && (
+              <span className="truncate">
+                {team.map((t) => t.name).join(" · ")}
+              </span>
+            )}
+            {project.repo && (
+              <span className="inline-flex items-center gap-1">
+                <GithubIcon className="h-3 w-3" />
+                repo
+              </span>
+            )}
+            {project.demo && (
+              <span className="inline-flex items-center gap-1">
+                <ExternalLink className="h-3 w-3" />
+                demo
+              </span>
+            )}
+            {isNostr && (
+              <span className="inline-flex items-center gap-1 text-nostr">
+                <Zap className="h-3 w-3" />
+                submission firmada
+              </span>
+            )}
           </div>
-          {prize && (
-            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-bitcoin/10 border border-bitcoin/30 text-[10px] font-mono font-bold tabular-nums text-bitcoin whitespace-nowrap shrink-0">
-              <Trophy className="h-3 w-3" />
-              {formatSats(prize)} sats
-            </span>
-          )}
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-foreground-subtle">
-          {team.length > 0 && (
-            <span className="truncate">
-              {team.map((t) => t.name).join(" · ")}
-            </span>
-          )}
-          {project.repo && (
-            <span className="inline-flex items-center gap-1">
-              <GithubIcon className="h-3 w-3" />
-              repo
-            </span>
-          )}
-          {project.demo && (
-            <span className="inline-flex items-center gap-1">
-              <ExternalLink className="h-3 w-3" />
-              demo
-            </span>
-          )}
-          {isNostr && (
-            <span className="inline-flex items-center gap-1 text-nostr">
-              <Zap className="h-3 w-3" />
-              submission firmada
-            </span>
-          )}
-        </div>
-      </div>
+      </Link>
 
-      <div className="flex items-center pr-4 shrink-0">
+      <div className="flex shrink-0 items-center gap-2 pr-3 sm:pr-4">
+        <ProjectVotingControls
+          projectId={project.id}
+          projectName={project.name}
+        />
         <ArrowRight className="h-4 w-4 text-foreground-muted group-hover:text-bitcoin group-hover:translate-x-0.5 transition-all" />
       </div>
-    </Wrapper>
+    </div>
   );
 }
 
