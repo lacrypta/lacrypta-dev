@@ -4,8 +4,10 @@ import type { SignedEvent } from "@/lib/nostrSigner";
 import { getSoldiers } from "@/lib/soldiers";
 import {
   getHackathon,
+  hackathonSlug,
   mergeWithSubmissions,
   primaryProjectPubkey,
+  type Hackathon,
   type HackathonSubmission,
 } from "@/lib/hackathons";
 import { getNostrHackathonSubmissions } from "@/lib/nostrCache";
@@ -50,6 +52,47 @@ const CLOSE_ACTIONS = new Set([
   CLOSE_PREVIEW_ACTION,
   CLOSE_CONFIRM_ACTION,
 ]);
+const PROFILE_KIND = 0;
+const PROFILE_SOURCE_NPUB =
+  "npub1rujdpkd8mwezrvpqd2rx2zphfaztqrtsfg6w3vdnljdghs2q8qrqtt9u68";
+const PROFILE_DISPLAY_NAME = "La Crypta Dev";
+const PROFILE_SOURCE_FALLBACK_RELAYS = [
+  "wss://purplepag.es",
+  "wss://relay.nostr.band",
+  "wss://relay.snort.social",
+  "wss://nostr.wine",
+] as const;
+const VOTING_DM_KIND = 4;
+const VOTING_DM_TAG = "lacrypta-dev-voting-notice";
+
+type RelayPublishResult = { relay: string; ok: boolean; error?: string };
+
+type VotingStartNotificationResult = {
+  recipientPubkey: string;
+  recipientName: string;
+  eventId: string | null;
+  ok: boolean;
+  relays: RelayPublishResult[];
+  error?: string;
+};
+
+type VotingStartNotificationSummary = {
+  attempted: number;
+  delivered: number;
+  failed: number;
+  senderProfile: SenderProfileResult;
+  results: VotingStartNotificationResult[];
+};
+
+type SenderProfileResult = {
+  pubkey: string;
+  existed: boolean;
+  sourcePubkey: string;
+  sourceFound: boolean;
+  eventId: string | null;
+  relays: RelayPublishResult[];
+  error?: string;
+};
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
@@ -85,7 +128,7 @@ async function publishToRelays(
   signed: SignedEvent,
   relays: string[],
   perRelayTimeoutMs = 8000,
-): Promise<{ relay: string; ok: boolean; error?: string }[]> {
+): Promise<RelayPublishResult[]> {
   const { SimplePool } = await import("nostr-tools/pool");
   const pool = new SimplePool();
   const promises = pool.publish(relays, signed);
@@ -114,6 +157,228 @@ async function publishToRelays(
     /* noop */
   }
   return results;
+}
+
+function parseProfileContent(content: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(content);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchLatestProfileEvent(
+  pubkey: string,
+  relays: string[] = DEFAULT_RELAYS,
+  timeoutMs = 3500,
+): Promise<SignedEvent | null> {
+  const { SimplePool } = await import("nostr-tools/pool");
+  const pool = new SimplePool();
+  let latest: SignedEvent | null = null;
+
+  const closer = pool.subscribe(
+    relays,
+    { kinds: [PROFILE_KIND], authors: [pubkey], limit: 1 },
+    {
+      onevent(ev) {
+        const event = ev as SignedEvent;
+        if (!parseProfileContent(event.content)) return;
+        if (!latest || event.created_at > latest.created_at) latest = event;
+      },
+      oneose() {
+        /* timeout-driven */
+      },
+    },
+  );
+
+  await new Promise((r) => setTimeout(r, timeoutMs));
+  try {
+    closer.close();
+  } catch {
+    /* noop */
+  }
+  try {
+    pool.close(relays);
+  } catch {
+    /* noop */
+  }
+  return latest;
+}
+
+async function profileSourcePubkey(): Promise<string> {
+  const { decode } = await import("nostr-tools/nip19");
+  const decoded = decode(PROFILE_SOURCE_NPUB);
+  if (decoded.type !== "npub") {
+    throw new Error("PROFILE_SOURCE_NPUB invalido.");
+  }
+  return decoded.data as string;
+}
+
+function sourceProfileRelays(): string[] {
+  return [...new Set([...DEFAULT_RELAYS, ...PROFILE_SOURCE_FALLBACK_RELAYS])];
+}
+
+async function ensureSenderProfile(
+  secret: Uint8Array,
+  createdAt: number,
+): Promise<SenderProfileResult> {
+  const { finalizeEvent, getPublicKey } = await import("nostr-tools/pure");
+  const pubkey = getPublicKey(secret);
+  const sourcePubkey = await profileSourcePubkey();
+  const existing = await fetchLatestProfileEvent(pubkey);
+  if (existing) {
+    return {
+      pubkey,
+      existed: true,
+      sourcePubkey,
+      sourceFound: false,
+      eventId: existing.id,
+      relays: [],
+    };
+  }
+
+  const source = await fetchLatestProfileEvent(
+    sourcePubkey,
+    sourceProfileRelays(),
+    6000,
+  );
+  const cloned = parseProfileContent(source?.content ?? "") ?? {};
+  const signed = finalizeEvent(
+    {
+      kind: PROFILE_KIND,
+      created_at: createdAt,
+      tags: [["client", "La Crypta Dev"]],
+      content: JSON.stringify({
+        ...cloned,
+        name: PROFILE_DISPLAY_NAME,
+        display_name: PROFILE_DISPLAY_NAME,
+        displayName: PROFILE_DISPLAY_NAME,
+      }),
+    },
+    secret,
+  ) as SignedEvent;
+  const relays = await publishToRelays(signed, DEFAULT_RELAYS);
+  return {
+    pubkey,
+    existed: false,
+    sourcePubkey,
+    sourceFound: !!source,
+    eventId: signed.id,
+    relays,
+  };
+}
+
+function siteBaseUrl(req: Request): string {
+  try {
+    return new URL(req.url).origin.replace(/\/+$/u, "");
+  } catch {
+    /* fallback below */
+  }
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/u, "") ||
+    "https://lacrypta.dev"
+  );
+}
+
+function votingUrlForHackathon(hackathon: Hackathon, req: Request): string {
+  return `${siteBaseUrl(req)}/hackathons/${hackathonSlug(hackathon)}#votar`;
+}
+
+function votingStartMessage(
+  hackathonName: string,
+  voter: VotingEligibleVoter,
+  votingUrl: string,
+): string {
+  const voteWord = voter.maxVotes === 1 ? "voto" : "votos";
+  return [
+    voter.name ? `Hola ${voter.name}.` : "Hola.",
+    `Ya está abierta la votación comunitaria de ${hackathonName}.`,
+    `Tenés ${voter.maxVotes} ${voteWord} disponibles para repartir entre los proyectos habilitados.`,
+    `Entrá a votar acá: ${votingUrl}`,
+    "La Crypta Dev",
+  ].join("\n\n");
+}
+
+async function publishVotingStartNotifications({
+  secret,
+  period,
+  hackathonName,
+  votingUrl,
+  votingEventId,
+  createdAt,
+}: {
+  secret: Uint8Array;
+  period: VotingPeriod;
+  hackathonName: string;
+  votingUrl: string;
+  votingEventId: string;
+  createdAt: number;
+}): Promise<VotingStartNotificationSummary> {
+  const { finalizeEvent } = await import("nostr-tools/pure");
+  const nip04 = await import("nostr-tools/nip04");
+  const senderProfile = await ensureSenderProfile(secret, createdAt);
+
+  const results: VotingStartNotificationResult[] = [];
+  const batchSize = 5;
+  for (let i = 0; i < period.eligible.length; i += batchSize) {
+    const batch = period.eligible.slice(i, i + batchSize);
+    const batchResults = await Promise.all(
+      batch.map(async (voter): Promise<VotingStartNotificationResult> => {
+        try {
+          const content = await nip04.encrypt(
+            secret,
+            voter.pubkey,
+            votingStartMessage(hackathonName, voter, votingUrl),
+          );
+          const signed = finalizeEvent(
+            {
+              kind: VOTING_DM_KIND,
+              created_at: createdAt,
+              content,
+              tags: [
+                ["p", voter.pubkey],
+                ["e", votingEventId],
+                ["t", VOTING_DM_TAG],
+                ["client", "La Crypta Dev"],
+              ],
+            },
+            secret,
+          ) as SignedEvent;
+          const relays = await publishToRelays(signed, DEFAULT_RELAYS, 5000);
+          return {
+            recipientPubkey: voter.pubkey,
+            recipientName: voter.name,
+            eventId: signed.id,
+            ok: relays.some((r) => r.ok),
+            relays,
+          };
+        } catch (error) {
+          return {
+            recipientPubkey: voter.pubkey,
+            recipientName: voter.name,
+            eventId: null,
+            ok: false,
+            relays: [],
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }),
+    );
+    results.push(...batchResults);
+  }
+
+  const delivered = results.filter((r) => r.ok).length;
+  return {
+    attempted: results.length,
+    delivered,
+    failed: results.length - delivered,
+    senderProfile,
+    results,
+  };
 }
 
 /** Collects all ballot events for the hackathon (no `authors` filter —
@@ -426,11 +691,14 @@ export async function POST(
 
     const existing = await fetchVotingPeriodFromRelays(id);
     const now = Math.floor(Date.now() / 1000);
+    const shouldNotifyVotingStart =
+      action === OPEN_ACTION && existing?.period.status !== "open";
     // NIP-01 replaceable tie-break keeps the LOWEST id on equal created_at —
     // always publish strictly after the event we're replacing.
     const eventCreatedAt = Math.max(now, (existing?.eventCreatedAt ?? 0) + 1);
 
     let period: VotingPeriod;
+    let notifications: VotingStartNotificationSummary | null = null;
 
     if (action === OPEN_ACTION) {
       if (
@@ -535,6 +803,24 @@ export async function POST(
     // Bust the server cache so SSR reads the freshly-published period.
     revalidateTag(nostrVotingTag(id), { expire: 0 });
 
+    if (shouldNotifyVotingStart) {
+      notifications = await publishVotingStartNotifications({
+        secret,
+        period,
+        hackathonName: hackathon.name,
+        votingUrl: votingUrlForHackathon(hackathon, req),
+        votingEventId: signed.id,
+        createdAt: eventCreatedAt,
+      });
+      if (notifications.failed > 0) {
+        console.warn("[api/hackathons/voting] NIP-04 notification misses", {
+          hackathonId: id,
+          delivered: notifications.delivered,
+          attempted: notifications.attempted,
+        });
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       eventId: signed.id,
@@ -542,6 +828,7 @@ export async function POST(
       eligibleCount: period.eligible.length,
       projectCount: period.projects.length,
       results: period.results,
+      notifications,
       relays: relayResults,
     });
   } catch (error) {

@@ -18,6 +18,7 @@ import {
   formatSats,
   hackathonSlug,
   hackathonStatus,
+  isHackathonInscriptionOpen,
 } from "@/lib/hackathons";
 import { cn } from "@/lib/cn";
 import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
@@ -421,7 +422,9 @@ function FeaturedHackathon({
             </div>
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 pt-4 border-t border-border">
-              <HackathonInscripcionButton hackathonId={h.id} />
+              {isHackathonInscriptionOpen(h) && (
+                <HackathonInscripcionButton hackathonId={h.id} />
+              )}
               <span className="inline-flex items-center gap-1 text-sm font-semibold text-foreground-muted group-hover:text-foreground transition-colors">
                 Ver detalle
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />

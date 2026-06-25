@@ -30,6 +30,7 @@ import {
   getHackathon,
   hackathonSlug,
   hackathonStatus,
+  isHackathonInscriptionOpen,
   primaryProjectPubkey,
   prizedProjects,
   programRules,
@@ -49,7 +50,7 @@ import { getCachedNostrProfile } from "@/lib/nostrProfileCache";
 import { getCachedVotingPeriod } from "@/lib/votingCache";
 import { nostrVotingTag } from "@/lib/nostrCacheTags";
 import HackathonProjectsList from "./HackathonProjectsList";
-import VotingSection from "./VotingSection";
+import VotingSection, { VotingProvider } from "./VotingSection";
 import VotingHero from "@/components/voting/VotingHero";
 import HackathonResultsClient from "./HackathonResultsClient";
 import AdminBadgesLink from "./AdminBadgesLink";
@@ -560,7 +561,7 @@ export default async function HackathonPage({
                   </span>
                 ))}
               </div>
-              {status !== "closed" && (
+              {isHackathonInscriptionOpen(hackathon) && (
                 <div className="mt-6">
                   <HackathonInscripcionButton hackathonId={hackathon.id} />
                 </div>
@@ -697,8 +698,8 @@ export default async function HackathonPage({
        * the SSR skeleton; client takes over on hydration.
        */}
       {/* Community voting hero — promotes the vote; "Votar ahora" scrolls to
-       *  the ballot (#votar) rendered by VotingSection below. Renders nothing
-       *  until voting has been opened at least once. */}
+       *  the projects list (#votar), where the ballot controls live. Renders
+       *  nothing until voting has been opened at least once. */}
       <Suspense fallback={null}>
         <div className="pb-14">
           <VotingHero
@@ -711,19 +712,18 @@ export default async function HackathonPage({
       </Suspense>
 
       <Suspense fallback={null}>
-        <HackathonProjectsList
-          hackathon={hackathon}
-          initialNostrSubmissions={nostrSubmissions}
-        />
-      </Suspense>
-
-      {/* Community voting — same Suspense requirement as the projects list. */}
-      <Suspense fallback={null}>
-        <VotingSection
+        <VotingProvider
           hackathonId={hackathon.id}
           hackathonName={hackathon.name}
           initialPeriod={votingPeriod}
-        />
+        >
+          <HackathonProjectsList
+            hackathon={hackathon}
+            initialNostrSubmissions={nostrSubmissions}
+          />
+
+          <VotingSection />
+        </VotingProvider>
       </Suspense>
 
       <section className="pb-12">
