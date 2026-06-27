@@ -29,6 +29,9 @@ export type ViewerVotingState = {
 export type VotingLive = {
   period: VotingPeriod | null;
   pubkeys: Pubkeys;
+  /** Viewer voting state not yet settled: auth still resolving, or (when
+   *  eligible) the ballot backlog hasn't arrived so `remaining` is unreliable. */
+  loading: boolean;
   /** Distinct eligible voters who have published a ballot. */
   votedCount: number;
   /** Size of the frozen eligible snapshot. */
@@ -50,8 +53,9 @@ export function useVotingLive(
   hackathonId: string,
   initialPeriod: VotingPeriod | null,
 ): VotingLive {
-  const { auth } = useAuth();
+  const { auth, ready } = useAuth();
   const [period, setPeriod] = useState<VotingPeriod | null>(initialPeriod);
+  const [ballotsLoaded, setBallotsLoaded] = useState(false);
   const [pubkeys, setPubkeys] = useState<Pubkeys>({
     adminPubkey: null,
     publisherPubkey: null,
@@ -120,22 +124,27 @@ export function useVotingLive(
   const votingOpen = period?.status === "open";
   useEffect(() => {
     if (!votingOpen) return;
-    return subscribeToBallots(hackathonId, (ev) => {
-      setBallots((prev) => {
-        const key = ev.pubkey.toLowerCase();
-        const existing = prev.get(key);
-        if (
-          existing &&
-          (existing.created_at > ev.created_at ||
-            (existing.created_at === ev.created_at && existing.id <= ev.id))
-        ) {
-          return prev;
-        }
-        const next = new Map(prev);
-        next.set(key, ev);
-        return next;
-      });
-    });
+    setBallotsLoaded(false);
+    return subscribeToBallots(
+      hackathonId,
+      (ev) => {
+        setBallots((prev) => {
+          const key = ev.pubkey.toLowerCase();
+          const existing = prev.get(key);
+          if (
+            existing &&
+            (existing.created_at > ev.created_at ||
+              (existing.created_at === ev.created_at && existing.id <= ev.id))
+          ) {
+            return prev;
+          }
+          const next = new Map(prev);
+          next.set(key, ev);
+          return next;
+        });
+      },
+      () => setBallotsLoaded(true),
+    );
   }, [hackathonId, votingOpen]);
 
   const isAdmin =
@@ -161,9 +170,16 @@ export function useVotingLive(
     const used = myBallot ? claimedVotes(myBallot) : 0;
     const maxVotes = me?.maxVotes ?? 0;
 
+    // Settled once auth is resolved and — if the viewer is eligible and voting
+    // is open — the ballot backlog has arrived (so `used`/`remaining` are real).
+    const votingOpenNow = period?.status === "open";
+    const loading =
+      !ready || (votingOpenNow && !!me && !ballotsLoaded);
+
     return {
       period,
       pubkeys,
+      loading,
       votedCount,
       eligibleCount,
       progressPct,
@@ -176,5 +192,5 @@ export function useVotingLive(
         hasVoted: !!myBallot,
       },
     };
-  }, [period, pubkeys, ballots, auth?.pubkey, isAdmin]);
+  }, [period, pubkeys, ballots, auth?.pubkey, isAdmin, ready, ballotsLoaded]);
 }

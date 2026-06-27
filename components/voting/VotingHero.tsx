@@ -42,7 +42,7 @@ export default function VotingHero({
 }) {
   const { ready } = useAuth();
   const live = useVotingLive(hackathonId, initialPeriod);
-  const { period } = live;
+  const { period, viewer } = live;
 
   const slug = hackathonSlugForId(hackathonId);
   // On the hackathon page the CTA scrolls to the ballot; on home it links there.
@@ -61,8 +61,30 @@ export default function VotingHero({
 
   if (!period) return null;
 
+  // On the home page, default to a generic "voting in progress" hero (linking to
+  // the hackathon) while the viewer's state resolves in the background. Swap to
+  // the full ballot hero ONLY once we've confirmed they're eligible and still
+  // have votes to spend; otherwise the "in progress" hero stays put.
+  // (The closed/results state still shows for all.)
+  if (variant === "home" && period.status === "open") {
+    const hasVotesAvailable =
+      !live.loading && viewer.eligible && viewer.remaining > 0;
+    if (!hasVotesAvailable) {
+      return (
+        <HomeVotingInProgress
+          hackathonName={hackathonName}
+          ballotHref={ballotHref}
+        />
+      );
+    }
+  }
+
   return (
-    <section className={cn(variant === "page" && "scroll-mt-24")}>
+    <section
+      className={cn(
+        variant === "page" ? "scroll-mt-24" : "pt-24 sm:pt-28",
+      )}
+    >
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -103,6 +125,74 @@ export default function VotingHero({
               onCta={scrollToBallot}
             />
           )}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────── In-progress (home default) ─────────────── */
+
+/**
+ * Generic "voting in progress" hero shown on the home page by default — while
+ * the viewer's eligibility/budget is still loading, and afterwards whenever they
+ * have no votes available. Links through to the hackathon. The full ballot hero
+ * (`OpenHero`) only replaces it once the viewer is confirmed to have votes left.
+ */
+function HomeVotingInProgress({
+  hackathonName,
+  ballotHref,
+}: {
+  hackathonName: string;
+  ballotHref: string;
+}) {
+  return (
+    <section className="pt-24 sm:pt-28">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="relative overflow-hidden rounded-3xl border border-nostr/40 bg-background-card p-6 shadow-[0_0_60px_-15px_rgba(168,85,247,0.45)] sm:p-8"
+        >
+          {/* Animated backdrop */}
+          <div aria-hidden className="pointer-events-none absolute inset-0">
+            <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-nostr/20 blur-3xl" />
+            <div className="absolute -bottom-28 -right-20 h-72 w-72 rounded-full bg-cyan/10 blur-3xl" />
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-nostr/70 to-transparent" />
+          </div>
+
+          <div className="relative grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 rounded-full border border-success/40 bg-success/10 px-3 py-1.5 text-[10px] font-mono font-black uppercase tracking-[0.22em] text-success">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+                </span>
+                Votación en progreso
+              </div>
+
+              <h2 className="mt-4 font-display text-3xl font-black leading-[0.95] tracking-tight sm:text-4xl">
+                La comunidad está{" "}
+                <span className="text-gradient-nostr">votando</span> a los
+                ganadores de {hackathonName}
+              </h2>
+              <p className="mt-3 max-w-xl text-sm leading-relaxed text-foreground-muted sm:text-base">
+                Seguí la votación en vivo y mirá cómo se reparten los votos de la
+                comunidad.
+              </p>
+            </div>
+
+            <div className="lg:pb-1">
+              <CtaButton
+                href={ballotHref}
+                onClick={() => {}}
+                tone="nostr"
+                label="Ver la votación"
+                icon={<Vote className="h-5 w-5" />}
+              />
+            </div>
+          </div>
         </motion.div>
       </div>
     </section>
@@ -173,7 +263,7 @@ function OpenHero({
           />
           <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-foreground-subtle">
             <Sparkles className="h-3.5 w-3.5 text-lightning" />
-            Cierre manual de La Crypta — no hay reloj, ¡votá tranqui!
+            Cierra el Martes 30 de Junio
           </span>
         </div>
       </div>

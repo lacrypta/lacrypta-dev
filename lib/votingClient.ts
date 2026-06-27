@@ -194,6 +194,7 @@ export async function fetchAllBallotEvents(
 export function subscribeToBallots(
   hackathonId: string,
   onEvent: (ev: SignedEvent) => void,
+  onEose?: () => void,
 ): () => void {
   let closed = false;
   let teardown: (() => void) | null = null;
@@ -221,6 +222,9 @@ export function subscribeToBallots(
         },
         oneose() {
           // Keep the subscription open for live ballots — do not close here.
+          // Signal that the historical backlog has been delivered so callers
+          // can tell "still loading" from "loaded, zero ballots".
+          onEose?.();
         },
       },
     );
