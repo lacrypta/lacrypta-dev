@@ -120,7 +120,7 @@ const SECTIONS: Section[] = [
     borderClass: "border-cyan/30",
     dotBgClass: "bg-cyan",
     icon: Layers,
-    href: "/infrastructure",
+    href: "/infra",
     cta: "Usá nuestra infra",
     pillars: [
       { src: "/pilares/lightning.svg", label: "Lightning" },

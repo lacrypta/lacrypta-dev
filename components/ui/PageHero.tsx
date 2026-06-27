@@ -9,7 +9,7 @@ export default function PageHero({
   title,
   description,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   eyebrowIcon?: ReactNode;
   title: ReactNode;
   description?: ReactNode;
@@ -23,15 +23,17 @@ export default function PageHero({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border bg-white/5 text-xs font-mono tracking-wider text-foreground-muted mb-6"
-        >
-          {eyebrowIcon}
-          {eyebrow}
-        </motion.div>
+        {eyebrow && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border bg-white/5 text-xs font-mono tracking-wider text-foreground-muted mb-6"
+          >
+            {eyebrowIcon}
+            {eyebrow}
+          </motion.div>
+        )}
 
         <motion.h1
           initial={{ opacity: 0, y: 30 }}

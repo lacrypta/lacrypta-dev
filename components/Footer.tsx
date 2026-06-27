@@ -19,7 +19,7 @@ const COLS = [
   {
     title: "Construí",
     links: [
-      { href: "/infrastructure", label: "Infra propia" },
+      { href: "/infra", label: "Infra propia" },
       { href: "/skills", label: "Skills" },
       {
         href: "https://github.com/lacrypta/lacrypta-dev",
