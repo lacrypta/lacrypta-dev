@@ -11,7 +11,6 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowRight,
   CircleDashed,
   ExternalLink,
   Loader2,
@@ -613,7 +612,6 @@ function ProjectRow({
           projectId={project.id}
           projectName={project.name}
         />
-        <ArrowRight className="h-4 w-4 text-foreground-muted group-hover:text-bitcoin group-hover:translate-x-0.5 transition-all" />
       </div>
     </div>
   );
