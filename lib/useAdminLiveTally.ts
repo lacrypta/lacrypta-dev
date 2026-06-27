@@ -5,9 +5,19 @@ import { useAuth } from "@/lib/auth";
 import { getSigner } from "@/lib/nostrSigner";
 import type { VotingResults } from "@/lib/voting";
 
+/** A single voter's decrypted ballot, as returned by `close-preview`. */
+export type AdminVoterAllocation = {
+  pubkey: string;
+  name: string;
+  allocations: Record<string, number>;
+  total: number;
+};
+
 export type AdminLiveTally = {
   /** Decrypted live standings, or null until the admin loads them. */
   results: VotingResults | null;
+  /** Per-voter decrypted allocations, or null until loaded. */
+  perVoter: AdminVoterAllocation[] | null;
   /** A fetch/sign round-trip is in flight. */
   loading: boolean;
   error: string | null;
@@ -27,6 +37,7 @@ export type AdminLiveTally = {
 export function useAdminLiveTally(hackathonId: string): AdminLiveTally {
   const { auth } = useAuth();
   const [results, setResults] = useState<VotingResults | null>(null);
+  const [perVoter, setPerVoter] = useState<AdminVoterAllocation[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // In-flight guard kept in a ref so `refresh` depends only on auth/hackathonId
@@ -63,13 +74,14 @@ export function useAdminLiveTally(hackathonId: string): AdminLiveTally {
       });
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
-        preview?: { tally: VotingResults };
+        preview?: { tally: VotingResults; perVoter?: AdminVoterAllocation[] };
         error?: string;
       };
       if (!res.ok || !data.ok || !data.preview) {
         throw new Error(data.error || "No se pudo obtener la votación actual.");
       }
       setResults(data.preview.tally);
+      setPerVoter(data.preview.perVoter ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido.");
     } finally {
@@ -78,5 +90,5 @@ export function useAdminLiveTally(hackathonId: string): AdminLiveTally {
     }
   }, [auth, hackathonId]);
 
-  return { results, loading, error, refresh };
+  return { results, perVoter, loading, error, refresh };
 }
