@@ -109,9 +109,23 @@ type VotingContextValue = {
   publishing: boolean;
   celebrate: boolean;
   hasPrev: boolean;
+  /** On-screen allocation differs from the published ballot — there are unsaved
+   *  changes worth publishing. False right after load / publish. */
+  isDirty: boolean;
   adjustProjectVote: (projectId: string, delta: number) => void;
   publishVotes: () => Promise<void>;
 };
+
+/** Allocation maps are equal ignoring zero/missing entries. */
+function allocationsEqual(
+  a: Record<string, number>,
+  b: Record<string, number>,
+): boolean {
+  const keysA = Object.keys(a).filter((k) => (a[k] ?? 0) > 0);
+  const keysB = Object.keys(b).filter((k) => (b[k] ?? 0) > 0);
+  if (keysA.length !== keysB.length) return false;
+  return keysA.every((k) => a[k] === b[k]);
+}
 
 const VotingContext = createContext<VotingContextValue | null>(null);
 
@@ -354,6 +368,7 @@ export function VotingProvider({
   const used = Object.values(allocations).reduce((sum, n) => sum + n, 0);
   const remaining = Math.max(0, maxVotes - used);
   const hasPrev = (ownBallotEvent?.created_at ?? 0) > 0 || !!ownAllocations;
+  const isDirty = !allocationsEqual(allocations, ownAllocations ?? {});
   const resetKey = `${period?.openedAt ?? 0}:${auth?.pubkey ?? ""}`;
   const ownAllocationsKey = JSON.stringify(ownAllocations ?? {});
 
@@ -470,6 +485,7 @@ export function VotingProvider({
         publishing,
         celebrate,
         hasPrev,
+        isDirty,
         adjustProjectVote,
         publishVotes,
       }}
@@ -1386,27 +1402,27 @@ export function ProjectVotingToolbar() {
             </motion.span>
           )}
         </AnimatePresence>
-        <button
-          type="button"
-          onClick={voting.publishVotes}
-          disabled={
-            voting.publishing ||
-            voting.used === 0 ||
-            voting.used > voting.maxVotes
-          }
-          className="inline-flex items-center gap-2 rounded-lg border border-nostr/40 bg-nostr/10 px-4 py-2 text-sm font-semibold text-nostr hover:bg-nostr/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {voting.publishing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Vote className="h-4 w-4" />
-          )}
-          {voting.publishing
-            ? "Publicando…"
-            : voting.hasPrev
-              ? "Actualizar votos"
-              : "Publicar votos"}
-        </button>
+        {/* Save-changes affordance: only surfaced when the on-screen ballot
+            differs from what's published (and there's something to publish). */}
+        {voting.isDirty && voting.used > 0 && (
+          <button
+            type="button"
+            onClick={voting.publishVotes}
+            disabled={voting.publishing || voting.used > voting.maxVotes}
+            className="inline-flex items-center gap-2 rounded-lg border border-nostr/40 bg-nostr/10 px-4 py-2 text-sm font-semibold text-nostr hover:bg-nostr/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {voting.publishing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Vote className="h-4 w-4" />
+            )}
+            {voting.publishing
+              ? "Publicando…"
+              : voting.hasPrev
+                ? "Actualizar votos"
+                : "Publicar votos"}
+          </button>
+        )}
       </div>
     </div>
   );
