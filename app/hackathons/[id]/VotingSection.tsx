@@ -391,6 +391,15 @@ export function VotingProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownAllocationsKey]);
 
+  // Once the editor matches the published ballot again (the user reverted their
+  // edits, or just published), clear the edit flag so later authoritative ballot
+  // updates resume syncing into this tab. Only ever clears — adjustProjectVote
+  // sets it — so a genuine ownAllocations change (isDirty flips true while the
+  // editor is stale) still lets the sync effect above run.
+  useEffect(() => {
+    if (!isDirty) dirty.current = false;
+  }, [isDirty]);
+
   const adjustProjectVote = useCallback(
     (projectId: string, delta: number) => {
       if (!voter || publishing || blocked.includes(projectId)) return;
@@ -1540,13 +1549,18 @@ export function ProjectVotingToolbar() {
             </motion.span>
           )}
         </AnimatePresence>
-        {/* Save-changes affordance: only surfaced when the on-screen ballot
-            differs from what's published (and there's something to publish). */}
-        {voting.isDirty && voting.used > 0 && (
+        {/* Save-changes affordance: surfaced only when the on-screen ballot
+            differs from what's published. Stays visible (but disabled) for an
+            empty edit so a ballot cleared to zero isn't silently unsavable. */}
+        {voting.isDirty && (
           <button
             type="button"
             onClick={voting.publishVotes}
-            disabled={voting.publishing || voting.used > voting.maxVotes}
+            disabled={
+              voting.publishing ||
+              voting.used === 0 ||
+              voting.used > voting.maxVotes
+            }
             className="inline-flex items-center gap-2 rounded-lg border border-nostr/40 bg-nostr/10 px-4 py-2 text-sm font-semibold text-nostr hover:bg-nostr/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {voting.publishing ? (

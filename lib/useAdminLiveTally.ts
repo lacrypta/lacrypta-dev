@@ -83,6 +83,9 @@ export function useAdminLiveTally(hackathonId: string): AdminLiveTally {
       setResults(data.preview.tally);
       setPerVoter(data.preview.perVoter ?? []);
     } catch (err) {
+      // Don't keep presenting a stale tally as current once a refresh fails.
+      setResults(null);
+      setPerVoter(null);
       setError(err instanceof Error ? err.message : "Error desconocido.");
     } finally {
       inFlight.current = false;
