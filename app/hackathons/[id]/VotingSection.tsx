@@ -661,6 +661,50 @@ function VotingSectionInner() {
   );
 }
 
+/**
+ * Compact voting action bar — "Ver padrón" + the admin open/close controls +
+ * the padrón modal. Extracted from the section card so the hackathon page can
+ * fold these buttons into the voting hero (the card itself is now only used by
+ * /dev/voting). Reads the shared VotingProvider context, so it must render
+ * inside a `<VotingProvider>`. Renders nothing for a non-admin before voting
+ * has opened.
+ */
+export function HackathonVotingActions() {
+  const { period, isAdmin, admin, voterRows, totals } = useVotingContext();
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  if (!period && !isAdmin) return null;
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {period && (
+          <button
+            type="button"
+            onClick={() => setDetailOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white/[0.03] px-3 py-1.5 text-[11px] font-mono font-bold uppercase tracking-widest text-foreground-muted hover:bg-white/[0.06] transition-colors"
+          >
+            <ListChecks className="h-3.5 w-3.5" />
+            Ver padrón ({totals.votedCount}/{totals.eligibleCount})
+          </button>
+        )}
+        {isAdmin && <AdminVotingControls period={period} admin={admin} />}
+      </div>
+
+      {detailOpen && period && (
+        <VotingDetailModal
+          period={period}
+          rows={voterRows}
+          totals={totals}
+          closed={period.status === "closed"}
+          isAdmin={isAdmin}
+          onClose={() => setDetailOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
 /* ───────────────────────── Detail modal ───────────────────────── */
 
 function VotingDetailModal({

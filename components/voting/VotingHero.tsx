@@ -39,11 +39,16 @@ export default function VotingHero({
   hackathonName,
   initialPeriod,
   variant,
+  actions,
 }: {
   hackathonId: string;
   hackathonName: string;
   initialPeriod: VotingPeriod | null;
   variant: "home" | "page";
+  /** Page-only action bar (Ver padrón + admin controls), folded into the hero.
+   *  Must be rendered inside the VotingProvider — only passed on the hackathon
+   *  page (`variant="page"`). */
+  actions?: React.ReactNode;
 }) {
   const { ready } = useAuth();
   const live = useVotingLive(hackathonId, initialPeriod);
@@ -64,7 +69,14 @@ export default function VotingHero({
     [variant],
   );
 
-  if (!period) return null;
+  if (!period) {
+    // On the hackathon page the admin still needs the action bar before the
+    // first round exists (to open voting). Everyone else sees nothing.
+    if (variant === "page" && actions && live.isAdmin) {
+      return <PageVotingActionsShell actions={actions} />;
+    }
+    return null;
+  }
 
   // On the home page, default to a generic "voting in progress" hero (linking to
   // the hackathon) while the viewer's state resolves in the background. Swap to
@@ -126,6 +138,14 @@ export default function VotingHero({
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-nostr/70 to-transparent" />
           </div>
 
+          {/* Page-only action bar (Ver padrón + admin controls), folded in from
+              the old voting section card. */}
+          {variant === "page" && actions && (
+            <div className="relative mb-5 flex flex-wrap items-center justify-end gap-2">
+              {actions}
+            </div>
+          )}
+
           {period.status === "open" ? (
             <OpenHero
               ready={ready}
@@ -143,6 +163,35 @@ export default function VotingHero({
             />
           )}
         </motion.div>
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────── Page actions shell (no period) ─────────── */
+
+/**
+ * Minimal hackathon-page card shown to the admin before any voting round
+ * exists, so they can still open the round. Hosts the same action bar the hero
+ * folds in once a period is live.
+ */
+function PageVotingActionsShell({ actions }: { actions: React.ReactNode }) {
+  return (
+    <section className="scroll-mt-24">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <div className="rounded-3xl border border-nostr/30 bg-background-card p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Vote className="h-4 w-4 text-nostr" />
+              <h2 className="font-display font-bold text-sm uppercase tracking-widest text-foreground-muted">
+                Votación comunitaria
+              </h2>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {actions}
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );
