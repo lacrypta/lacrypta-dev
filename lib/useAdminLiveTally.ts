@@ -3,7 +3,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { getSigner } from "@/lib/nostrSigner";
-import { fetchAllBallotEvents } from "@/lib/votingClient";
 import type { VotingResults } from "@/lib/voting";
 
 export type AdminLiveTally = {
@@ -40,7 +39,6 @@ export function useAdminLiveTally(hackathonId: string): AdminLiveTally {
     setLoading(true);
     setError(null);
     try {
-      const ballots = await fetchAllBallotEvents(hackathonId);
       const signer = await getSigner(auth);
       const request = await signer.signEvent({
         kind: 27235,
@@ -54,10 +52,14 @@ export function useAdminLiveTally(hackathonId: string): AdminLiveTally {
           ["h", hackathonId],
         ],
       });
+      // No client ballot snapshot: let the server do its own authoritative
+      // relay fetch (fetchBallotEvents) so a slow relay can't undercount the
+      // preview. This is a read-only peek — unlike the real close it doesn't
+      // need to freeze the exact ballot set.
       const res = await fetch(`/api/hackathons/${hackathonId}/voting`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ request, ballots }),
+        body: JSON.stringify({ request }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;

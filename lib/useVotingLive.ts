@@ -123,8 +123,11 @@ export function useVotingLive(
   // Live ballots while open (for the participation progress).
   const votingOpen = period?.status === "open";
   useEffect(() => {
-    if (!votingOpen) return;
+    // Drop any prior round's ballots so a hackathonId change / round restart
+    // doesn't compute hasVoted/used/remaining/progress from stale events.
+    setBallots(new Map());
     setBallotsLoaded(false);
+    if (!votingOpen) return;
     return subscribeToBallots(
       hackathonId,
       (ev) => {
