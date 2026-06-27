@@ -58,7 +58,7 @@ function staticSitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
-      url: `${BASE_URL}/infrastructure`,
+      url: `${BASE_URL}/infra`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.9,

@@ -40,6 +40,7 @@ const NAV_LINKS: NavLink[] = [
   { href: "/projects", label: "Proyectos" },
   { href: "/skills", label: "Skills", badge: "NEW" },
   { href: "/soldados", label: "Soldados" },
+  { href: "/infra", label: "Infra", badge: "NEW" },
 ];
 
 function isActiveNavLink(link: NavLink, pathname: string) {

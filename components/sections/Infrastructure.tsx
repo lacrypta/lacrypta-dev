@@ -9,7 +9,6 @@ import {
   Flower2,
   Wallet,
   ArrowRight,
-  Bitcoin,
   Activity,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -22,35 +21,25 @@ export type Service = {
   description: string;
   status: ServiceStatus;
   icon: typeof Server;
+  /** Official brand image (overrides the lucide `icon` when set). */
+  iconSrc?: string;
   accent: "bitcoin" | "lightning" | "nostr" | "cyan" | "green";
   stats?: { label: string; value: string }[];
   href?: string;
   feature?: boolean;
+  /** Public connection endpoint (URL or websocket) users can copy. */
+  endpoint?: string;
 };
 
 export const SERVICES: Service[] = [
   {
-    id: "bitcoin",
-    name: "Nodo Bitcoin",
-    description:
-      "Un nodo Bitcoin Core completo que valida cada bloque y transacción desde el génesis. Columna vertebral de todo lo que construimos.",
-    status: "live",
-    icon: Bitcoin,
-    accent: "bitcoin",
-    stats: [
-      { label: "Red", value: "mainnet" },
-      { label: "Prune", value: "archival" },
-    ],
-    feature: true,
-  },
-  {
     id: "lightning",
     name: "Nodo Lightning",
-    description:
-      "Nodo Lightning público con canales abiertos a la comunidad. Ruteá pagos, probá apps y arrancá tus propios proyectos de LN.",
+    description: "Creá canales de lightning.",
     status: "live",
     icon: Zap,
     accent: "lightning",
+    href: "https://amboss.space/node/030ef51039f200c65c5ec4037946b18d7129f63057bb7fe54ad707407a94b37ee0",
     stats: [
       { label: "Implementación", value: "LND" },
       { label: "Canales", value: "públicos" },
@@ -60,40 +49,43 @@ export const SERVICES: Service[] = [
   {
     id: "nostr",
     name: "Relay Nostr",
-    description:
-      "Relay Nostr operado por la comunidad para eventos, conversaciones y artefactos firmados. Resistente a la censura por diseño.",
-    status: "coming",
+    description: "Publicá los eventos acá.",
+    status: "live",
     icon: Radio,
+    iconSrc: "/brand/nostr.svg",
     accent: "nostr",
+    endpoint: "wss://relay.lacrypta.ar",
     stats: [
       { label: "Protocolo", value: "NIP-01+" },
-      { label: "Disponibilidad", value: "pronto" },
+      { label: "Endpoint", value: "relay.lacrypta.ar" },
     ],
   },
   {
     id: "blossom",
     name: "Servidor Blossom",
-    description:
-      "Almacenamiento de medios direccionado por contenido para Nostr. Subí una vez, referenciá para siempre con un hash criptográfico.",
-    status: "coming",
+    description: "Alojá los archivos de manera descentralizada.",
+    status: "live",
     icon: Flower2,
+    iconSrc: "/brand/blossom.png",
     accent: "cyan",
+    endpoint: "https://blossom.lacrypta.ar",
     stats: [
       { label: "Protocolo", value: "BUD-01" },
-      { label: "Disponibilidad", value: "pronto" },
+      { label: "Endpoint", value: "blossom.lacrypta.ar" },
     ],
   },
   {
     id: "lawallet",
     name: "LaWallet Stack",
-    description:
-      "Toda la infraestructura open source detrás de LaWallet — NWC, LNURL y UX nativa en Nostr.",
-    status: "coming",
+    description: "Creá lightning addresses y tarjetas NFC.",
+    status: "live",
     icon: Wallet,
+    iconSrc: "/brand/lawallet.svg",
     accent: "nostr",
+    href: "https://beta.lawallet.io",
     stats: [
       { label: "Licencia", value: "MIT" },
-      { label: "Disponibilidad", value: "pronto" },
+      { label: "Versión", value: "—" },
     ],
   },
 ];
@@ -252,7 +244,16 @@ export function ServiceCard({
                 a.text,
               )}
             >
-              <Icon className="h-5 w-5" strokeWidth={2} />
+              {service.iconSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={service.iconSrc}
+                  alt={`${service.name} logo`}
+                  className="h-7 w-7 object-contain"
+                />
+              ) : (
+                <Icon className="h-5 w-5" strokeWidth={2} />
+              )}
             </div>
             <StatusBadge status={service.status} />
           </div>

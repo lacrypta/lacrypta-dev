@@ -97,7 +97,7 @@ export default function Hero() {
             className="mt-10 flex flex-col sm:flex-row items-center gap-3"
           >
             <Link
-              href="/infrastructure"
+              href="/infra"
               className="group relative inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-r from-bitcoin to-yellow-500 text-black font-semibold text-base shadow-xl shadow-bitcoin/20 hover:shadow-bitcoin/40 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <Zap className="h-4 w-4" strokeWidth={2.5} />
