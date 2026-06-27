@@ -5,10 +5,13 @@ import { useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
+  BarChart3,
   CheckCircle2,
   Coins,
+  Loader2,
   LogIn,
   Radio,
+  ShieldCheck,
   Sparkles,
   Trophy,
   Vote,
@@ -16,12 +19,14 @@ import {
 import { useAuth } from "@/lib/auth";
 import { hackathonSlugForId, prizeForPosition, formatSats } from "@/lib/hackathons";
 import { useVotingLive } from "@/lib/useVotingLive";
+import { useAdminLiveTally } from "@/lib/useAdminLiveTally";
 import {
   VOTES_PER_HACKATHON,
   type VotingPeriod,
   type VotingWinner,
 } from "@/lib/voting";
 import { cn } from "@/lib/cn";
+import LiveTally from "@/components/voting/LiveTally";
 
 /**
  * Gamified, live "community voting" hero. Reused on the home page and the
@@ -67,6 +72,18 @@ export default function VotingHero({
   // have votes to spend; otherwise the "in progress" hero stays put.
   // (The closed/results state still shows for all.)
   if (variant === "home" && period.status === "open") {
+    // The La Crypta admin oversees the round rather than voting in it — give
+    // them the live standings (decrypted on demand) instead of the ballot.
+    if (live.isAdmin) {
+      return (
+        <HomeVotingAdmin
+          hackathonId={hackathonId}
+          hackathonName={hackathonName}
+          ballotHref={ballotHref}
+          live={live}
+        />
+      );
+    }
     const hasVotesAvailable =
       !live.loading && viewer.eligible && viewer.remaining > 0;
     if (!hasVotesAvailable) {
@@ -192,6 +209,119 @@ function HomeVotingInProgress({
                 icon={<Vote className="h-5 w-5" />}
               />
             </div>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+/* ───────────────────── Admin standings (home) ───────────────── */
+
+/**
+ * Admin-only home hero shown while voting is open. The La Crypta admin oversees
+ * the round, so instead of a ballot they get the live participation gauge plus
+ * the current decrypted standings — fetched on demand via the `close-preview`
+ * action (admin-gated, decrypted server-side, publishes nothing).
+ */
+function HomeVotingAdmin({
+  hackathonId,
+  hackathonName,
+  ballotHref,
+  live,
+}: {
+  hackathonId: string;
+  hackathonName: string;
+  ballotHref: string;
+  live: ReturnType<typeof useVotingLive>;
+}) {
+  const tally = useAdminLiveTally(hackathonId);
+  const { votedCount, eligibleCount, progressPct } = live;
+
+  return (
+    <section className="pt-24 sm:pt-28">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="relative overflow-hidden rounded-3xl border border-bitcoin/40 bg-background-card p-6 shadow-[0_0_60px_-15px_rgba(247,147,26,0.45)] sm:p-8"
+        >
+          {/* Animated backdrop */}
+          <div aria-hidden className="pointer-events-none absolute inset-0">
+            <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-bitcoin/20 blur-3xl" />
+            <div className="absolute -bottom-28 -right-20 h-72 w-72 rounded-full bg-cyan/10 blur-3xl" />
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-bitcoin/70 to-transparent" />
+          </div>
+
+          <div className="relative grid gap-6 lg:grid-cols-[1fr_300px] lg:items-start">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 rounded-full border border-bitcoin/40 bg-bitcoin/10 px-3 py-1.5 text-[10px] font-mono font-black uppercase tracking-[0.22em] text-bitcoin">
+                <ShieldCheck className="h-3 w-3" />
+                Panel admin · Votación abierta
+              </div>
+
+              <h2 className="mt-4 font-display text-3xl font-black leading-[0.95] tracking-tight sm:text-4xl">
+                Así viene la votación de{" "}
+                <span className="text-gradient-bitcoin">{hackathonName}</span>
+              </h2>
+              <p className="mt-3 max-w-xl text-sm leading-relaxed text-foreground-muted sm:text-base">
+                Los votos están cifrados en los relays. Descifralos vos para ver
+                el conteo actual — no se publica nada hasta que cierres la
+                votación.
+              </p>
+
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={tally.refresh}
+                  disabled={tally.loading}
+                  className={cn(
+                    "group inline-flex items-center justify-center gap-2.5 rounded-2xl bg-bitcoin px-6 py-3.5 font-display text-base font-black uppercase tracking-wide text-black transition-all",
+                    "shadow-[0_0_38px_-8px_rgba(247,147,26,0.7)] hover:shadow-[0_0_56px_-8px_rgba(247,147,26,0.85)]",
+                    "hover:scale-[1.03] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100",
+                  )}
+                >
+                  {tally.loading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <BarChart3 className="h-5 w-5" />
+                  )}
+                  {tally.results ? "Actualizar conteo" : "Ver votos actuales"}
+                </button>
+                <Link
+                  href={ballotHref}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-widest text-foreground-subtle transition-colors hover:text-bitcoin"
+                >
+                  Abrir panel completo
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+
+              {tally.error && (
+                <p className="mt-4 rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-xs font-mono text-danger">
+                  {tally.error}
+                </p>
+              )}
+
+              {tally.results ? (
+                <LiveTally results={tally.results} closed={false} />
+              ) : (
+                !tally.loading && (
+                  <p className="mt-5 text-xs font-mono text-foreground-subtle">
+                    Tocá “Ver votos actuales” para descifrar y ver el conteo en
+                    vivo.
+                  </p>
+                )
+              )}
+            </div>
+
+            {/* Live participation gauge (no decryption needed) */}
+            <ParticipationGauge
+              votedCount={votedCount}
+              eligibleCount={eligibleCount}
+              progressPct={progressPct}
+            />
           </div>
         </motion.div>
       </div>
