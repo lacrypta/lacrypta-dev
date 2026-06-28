@@ -18,7 +18,7 @@ import {
 import { cn } from "@/lib/cn";
 import HackathonTimeline, {
   type TimelineHackathon,
-} from "./HackathonTimeline";
+} from "@/app/hackathons/HackathonTimeline";
 
 export const metadata: Metadata = {
   title: "Hackatones",
@@ -68,8 +68,11 @@ function buildTimeline(now: Date): {
 
   const items: TimelineHackathon[] = ordered.map((h) => {
     const status = hackathonStatus(h, now);
-    const firstISO = h.dates[0]?.date ?? null;
-    const lastISO = h.dates[h.dates.length - 1]?.date ?? null;
+    // Sort dates to match hackathonStatus()/isHackathonInscriptionOpen(), which
+    // normalize ordering — keeps every timeline calc on the same boundaries.
+    const sortedDates = [...h.dates].sort((a, b) => a.date.localeCompare(b.date));
+    const firstISO = sortedDates[0]?.date ?? null;
+    const lastISO = sortedDates[sortedDates.length - 1]?.date ?? null;
     return {
       id: h.id,
       slug: hackathonSlug(h),
@@ -104,8 +107,9 @@ function buildTimeline(now: Date): {
   let todayPct: number;
   if (activeIdx >= 0) {
     const h = ordered[activeIdx];
-    const first = h.dates[0]?.date ?? today;
-    const last = h.dates[h.dates.length - 1]?.date ?? today;
+    const sorted = [...h.dates].sort((a, b) => a.date.localeCompare(b.date));
+    const first = sorted[0]?.date ?? today;
+    const last = sorted[sorted.length - 1]?.date ?? today;
     const span = new Date(last).getTime() - new Date(first).getTime();
     const into = new Date(today).getTime() - new Date(first).getTime();
     const f = span > 0 ? Math.min(1, Math.max(0, into / span)) : 0.5;

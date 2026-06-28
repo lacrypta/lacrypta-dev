@@ -108,8 +108,18 @@ export default function HackathonTimeline({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") goTo(index - 1);
-      else if (e.key === "ArrowRight") goTo(index + 1);
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      // Don't hijack arrows while the user is typing or inside a dialog/menu.
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.isContentEditable ||
+          /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) ||
+          t.closest('[role="dialog"],[role="menu"],[contenteditable="true"]'))
+      ) {
+        return;
+      }
+      goTo(e.key === "ArrowLeft" ? index - 1 : index + 1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -159,7 +169,7 @@ export default function HackathonTimeline({
                     onClick={() => goTo(i)}
                     aria-current={selected ? "true" : undefined}
                     aria-label={`${h.name} — ${meta.label}`}
-                    className="group relative flex flex-1 flex-col items-center gap-2 pt-[6px] outline-none"
+                    className="group relative flex flex-1 flex-col items-center gap-2 rounded-lg pt-[6px] outline-none focus-visible:ring-2 focus-visible:ring-cyan/60"
                   >
                     {/* Dot */}
                     <span className="relative flex h-6 w-6 items-center justify-center">
@@ -431,11 +441,16 @@ function InfoChip({
 }) {
   return (
     <div className="group/chip relative">
-      <span className="inline-flex cursor-default items-center gap-1.5 rounded-lg border border-border bg-white/[0.03] px-2.5 py-1.5 text-[11px] font-mono font-semibold uppercase tracking-wider text-foreground-muted transition-colors hover:border-border-strong hover:text-foreground">
+      {/* A button so the detail is reachable by keyboard/touch (focus), not
+       *  only by hover. The tooltip reveals on hover OR focus-within. */}
+      <button
+        type="button"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white/[0.03] px-2.5 py-1.5 text-[11px] font-mono font-semibold uppercase tracking-wider text-foreground-muted outline-none transition-colors hover:border-border-strong hover:text-foreground focus-visible:border-border-strong focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-cyan/60"
+      >
         <span className="text-foreground-subtle">{icon}</span>
         {label}
-      </span>
-      <span className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-max max-w-[240px] -translate-x-1/2 translate-y-1 rounded-xl border border-border-strong bg-background-elevated px-3 py-2 text-left text-xs font-normal normal-case tracking-normal text-foreground opacity-0 shadow-xl transition-all duration-150 group-hover/chip:translate-y-0 group-hover/chip:opacity-100">
+      </button>
+      <span className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-max max-w-[240px] -translate-x-1/2 translate-y-1 rounded-xl border border-border-strong bg-background-elevated px-3 py-2 text-left text-xs font-normal normal-case tracking-normal text-foreground opacity-0 shadow-xl transition-all duration-150 group-hover/chip:translate-y-0 group-hover/chip:opacity-100 group-focus-within/chip:translate-y-0 group-focus-within/chip:opacity-100">
         {tooltip}
       </span>
     </div>
