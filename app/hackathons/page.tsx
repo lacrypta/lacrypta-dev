@@ -1,15 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import {
   Calendar,
   Zap,
   Trophy,
   CirclePlay,
-  ArrowRight,
   Sparkles,
-  Radio,
-  Flame,
-  Clock,
 } from "lucide-react";
 import PageHero from "@/components/ui/PageHero";
 import {
@@ -21,37 +16,14 @@ import {
   isHackathonInscriptionOpen,
 } from "@/lib/hackathons";
 import { cn } from "@/lib/cn";
-import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
+import HackathonTimeline, {
+  type TimelineHackathon,
+} from "@/app/hackathons/HackathonTimeline";
 
 export const metadata: Metadata = {
   title: "Hackatones",
   description:
     "Lightning Hackathons 2026 — 8 hackatones mensuales, 8M sats en premios. Bitcoin, Lightning, Nostr.",
-};
-
-const DIFFICULTY_STYLE: Record<string, string> = {
-  Beginner: "bg-success/10 text-success border-success/30",
-  Intermediate: "bg-cyan/10 text-cyan border-cyan/30",
-  Advanced: "bg-nostr/10 text-nostr border-nostr/30",
-  Expert: "bg-bitcoin/10 text-bitcoin border-bitcoin/30",
-};
-
-const STATUS_STYLE: Record<
-  "upcoming" | "active" | "closed",
-  { label: string; className: string }
-> = {
-  upcoming: {
-    label: "PRÓXIMO",
-    className: "bg-white/5 text-foreground-muted border-border",
-  },
-  active: {
-    label: "EN CURSO",
-    className: "bg-success/10 text-success border-success/30",
-  },
-  closed: {
-    label: "CERRADO",
-    className: "bg-bitcoin/10 text-bitcoin border-bitcoin/30",
-  },
 };
 
 function daysBetween(a: Date, b: Date): number {
@@ -81,26 +53,79 @@ function startsInLabel(startISO: string, now: Date): string | null {
   return `Empieza en ${Math.round(days / 30)} meses`;
 }
 
+/** Builds the serializable timeline payload + the index of the "current"
+ *  hackathon (active, else soonest upcoming, else the last one) and the
+ *  fraction of the program that has already elapsed (0–100), so the rail can
+ *  draw a "today" marker even between two hackathons. */
+function buildTimeline(now: Date): {
+  items: TimelineHackathon[];
+  initialIndex: number;
+  todayPct: number;
+} {
+  const ordered = [...HACKATHONS].sort((a, b) => a.number - b.number);
+  const n = ordered.length;
+  const today = now.toISOString().slice(0, 10);
+
+  const items: TimelineHackathon[] = ordered.map((h) => {
+    const status = hackathonStatus(h, now);
+    // Sort dates to match hackathonStatus()/isHackathonInscriptionOpen(), which
+    // normalize ordering — keeps every timeline calc on the same boundaries.
+    const sortedDates = [...h.dates].sort((a, b) => a.date.localeCompare(b.date));
+    const firstISO = sortedDates[0]?.date ?? null;
+    const lastISO = sortedDates[sortedDates.length - 1]?.date ?? null;
+    return {
+      id: h.id,
+      slug: hackathonSlug(h),
+      number: h.number,
+      name: h.name,
+      focus: h.focus,
+      description: h.description,
+      difficulty: h.difficulty,
+      stars: h.stars,
+      month: h.month,
+      monthShort: h.monthShort,
+      year: h.year,
+      icon: h.icon,
+      tags: h.tags,
+      topics: h.topics,
+      firstDay: firstISO ? firstISO.slice(8, 10) : null,
+      lastDay: lastISO ? lastISO.slice(8, 10) : null,
+      status,
+      inscriptionOpen: isHackathonInscriptionOpen(h, now),
+      countdown: status === "upcoming" && firstISO ? startsInLabel(firstISO, now) : null,
+      sponsors: (h.sponsors ?? []).map((s) => ({ name: s.name, logo: s.logo })),
+    };
+  });
+
+  const activeIdx = items.findIndex((x) => x.status === "active");
+  const firstUpcomingIdx = items.findIndex((x) => x.status === "upcoming");
+  const initialIndex =
+    activeIdx >= 0 ? activeIdx : firstUpcomingIdx >= 0 ? firstUpcomingIdx : n - 1;
+
+  // Elapsed fraction: closed nodes count as fully done; the active one is
+  // interpolated across its own date span. Each node owns a 1/n slice.
+  let todayPct: number;
+  if (activeIdx >= 0) {
+    const h = ordered[activeIdx];
+    const sorted = [...h.dates].sort((a, b) => a.date.localeCompare(b.date));
+    const first = sorted[0]?.date ?? today;
+    const last = sorted[sorted.length - 1]?.date ?? today;
+    const span = new Date(last).getTime() - new Date(first).getTime();
+    const into = new Date(today).getTime() - new Date(first).getTime();
+    const f = span > 0 ? Math.min(1, Math.max(0, into / span)) : 0.5;
+    todayPct = ((activeIdx + f) / n) * 100;
+  } else {
+    const closedCount = items.filter((x) => x.status === "closed").length;
+    todayPct = (closedCount / n) * 100;
+  }
+
+  return { items, initialIndex, todayPct: Math.min(100, Math.max(0, todayPct)) };
+}
+
 export default async function HackathonsPage() {
   "use cache";
   const now = new Date();
-  const withStatus = HACKATHONS.map((h) => ({
-    h,
-    status: hackathonStatus(h, now),
-  }));
-  const active = withStatus.filter((x) => x.status === "active");
-  const upcoming = withStatus
-    .filter((x) => x.status === "upcoming")
-    .sort((a, b) =>
-      (a.h.dates[0]?.date ?? "").localeCompare(b.h.dates[0]?.date ?? ""),
-    );
-  const closed = withStatus.filter((x) => x.status === "closed");
-
-  // Pick the spotlight card: an active hackathon if any, else the soonest
-  // upcoming. The remaining upcoming entries fall into the secondary grid.
-  const featured = active[0] ?? upcoming[0] ?? null;
-  const otherUpcoming =
-    featured && featured.status === "upcoming" ? upcoming.slice(1) : upcoming;
+  const { items, initialIndex, todayPct } = buildTimeline(now);
 
   return (
     <>
@@ -116,7 +141,6 @@ export default async function HackathonsPage() {
             en premios
           </>
         }
-        description={`Un hackatón por mes hasta octubre, organizado por ${PROGRAM.organization}. De Lightning básico hasta apps full-stack. Participá solo o en equipo (máx. 4 personas).`}
       />
 
       <section className="py-10 sm:py-14">
@@ -149,46 +173,21 @@ export default async function HackathonsPage() {
             />
           </div>
 
-          {/* Spotlight: active hackathon, or the next upcoming one. */}
-          {featured && (
-            <FeaturedHackathon
-              h={featured.h}
-              status={featured.status}
-              now={now}
-            />
-          )}
-
-          {/* Other upcoming */}
-          {otherUpcoming.length > 0 && (
-            <div className="mt-12">
-              <SectionHeading
-                eyebrow="Próximos"
-                title="Lo que viene"
-                accent="text-cyan"
-              />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {otherUpcoming.map(({ h, status }) => (
-                  <HackathonCard key={h.id} h={h} status={status} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Closed */}
-          {closed.length > 0 && (
-            <div className="mt-12">
-              <SectionHeading
-                eyebrow="Anteriores"
-                title="Hackatones realizados"
-                accent="text-foreground-subtle"
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 opacity-70 hover:opacity-100 transition-opacity">
-                {closed.map(({ h, status }) => (
-                  <HackathonCard key={h.id} h={h} status={status} compact />
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Timeline: navigable past → present → future. */}
+          <div className="mb-4 flex items-baseline gap-3">
+            <span className="text-[10px] font-mono font-semibold tracking-widest uppercase text-bitcoin">
+              Línea de tiempo
+            </span>
+            <span className="h-px flex-1 bg-gradient-to-r from-border via-border/50 to-transparent" />
+            <h3 className="text-sm font-mono text-foreground-muted">
+              Marzo → Octubre 2026
+            </h3>
+          </div>
+          <HackathonTimeline
+            items={items}
+            initialIndex={initialIndex}
+            todayPct={todayPct}
+          />
 
           {/* Prize structure */}
           <div className="mt-14 rounded-2xl border border-border bg-background-card p-6 sm:p-8">
@@ -242,330 +241,6 @@ export default async function HackathonsPage() {
 
       <PilaresSection />
     </>
-  );
-}
-
-function SectionHeading({
-  eyebrow,
-  title,
-  accent,
-}: {
-  eyebrow: string;
-  title: string;
-  accent: string;
-}) {
-  return (
-    <div className="mb-5 flex items-baseline gap-3">
-      <span
-        className={cn(
-          "text-[10px] font-mono font-semibold tracking-widest uppercase",
-          accent,
-        )}
-      >
-        {eyebrow}
-      </span>
-      <span className="h-px flex-1 bg-gradient-to-r from-border via-border/50 to-transparent" />
-      <h3 className="text-sm font-mono text-foreground-muted">{title}</h3>
-    </div>
-  );
-}
-
-/** The big hero-style card for the active or soonest-upcoming hackathon.
- *  Active state uses success-green; upcoming uses bitcoin-orange with a
- *  countdown badge so the next event always feels alive. */
-function FeaturedHackathon({
-  h,
-  status,
-  now,
-}: {
-  h: (typeof HACKATHONS)[number];
-  status: "upcoming" | "active" | "closed";
-  now: Date;
-}) {
-  const firstDate = h.dates[0]?.date;
-  const lastDate = h.dates[h.dates.length - 1]?.date;
-  const isActive = status === "active";
-  const countdown = !isActive && firstDate ? startsInLabel(firstDate, now) : null;
-
-  const accent = isActive
-    ? {
-        ring: "border-success/40 hover:border-success/60",
-        glow: "shadow-[0_0_60px_-12px_rgba(34,197,94,0.35)] hover:shadow-[0_0_90px_-8px_rgba(34,197,94,0.5)]",
-        gradient: "from-success/[0.10] via-transparent to-bitcoin/[0.05]",
-        eyebrow: "text-success",
-        eyebrowIcon: <Radio className="h-3.5 w-3.5 animate-pulse" />,
-        eyebrowLabel: "Hackatón en curso",
-        badge: "border-success/30 bg-success/10 text-success",
-        badgeLabel: "● EN CURSO",
-      }
-    : {
-        ring: "border-bitcoin/40 hover:border-bitcoin/60",
-        glow: "shadow-[0_0_60px_-12px_rgba(247,147,26,0.45)] hover:shadow-[0_0_100px_-8px_rgba(247,147,26,0.6)]",
-        gradient: "from-bitcoin/[0.10] via-transparent to-nostr/[0.06]",
-        eyebrow: "text-bitcoin",
-        eyebrowIcon: <Flame className="h-3.5 w-3.5" />,
-        eyebrowLabel: "Próximo hackatón",
-        badge: "border-bitcoin/30 bg-bitcoin/10 text-bitcoin",
-        badgeLabel: countdown ?? "PRÓXIMO",
-      };
-
-  return (
-    <div className="relative">
-      <div className="flex items-center gap-2 mb-3">
-        <span className={cn("inline-flex items-center", accent.eyebrow)}>
-          {accent.eyebrowIcon}
-        </span>
-        <span
-          className={cn(
-            "text-xs font-mono font-semibold tracking-widest uppercase",
-            accent.eyebrow,
-          )}
-        >
-          {accent.eyebrowLabel}
-        </span>
-        <span className="h-px flex-1 bg-gradient-to-r from-border via-border/30 to-transparent" />
-      </div>
-
-      <Link
-        href={`/hackathons/${hackathonSlug(h)}`}
-        className={cn(
-          "group relative block overflow-hidden rounded-3xl border bg-background-card transition-all",
-          accent.ring,
-          accent.glow,
-        )}
-      >
-        {/* Decorative aurora glow that sits behind the content. */}
-        <div className="pointer-events-none absolute inset-0">
-          <div
-            className={cn(
-              "absolute inset-0 bg-gradient-to-br",
-              accent.gradient,
-            )}
-          />
-          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-bitcoin/10 blur-3xl opacity-40 aurora" />
-          <div
-            className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-nostr/10 blur-3xl opacity-30 aurora"
-            style={{ animationDelay: "-10s" }}
-          />
-        </div>
-
-        <div className="relative p-6 sm:p-10 grid gap-6 sm:grid-cols-[1fr_auto] items-start">
-          <div className="min-w-0 flex flex-col gap-4">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-mono tracking-widest text-foreground-subtle">
-                #{String(h.number).padStart(2, "0")}
-              </span>
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono font-semibold tracking-widest uppercase",
-                  accent.badge,
-                  isActive && "animate-pulse",
-                )}
-              >
-                {accent.badgeLabel}
-              </span>
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-foreground-subtle">
-                <Calendar className="h-3 w-3" />
-                {h.month} {h.year}
-                {firstDate && lastDate && (
-                  <span>
-                    · {firstDate.slice(8, 10)}–{lastDate.slice(8, 10)}
-                  </span>
-                )}
-              </span>
-            </div>
-
-            <div>
-              <h2 className="font-display text-4xl sm:text-6xl font-bold tracking-tight leading-none">
-                {h.name}
-              </h2>
-              <p className="mt-2 text-sm sm:text-base font-mono text-foreground-muted uppercase tracking-widest">
-                {h.focus}
-              </p>
-            </div>
-
-            <p className="text-base sm:text-lg text-foreground-muted leading-relaxed max-w-2xl">
-              {h.description}
-            </p>
-
-            {h.topics.length > 0 && (
-              <ul className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 max-w-2xl">
-                {h.topics.map((t) => (
-                  <li
-                    key={t}
-                    className="px-2.5 py-1.5 rounded-lg border border-border bg-white/[0.02] text-[11px] text-foreground-muted leading-snug"
-                  >
-                    {t}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <div className="flex flex-wrap gap-2 pt-1">
-              <span
-                className={cn(
-                  "px-2.5 py-1 rounded-lg border text-xs font-mono font-semibold uppercase tracking-wider",
-                  DIFFICULTY_STYLE[h.difficulty] ??
-                    "bg-white/5 text-foreground-muted border-border",
-                )}
-              >
-                {"★".repeat(h.stars)} {h.difficulty}
-              </span>
-              {h.tags.map((t) => (
-                <span
-                  key={t}
-                  className="px-2.5 py-1 rounded-lg border border-border bg-white/[0.03] text-xs font-mono font-semibold uppercase tracking-wider text-foreground-muted"
-                >
-                  {t}
-                </span>
-              ))}
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 pt-4 border-t border-border">
-              {isHackathonInscriptionOpen(h) && (
-                <HackathonInscripcionButton hackathonId={h.id} />
-              )}
-              <span className="inline-flex items-center gap-1 text-sm font-semibold text-foreground-muted group-hover:text-foreground transition-colors">
-                Ver detalle
-                <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-              </span>
-              {countdown && !isActive && (
-                <span className="ml-auto inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-bitcoin">
-                  <Clock className="h-3.5 w-3.5" />
-                  {countdown}
-                </span>
-              )}
-            </div>
-
-            {h.sponsors && h.sponsors.length > 0 && (
-              <div className="flex flex-wrap items-center gap-3 pt-3">
-                <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-foreground-subtle">
-                  Sponsor
-                </span>
-                {h.sponsors.map((s) => (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    key={s.name}
-                    src={s.logo}
-                    alt={s.name}
-                    className="h-14 sm:h-16 w-auto object-contain"
-                    loading="lazy"
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="text-7xl sm:text-9xl leading-none shrink-0 text-right opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-transform origin-right">
-            {h.icon}
-          </div>
-        </div>
-      </Link>
-    </div>
-  );
-}
-
-function HackathonCard({
-  h,
-  status,
-  compact = false,
-}: {
-  h: (typeof HACKATHONS)[number];
-  status: "upcoming" | "active" | "closed";
-  compact?: boolean;
-}) {
-  const statusMeta = STATUS_STYLE[status];
-  const firstDate = h.dates[0]?.date;
-  const lastDate = h.dates[h.dates.length - 1]?.date;
-  return (
-    <Link
-      href={`/hackathons/${hackathonSlug(h)}`}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-background-card hover:border-border-strong hover:-translate-y-1 transition-all"
-    >
-      <div className="absolute inset-0 bg-gradient-to-br from-bitcoin/[0.04] via-transparent to-nostr/[0.04] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-      <div className={cn("relative flex flex-col flex-1", compact ? "p-4" : "p-6")}>
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono tracking-widest text-foreground-subtle">
-              #{String(h.number).padStart(2, "0")}
-            </span>
-            <span
-              className={cn(
-                "inline-flex items-center px-2 py-0.5 rounded-full border text-[9px] font-mono font-semibold tracking-widest",
-                statusMeta.className,
-              )}
-            >
-              {statusMeta.label}
-            </span>
-          </div>
-          <div className={cn("leading-none", compact ? "text-2xl" : "text-3xl")}>
-            {h.icon}
-          </div>
-        </div>
-
-        <div>
-          <h2
-            className={cn(
-              "font-display font-bold tracking-tight",
-              compact ? "text-lg" : "text-2xl",
-            )}
-          >
-            {h.name}
-          </h2>
-          <p className="mt-0.5 text-xs font-mono text-foreground-muted uppercase tracking-widest">
-            {h.focus}
-          </p>
-        </div>
-
-        {!compact && (
-          <p className="mt-3 text-sm text-foreground-muted leading-relaxed line-clamp-3 flex-1">
-            {h.description}
-          </p>
-        )}
-
-        {!compact && (
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            <span
-              className={cn(
-                "px-2 py-0.5 rounded-md border text-[10px] font-mono font-semibold uppercase tracking-wider",
-                DIFFICULTY_STYLE[h.difficulty] ??
-                  "bg-white/5 text-foreground-muted border-border",
-              )}
-            >
-              {"★".repeat(h.stars)} {h.difficulty}
-            </span>
-            {h.tags.map((t) => (
-              <span
-                key={t}
-                className="px-2 py-0.5 rounded-md border border-border bg-white/[0.03] text-[10px] font-mono font-semibold uppercase tracking-wider text-foreground-muted"
-              >
-                {t}
-              </span>
-            ))}
-          </div>
-        )}
-
-        <div
-          className={cn(
-            "border-t border-border flex items-center justify-between text-xs",
-            compact ? "mt-3 pt-3" : "mt-6 pt-5",
-          )}
-        >
-          <div className="flex items-center gap-1.5 text-foreground-muted">
-            <Calendar className="h-3.5 w-3.5" />
-            <span>
-              {h.monthShort} {h.year}
-            </span>
-            {!compact && firstDate && lastDate && (
-              <span className="text-foreground-subtle">
-                · {firstDate.slice(8, 10)}–{lastDate.slice(8, 10)}
-              </span>
-            )}
-          </div>
-          <ArrowRight className="h-4 w-4 text-foreground-muted group-hover:text-bitcoin group-hover:translate-x-0.5 transition-all" />
-        </div>
-      </div>
-    </Link>
   );
 }
 
