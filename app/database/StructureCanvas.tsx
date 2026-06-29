@@ -366,7 +366,7 @@ export default function StructureCanvas({
         <div className="absolute right-3 top-3 z-30 flex flex-col gap-1">
           <CanvasBtn onClick={() => zoomBy(1.2)} title="Acercar"><Plus className="h-4 w-4" /></CanvasBtn>
           <CanvasBtn onClick={() => zoomBy(1 / 1.2)} title="Alejar"><Minus className="h-4 w-4" /></CanvasBtn>
-          <CanvasBtn onClick={resetView} title="Reset"><Maximize2 className="h-4 w-4" /></CanvasBtn>
+          <CanvasBtn onClick={resetView} title="Reiniciar"><Maximize2 className="h-4 w-4" /></CanvasBtn>
           <span className="mt-1 text-center text-[9px] font-mono text-foreground-subtle tabular-nums">
             {Math.round(zoom * 100)}%
           </span>
@@ -494,9 +494,19 @@ function NodeCard({
           : undefined
       }
     >
-      {/* drag handle / header */}
+      {/* drag handle / header (also keyboard-selectable) */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-pressed={selected}
+        aria-label={`Ver detalles de ${entity.label}`}
         onPointerDown={onHeaderPointerDown}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onJumpTo(entity.id);
+          }
+        }}
         className={cn("px-3 py-2 border-b border-border cursor-grab active:cursor-grabbing", a.bg)}
       >
         <div className="flex items-center justify-between gap-2">

@@ -168,7 +168,11 @@ export default function ExplorerStudio({
 
   const scan = useCallback(
     async (cat: EventCategory) => {
-      const filter = cat.buildFilter({ lacryptaPubkey: pubkeyRef.current });
+      // Pin the pubkey this scan was built for; if it changes mid-flight the
+      // results belong to a different account and must be discarded.
+      const reqPubkey = pubkeyRef.current;
+      const stale = () => pubkeyRef.current !== reqPubkey;
+      const filter = cat.buildFilter({ lacryptaPubkey: reqPubkey });
       if (!filter) {
         if (activeIdRef.current === cat.id)
           setScanError("Esta tabla necesita la pubkey de La Crypta (pegala arriba).");
@@ -214,7 +218,7 @@ export default function ExplorerStudio({
                       coverage: new Map([[relay, { eventId: ev.id, createdAt: ev.created_at }]]),
                     });
                   }
-                  commitRows(cat.id, [...byKey.values()]);
+                  if (!stale()) commitRows(cat.id, [...byKey.values()]);
                   flush();
                 },
                 oneose() {},
@@ -236,8 +240,10 @@ export default function ExplorerStudio({
           if (s.state === "connecting" || s.state === "receiving") s.state = "done";
         }
         flush();
-        commitRows(cat.id, [...byKey.values()]);
-        setScannedAt((prev) => ({ ...prev, [cat.id]: Date.now() }));
+        if (!stale()) {
+          commitRows(cat.id, [...byKey.values()]);
+          setScannedAt((prev) => ({ ...prev, [cat.id]: Date.now() }));
+        }
       } catch (e) {
         if (activeIdRef.current === cat.id)
           setScanError(e instanceof Error ? e.message : String(e));
@@ -267,6 +273,26 @@ export default function ExplorerStudio({
     onConsumedFocus?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusCategoryId]);
+
+  // The pubkey scopes which events the author-filtered tables return, so when it
+  // changes we drop every cached row (they belonged to the old account, and must
+  // not be shown or republished under the new one) and re-scan the active table.
+  const pubkeyInitDone = useRef(false);
+  useEffect(() => {
+    if (!pubkeyInitDone.current) {
+      pubkeyInitDone.current = true;
+      return;
+    }
+    inFlightRef.current.clear();
+    setScanningIds(new Set());
+    setCache({});
+    setScannedAt({});
+    setRelayStatuses([]);
+    setExpandedKey(null);
+    setScanError(null);
+    void scan(activeCat);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pubkey]);
 
   const toggleRelay = useCallback((url: string) => {
     setSelectedRelays((prev) => {
@@ -574,7 +600,7 @@ function TableRow({
   onRepublish: () => void;
   republishing: boolean;
 }) {
-  const colSpan = 6 + extraCols.length;
+  const colSpan = 7 + extraCols.length;
   let prettyContent = row.event.content;
   try {
     prettyContent = JSON.stringify(JSON.parse(row.event.content), null, 2);
@@ -660,7 +686,7 @@ function TableRow({
               </div>
               <div>
                 <h5 className="text-[10px] font-mono uppercase tracking-widest text-foreground-subtle mb-1.5">
-                  Content
+                  Contenido
                 </h5>
                 <pre className="rounded-lg border border-border bg-background/60 p-2 font-mono text-[10px] max-h-56 overflow-auto whitespace-pre-wrap break-all">
                   {prettyContent || "(vacío)"}

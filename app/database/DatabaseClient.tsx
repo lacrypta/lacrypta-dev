@@ -23,7 +23,8 @@ export default function DatabaseClient() {
   useEffect(() => {
     resolveLacryptaPubkey().then((pk) => {
       setEnvPubkey(pk);
-      if (pk) setEffectivePubkey(pk);
+      // Don't clobber an override the user may have applied while this resolved.
+      if (pk) setEffectivePubkey((current) => current || pk);
     });
   }, []);
 
@@ -72,7 +73,7 @@ export default function DatabaseClient() {
         <header className="space-y-2">
           <div className="inline-flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-foreground-subtle">
             <Database className="h-3 w-3" />
-            Internal · noindex
+            Interno · no indexar
           </div>
           <h1 className="font-display text-4xl sm:text-5xl font-black tracking-tight">Database</h1>
           <p className="text-sm text-foreground-muted">Estructura y datos de los eventos Nostr.</p>
@@ -184,7 +185,7 @@ function PubkeyOverride({
               : "border-border text-foreground-subtle",
           )}
         >
-          {isOverride ? "override" : "env"} · {effectivePubkey.slice(0, 12)}…{effectivePubkey.slice(-8)}
+          {isOverride ? "sobrescritura" : "env"} · {effectivePubkey.slice(0, 12)}…{effectivePubkey.slice(-8)}
         </span>
         {isOverride && (
           <button
@@ -192,7 +193,7 @@ function PubkeyOverride({
             onClick={onClear}
             className="text-foreground-subtle hover:text-foreground underline underline-offset-2"
           >
-            quitar override
+            quitar sobrescritura
           </button>
         )}
       </div>

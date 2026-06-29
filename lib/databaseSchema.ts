@@ -72,7 +72,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   /* ───────────────────────── Curated models ──────────────────────────── */
   {
     id: "hackathon",
-    label: "Hackathon",
+    label: "Hackatón",
     kind: null,
     group: "model",
     accent: "bitcoin",
@@ -99,7 +99,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   },
   {
     id: "soldier",
-    label: "Soldier",
+    label: "Soldado",
     kind: null,
     group: "model",
     accent: "lightning",
@@ -127,7 +127,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   /* ───────────────────────── Nostr events ─────────────────────────────── */
   {
     id: "profile",
-    label: "User Profile",
+    label: "Perfil de usuario",
     kind: 0,
     group: "event",
     accent: "cyan",
@@ -154,7 +154,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   },
   {
     id: "project",
-    label: "Project",
+    label: "Proyecto",
     kind: 30078,
     group: "event",
     accent: "nostr",
@@ -194,7 +194,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   },
   {
     id: "team-member",
-    label: "TeamMember",
+    label: "Integrante",
     kind: null,
     group: "embedded",
     accent: "cyan",
@@ -215,7 +215,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   },
   {
     id: "voting-period",
-    label: "VotingPeriod",
+    label: "Período de votación",
     kind: 30078,
     group: "event",
     accent: "lightning",
@@ -238,6 +238,8 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
       { tag: "d", value: "lacrypta.dev:voting:<hackathonId>" },
       { tag: "t", value: "lacrypta-dev-voting" },
       { tag: "h", value: "<hackathonId>" },
+      { tag: "status", value: "open | closed" },
+      { tag: "client", value: "La Crypta Dev" },
     ],
     relations: [
       { to: "hackathon", kind: "belongsTo", label: "de un hackatón", via: "h" },
@@ -248,7 +250,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   },
   {
     id: "ballot",
-    label: "Ballot (voto)",
+    label: "Boleta (voto)",
     kind: 30078,
     group: "event",
     accent: "success",
@@ -279,7 +281,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   },
   {
     id: "report",
-    label: "Project Report",
+    label: "Reporte de proyecto",
     kind: 30078,
     group: "event",
     accent: "bitcoin",
@@ -313,7 +315,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   },
   {
     id: "results",
-    label: "Hackathon Results",
+    label: "Resultados del hackatón",
     kind: 30078,
     group: "event",
     accent: "lightning",
@@ -340,7 +342,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   },
   {
     id: "badge-catalog",
-    label: "Badge Catalog",
+    label: "Catálogo de badges",
     kind: 30078,
     group: "event",
     accent: "nostr",
@@ -356,6 +358,14 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
       { name: "categories", type: "HackathonBadgeCategory[]" },
       { name: "badges", type: "BadgeTemplate[]", kind: "ref", ref: "badge-definition" },
     ],
+    tags: [
+      { tag: "d", value: "lacrypta.dev:hackathon-badges:<h>" },
+      { tag: "client", value: "La Crypta Dev" },
+      { tag: "hackathon", value: "<hackathonId>" },
+      { tag: "title", value: "<título>" },
+      { tag: "t", value: "lacrypta-dev-hackathon-badges" },
+      { tag: "a", value: "30009:<pk>:<d>", note: "una por badge del catálogo" },
+    ],
     relations: [
       { to: "hackathon", kind: "belongsTo", label: "de un hackatón", via: "h" },
       { to: "badge-definition", kind: "references", label: "instancia definiciones" },
@@ -363,7 +373,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   },
   {
     id: "badge-definition",
-    label: "Badge Definition",
+    label: "Definición de badge",
     kind: 30009,
     group: "event",
     accent: "cyan",
@@ -383,7 +393,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   },
   {
     id: "badge-award",
-    label: "Badge Award",
+    label: "Otorgamiento de badge",
     kind: 8,
     group: "event",
     accent: "success",
@@ -406,7 +416,7 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
   },
   {
     id: "relay-list",
-    label: "Relay List",
+    label: "Lista de relays",
     kind: 10002,
     group: "event",
     accent: "foreground",
