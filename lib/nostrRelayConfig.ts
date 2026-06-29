@@ -6,6 +6,7 @@
  */
 
 export const LACRYPTA_DEFAULT_RELAYS = [
+  "wss://relay.lacrypta.ar",
   "wss://relay.masize.com",
   "wss://relay.damus.io",
   "wss://relay.primal.net",
