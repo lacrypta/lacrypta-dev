@@ -29,6 +29,7 @@ import {
   type EventCategory,
 } from "@/lib/databaseCatalog";
 import { cn } from "@/lib/cn";
+import NpubBadge from "@/components/NpubBadge";
 
 type SignedEvent = {
   id: string;
@@ -601,6 +602,14 @@ function TableRow({
   republishing: boolean;
 }) {
   const colSpan = 7 + extraCols.length;
+  // Author plus any pubkeys referenced via p tags — shown as profile badges.
+  const referencedPubkeys = (() => {
+    const set = new Set<string>([row.event.pubkey]);
+    for (const t of row.event.tags) {
+      if (t[0] === "p" && /^[0-9a-f]{64}$/i.test(t[1] ?? "")) set.add((t[1] as string).toLowerCase());
+    }
+    return [...set];
+  })();
   let prettyContent = row.event.content;
   try {
     prettyContent = JSON.stringify(JSON.parse(row.event.content), null, 2);
@@ -624,7 +633,9 @@ function TableRow({
           <td key={i} className="px-3 py-2 text-xs font-mono text-foreground-muted">{v}</td>
         ))}
         <td className="px-3 py-2 text-[11px] font-mono text-foreground-subtle max-w-[14rem] truncate">{dTag}</td>
-        <td className="px-3 py-2 text-[11px] font-mono text-foreground-subtle">{row.event.pubkey.slice(0, 8)}…</td>
+        <td className="px-3 py-2 max-w-[12rem]">
+          <NpubBadge pubkey={row.event.pubkey} />
+        </td>
         <td className="px-3 py-2 text-[11px] font-mono text-foreground-subtle whitespace-nowrap">
           {fmtDate(row.event.created_at)}
         </td>
@@ -661,6 +672,18 @@ function TableRow({
       {expanded && (
         <tr className="bg-background-elevated/40">
           <td colSpan={colSpan} className="px-4 py-3">
+            <div className="mb-3">
+              <h5 className="text-[10px] font-mono uppercase tracking-widest text-foreground-subtle mb-1.5">
+                Perfiles
+              </h5>
+              <div className="flex flex-wrap gap-2">
+                {referencedPubkeys.map((pk) => (
+                  <span key={pk} className="rounded-lg border border-border bg-background/60 px-2 py-1">
+                    <NpubBadge pubkey={pk} size="md" showNpub />
+                  </span>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
