@@ -11,9 +11,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CheckCircle2,
+  ChevronDown,
   Coins,
   Loader2,
   Lock,
@@ -50,6 +52,11 @@ import {
   subscribeToBallots,
   subscribeToVotingPeriod,
 } from "@/lib/votingClient";
+import LiveTally from "@/components/voting/LiveTally";
+import {
+  useAdminLiveTally,
+  type AdminVoterAllocation,
+} from "@/lib/useAdminLiveTally";
 
 /** Shape of the close-preview the backend returns (decrypted, admin-only). */
 type ClosePreviewData = {
@@ -108,9 +115,23 @@ type VotingContextValue = {
   publishing: boolean;
   celebrate: boolean;
   hasPrev: boolean;
+  /** On-screen allocation differs from the published ballot — there are unsaved
+   *  changes worth publishing. False right after load / publish. */
+  isDirty: boolean;
   adjustProjectVote: (projectId: string, delta: number) => void;
   publishVotes: () => Promise<void>;
 };
+
+/** Allocation maps are equal ignoring zero/missing entries. */
+function allocationsEqual(
+  a: Record<string, number>,
+  b: Record<string, number>,
+): boolean {
+  const keysA = Object.keys(a).filter((k) => (a[k] ?? 0) > 0);
+  const keysB = Object.keys(b).filter((k) => (b[k] ?? 0) > 0);
+  if (keysA.length !== keysB.length) return false;
+  return keysA.every((k) => a[k] === b[k]);
+}
 
 const VotingContext = createContext<VotingContextValue | null>(null);
 
@@ -353,6 +374,7 @@ export function VotingProvider({
   const used = Object.values(allocations).reduce((sum, n) => sum + n, 0);
   const remaining = Math.max(0, maxVotes - used);
   const hasPrev = (ownBallotEvent?.created_at ?? 0) > 0 || !!ownAllocations;
+  const isDirty = !allocationsEqual(allocations, ownAllocations ?? {});
   const resetKey = `${period?.openedAt ?? 0}:${auth?.pubkey ?? ""}`;
   const ownAllocationsKey = JSON.stringify(ownAllocations ?? {});
 
@@ -368,6 +390,15 @@ export function VotingProvider({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownAllocationsKey]);
+
+  // Once the editor matches the published ballot again (the user reverted their
+  // edits, or just published), clear the edit flag so later authoritative ballot
+  // updates resume syncing into this tab. Only ever clears — adjustProjectVote
+  // sets it — so a genuine ownAllocations change (isDirty flips true while the
+  // editor is stale) still lets the sync effect above run.
+  useEffect(() => {
+    if (!isDirty) dirty.current = false;
+  }, [isDirty]);
 
   const adjustProjectVote = useCallback(
     (projectId: string, delta: number) => {
@@ -469,6 +500,7 @@ export function VotingProvider({
         publishing,
         celebrate,
         hasPrev,
+        isDirty,
         adjustProjectVote,
         publishVotes,
       }}
@@ -631,7 +663,7 @@ function VotingSectionInner() {
 
               {period.status === "closed" && results && (
                 <>
-                  <TallyBoard results={results} closed />
+                  <LiveTally results={results} closed />
                   {results.winners && results.winners.length > 0 && (
                     <WinnersPanel
                       winners={results.winners}
@@ -660,6 +692,50 @@ function VotingSectionInner() {
   );
 }
 
+/**
+ * Compact voting action bar — "Ver padrón" + the admin open/close controls +
+ * the padrón modal. Extracted from the section card so the hackathon page can
+ * fold these buttons into the voting hero (the card itself is now only used by
+ * /dev/voting). Reads the shared VotingProvider context, so it must render
+ * inside a `<VotingProvider>`. Renders nothing for a non-admin before voting
+ * has opened.
+ */
+export function HackathonVotingActions() {
+  const { period, isAdmin, admin, voterRows, totals } = useVotingContext();
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  if (!period && !isAdmin) return null;
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {period && (
+          <button
+            type="button"
+            onClick={() => setDetailOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white/[0.03] px-3 py-1.5 text-[11px] font-mono font-bold uppercase tracking-widest text-foreground-muted hover:bg-white/[0.06] transition-colors"
+          >
+            <ListChecks className="h-3.5 w-3.5" />
+            Ver padrón ({totals.votedCount}/{totals.eligibleCount})
+          </button>
+        )}
+        {isAdmin && <AdminVotingControls period={period} admin={admin} />}
+      </div>
+
+      {detailOpen && period && (
+        <VotingDetailModal
+          period={period}
+          rows={voterRows}
+          totals={totals}
+          closed={period.status === "closed"}
+          isAdmin={isAdmin}
+          onClose={() => setDetailOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
 /* ───────────────────────── Detail modal ───────────────────────── */
 
 function VotingDetailModal({
@@ -684,7 +760,46 @@ function VotingDetailModal({
   onClose: () => void;
 }) {
   useScrollLock(true);
-  return (
+  // SSR-safe portal: stay null on the server and the first client render, then
+  // mount into <body> after hydration.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // Admins can reveal each voter's actual allocations on demand. Ballots are
+  // encrypted, so one `close-preview` decrypt (admin-gated, no publish) loads
+  // every voter's breakdown; we only fetch it the first time a voter is opened.
+  // Only available while open — once closed the round can't be previewed.
+  const canReveal = isAdmin && !closed;
+  const tally = useAdminLiveTally(period.hackathonId);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const projectNames = useMemo(
+    () => new Map(period.projects.map((p) => [p.id, p.name])),
+    [period.projects],
+  );
+  const perVoterMap = useMemo(() => {
+    const map = new Map<string, AdminVoterAllocation>();
+    for (const v of tally.perVoter ?? []) map.set(v.pubkey.toLowerCase(), v);
+    return map;
+  }, [tally.perVoter]);
+
+  const toggleReveal = useCallback(
+    (pubkey: string) => {
+      if (!tally.perVoter && !tally.loading) void tally.refresh();
+      setExpanded((prev) => {
+        const key = pubkey.toLowerCase();
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    },
+    [tally],
+  );
+
+  if (!mounted) return null;
+  // Portal to <body>: the hero folds this in under a transformed,
+  // overflow-hidden motion.div, which would otherwise clip a fixed child.
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
       onClick={onClose}
@@ -734,37 +849,65 @@ function VotingDetailModal({
         {/* Per-voter roll */}
         <div className="flex-1 overflow-y-auto">
           <ul className="divide-y divide-border/60">
-            {rows.map((r) => (
-              <li
-                key={r.pubkey}
-                className={cn(
-                  "px-5 py-2.5",
-                  r.voted ? "bg-success/[0.04]" : "",
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-sm font-semibold truncate">
-                      {r.name}
+            {rows.map((r) => {
+              const isOpen = expanded.has(r.pubkey.toLowerCase());
+              const revealable = canReveal && r.voted;
+              return (
+                <li
+                  key={r.pubkey}
+                  className={cn("px-5 py-2.5", r.voted ? "bg-success/[0.04]" : "")}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-semibold truncate">
+                        {r.name}
+                      </span>
+                      <span className="block text-[10px] font-mono text-foreground-subtle">
+                        {r.used}/{r.maxVotes} votos declarados · {r.remaining}{" "}
+                        restante{r.remaining === 1 ? "" : "s"}
+                      </span>
                     </span>
-                    <span className="block text-[10px] font-mono text-foreground-subtle">
-                      {r.used}/{r.maxVotes} votos declarados · {r.remaining}{" "}
-                      restante{r.remaining === 1 ? "" : "s"}
-                    </span>
-                  </span>
-                  {r.voted ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-success">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      VOTÓ
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-mono text-foreground-subtle">
-                      SIN VOTAR
-                    </span>
+                    {r.voted ? (
+                      revealable ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleReveal(r.pubkey)}
+                          aria-expanded={isOpen}
+                          className="inline-flex items-center gap-1 rounded-md border border-success/40 bg-success/10 px-2 py-1 text-[10px] font-mono font-bold text-success hover:bg-success/20 transition-colors"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          VOTÓ
+                          <ChevronDown
+                            className={cn(
+                              "h-3 w-3 transition-transform",
+                              isOpen && "rotate-180",
+                            )}
+                          />
+                        </button>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-success">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          VOTÓ
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-[10px] font-mono text-foreground-subtle">
+                        SIN VOTAR
+                      </span>
+                    )}
+                  </div>
+
+                  {revealable && isOpen && (
+                    <VoterBallotBreakdown
+                      voter={perVoterMap.get(r.pubkey.toLowerCase()) ?? null}
+                      loading={tally.loading && !tally.perVoter}
+                      error={tally.error}
+                      projectNames={projectNames}
+                    />
                   )}
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         </div>
 
@@ -772,12 +915,71 @@ function VotingDetailModal({
           <Lock className="h-3 w-3 shrink-0" />
           {closed
             ? "Resultados congelados y publicados en Nostr."
-            : "Los votos están cifrados — el detalle (qué votó cada uno) se revela al cerrar la votación."}
+            : canReveal
+              ? "Tocá “VOTÓ” para descifrar qué votó cada quien — solo lo ves vos, no se publica nada."
+              : "Los votos están cifrados — el detalle (qué votó cada uno) se revela al cerrar la votación."}
           {" · "}
           {period.projects.length} proyectos votables
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** Admin-only expanded breakdown of one voter's decrypted allocations. */
+function VoterBallotBreakdown({
+  voter,
+  loading,
+  error,
+  projectNames,
+}: {
+  voter: AdminVoterAllocation | null;
+  loading: boolean;
+  error: string | null;
+  projectNames: Map<string, string>;
+}) {
+  if (loading) {
+    return (
+      <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-black/20 px-3 py-2 text-[11px] font-mono text-foreground-subtle">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Descifrando voto…
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="mt-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[11px] font-mono text-danger">
+        {error}
+      </div>
+    );
+  }
+  const entries = Object.entries(voter?.allocations ?? {})
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1]);
+  if (!voter || entries.length === 0) {
+    return (
+      <div className="mt-2 rounded-lg border border-border bg-black/20 px-3 py-2 text-[11px] font-mono text-foreground-subtle">
+        No se pudo descifrar este voto.
+      </div>
+    );
+  }
+  return (
+    <ul className="mt-2 space-y-1 rounded-lg border border-border bg-black/20 px-3 py-2">
+      {entries.map(([projectId, count]) => (
+        <li
+          key={projectId}
+          className="flex items-center justify-between gap-2 text-[11px] font-mono"
+        >
+          <span className="min-w-0 truncate text-foreground-muted">
+            {projectNames.get(projectId) ?? projectId}
+          </span>
+          <span className="shrink-0 font-bold tabular-nums text-nostr">
+            {count} {count === 1 ? "voto" : "votos"}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -1117,12 +1319,17 @@ function CloseReviewModal({
   onConfirm: () => void;
 }) {
   useScrollLock(true);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const projectName = useMemo(
     () => new Map(period.projects.map((p) => [p.id, p.name])),
     [period.projects],
   );
   const counted = preview.countedBallotIds.length;
-  return (
+  if (!mounted) return null;
+  // Portal to <body>: same reason as the padrón modal — the admin controls now
+  // live inside the hero's transformed, overflow-hidden card.
+  return createPortal(
     <div
       className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-4"
       onClick={onCancel}
@@ -1265,7 +1472,8 @@ function CloseReviewModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1341,27 +1549,32 @@ export function ProjectVotingToolbar() {
             </motion.span>
           )}
         </AnimatePresence>
-        <button
-          type="button"
-          onClick={voting.publishVotes}
-          disabled={
-            voting.publishing ||
-            voting.used === 0 ||
-            voting.used > voting.maxVotes
-          }
-          className="inline-flex items-center gap-2 rounded-lg border border-nostr/40 bg-nostr/10 px-4 py-2 text-sm font-semibold text-nostr hover:bg-nostr/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {voting.publishing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Vote className="h-4 w-4" />
-          )}
-          {voting.publishing
-            ? "Publicando…"
-            : voting.hasPrev
-              ? "Actualizar votos"
-              : "Publicar votos"}
-        </button>
+        {/* Save-changes affordance: surfaced only when the on-screen ballot
+            differs from what's published. Stays visible (but disabled) for an
+            empty edit so a ballot cleared to zero isn't silently unsavable. */}
+        {voting.isDirty && (
+          <button
+            type="button"
+            onClick={voting.publishVotes}
+            disabled={
+              voting.publishing ||
+              voting.used === 0 ||
+              voting.used > voting.maxVotes
+            }
+            className="inline-flex items-center gap-2 rounded-lg border border-nostr/40 bg-nostr/10 px-4 py-2 text-sm font-semibold text-nostr hover:bg-nostr/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {voting.publishing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Vote className="h-4 w-4" />
+            )}
+            {voting.publishing
+              ? "Publicando…"
+              : voting.hasPrev
+                ? "Actualizar votos"
+                : "Publicar votos"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1433,70 +1646,6 @@ export function ProjectVotingControls({
 }
 
 /* ───────────────────────── Tally board ───────────────────────── */
-
-function TallyBoard({
-  results,
-  closed,
-}: {
-  results: VotingResults;
-  closed: boolean;
-}) {
-  const max = Math.max(1, ...results.tally.map((r) => r.votes));
-  return (
-    <div className="mt-5">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-mono font-semibold tracking-widest text-foreground-subtle uppercase">
-          {closed ? "Resultados finales" : "Resultados en vivo"}
-        </span>
-        <span className="text-[10px] font-mono text-foreground-subtle tabular-nums">
-          {results.ballotsCounted}{" "}
-          {results.ballotsCounted === 1 ? "votante" : "votantes"} ·{" "}
-          {results.totalVotesCast} votos
-        </span>
-      </div>
-      <ol className="space-y-1.5">
-        {results.tally.map((row, i) => {
-          const leader = closed && i === 0 && row.votes > 0;
-          return (
-            <li key={row.projectId} className="relative">
-              <div
-                className={cn(
-                  "relative overflow-hidden rounded-lg border px-3 py-2",
-                  leader
-                    ? "border-bitcoin/40 bg-bitcoin/5"
-                    : "border-border bg-white/[0.02]",
-                )}
-              >
-                <div
-                  aria-hidden
-                  className={cn(
-                    "absolute inset-y-0 left-0 transition-[width] duration-500",
-                    leader ? "bg-bitcoin/15" : "bg-nostr/10",
-                  )}
-                  style={{ width: `${(row.votes / max) * 100}%` }}
-                />
-                <div className="relative flex items-center gap-2">
-                  {leader && <Trophy className="h-3.5 w-3.5 text-bitcoin shrink-0" />}
-                  <span className="flex-1 min-w-0 text-sm font-semibold truncate">
-                    {row.name}
-                  </span>
-                  <span
-                    className={cn(
-                      "text-sm font-mono font-bold tabular-nums",
-                      leader ? "text-bitcoin" : "text-nostr",
-                    )}
-                  >
-                    {row.votes}
-                  </span>
-                </div>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
-}
 
 /* ───────────────────────── Winners (post-close) ───────────────────────── */
 

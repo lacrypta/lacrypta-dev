@@ -50,7 +50,7 @@ import { getCachedNostrProfile } from "@/lib/nostrProfileCache";
 import { getCachedVotingPeriod } from "@/lib/votingCache";
 import { nostrVotingTag } from "@/lib/nostrCacheTags";
 import HackathonProjectsList from "./HackathonProjectsList";
-import VotingSection, { VotingProvider } from "./VotingSection";
+import { VotingProvider, HackathonVotingActions } from "./VotingSection";
 import VotingHero from "@/components/voting/VotingHero";
 import HackathonResultsClient from "./HackathonResultsClient";
 import AdminBadgesLink from "./AdminBadgesLink";
@@ -698,31 +698,31 @@ export default async function HackathonPage({
        * the SSR skeleton; client takes over on hydration.
        */}
       {/* Community voting hero — promotes the vote; "Votar ahora" scrolls to
-       *  the projects list (#votar), where the ballot controls live. Renders
-       *  nothing until voting has been opened at least once. */}
-      <Suspense fallback={null}>
-        <div className="pb-14">
-          <VotingHero
-            hackathonId={hackathon.id}
-            hackathonName={hackathon.name}
-            initialPeriod={votingPeriod}
-            variant="page"
-          />
-        </div>
-      </Suspense>
-
+       *  the projects list (#votar), where the ballot controls live. The
+       *  "Ver padrón" + admin controls are folded into the hero via `actions`
+       *  (they need the VotingProvider context, so the hero lives inside it).
+       *  Renders nothing until voting has been opened at least once (admins see
+       *  the open-voting control). */}
       <Suspense fallback={null}>
         <VotingProvider
           hackathonId={hackathon.id}
           hackathonName={hackathon.name}
           initialPeriod={votingPeriod}
         >
+          <div className="pb-14">
+            <VotingHero
+              hackathonId={hackathon.id}
+              hackathonName={hackathon.name}
+              initialPeriod={votingPeriod}
+              variant="page"
+              actions={<HackathonVotingActions />}
+            />
+          </div>
+
           <HackathonProjectsList
             hackathon={hackathon}
             initialNostrSubmissions={nostrSubmissions}
           />
-
-          <VotingSection />
         </VotingProvider>
       </Suspense>
 

@@ -20,14 +20,12 @@ async function HomeVotingHero() {
   const period = await getCachedVotingPeriod(gaming.id);
   if (!period) return null;
   return (
-    <div className="pt-24 sm:pt-28">
-      <VotingHero
-        hackathonId={gaming.id}
-        hackathonName={gaming.name}
-        initialPeriod={period}
-        variant="home"
-      />
-    </div>
+    <VotingHero
+      hackathonId={gaming.id}
+      hackathonName={gaming.name}
+      initialPeriod={period}
+      variant="home"
+    />
   );
 }
 
