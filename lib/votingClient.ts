@@ -9,11 +9,13 @@
 import { FAST_USER_RELAYS, DEFAULT_RELAYS } from "./nostrRelayConfig";
 import type { SignedEvent, UserSigner } from "./nostrSigner";
 import {
+  JUDGES_KIND,
   VOTE_ENC,
   VOTE_T_TAG,
   VOTING_KIND,
   VOTING_SCHEMA_VERSION,
   dedupeBallots,
+  judgesDTag,
   parseBallotContent,
   parseVotingPeriod,
   voteDTag,
@@ -225,6 +227,66 @@ export function subscribeToBallots(
           // Signal that the historical backlog has been delivered so callers
           // can tell "still loading" from "loaded, zero ballots".
           onEose?.();
+        },
+      },
+    );
+    teardown = () => {
+      closer.close();
+      try {
+        pool.close(relays);
+      } catch {
+        /* noop */
+      }
+    };
+    if (closed) teardown();
+  })();
+
+  return () => {
+    closed = true;
+    teardown?.();
+  };
+}
+
+/**
+ * Live-subscribe to the judges' scores event published by La Crypta. Fires
+ * `onFound` with the event's created_at whenever a (fresher) one exists — used
+ * to surface the "judges published" badge. The content stays NIP-44 encrypted;
+ * only its existence is observable here.
+ */
+export function subscribeToJudgesEvent(
+  hackathonId: string,
+  publisherPubkey: string,
+  onFound: (eventCreatedAt: number) => void,
+): () => void {
+  let closed = false;
+  let teardown: (() => void) | null = null;
+  let freshest = 0;
+  const dTag = judgesDTag(hackathonId);
+  const relays = [...FAST_USER_RELAYS];
+
+  void (async () => {
+    const { SimplePool } = await import("nostr-tools/pool");
+    if (closed) return;
+    const pool = new SimplePool();
+    const closer = pool.subscribe(
+      relays,
+      {
+        kinds: [JUDGES_KIND],
+        authors: [publisherPubkey],
+        "#d": [dTag],
+      },
+      {
+        onevent(ev) {
+          const event = ev as SignedEvent;
+          const d = event.tags.find((t) => t[0] === "d")?.[1];
+          if (d !== dTag) return;
+          if (event.pubkey !== publisherPubkey) return;
+          if (event.created_at <= freshest) return;
+          freshest = event.created_at;
+          onFound(event.created_at);
+        },
+        oneose() {
+          // Keep open so a fresh judges upload flips the badge live.
         },
       },
     );

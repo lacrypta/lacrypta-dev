@@ -27,6 +27,7 @@ import {
 } from "@/lib/voting";
 import { cn } from "@/lib/cn";
 import LiveTally from "@/components/voting/LiveTally";
+import FinalResultsTable from "@/components/voting/FinalResultsTable";
 
 /**
  * Gamified, live "community voting" hero. Reused on the home page and the
@@ -661,6 +662,17 @@ function ClosedHero({
             </ol>
           )}
         </div>
+      )}
+
+      {/* Official combined ranking (70% popular · 30% judges). Present only when
+       *  the admin uploaded judges' scores before closing — the podium above is
+       *  the community vote; this table is the prize-deciding blended result. */}
+      {period.results?.final && period.results.final.length > 0 && (
+        <FinalResultsTable
+          judges={period.results.judges ?? []}
+          rows={period.results.final}
+          hackathonId={hackathonId}
+        />
       )}
     </div>
   );
