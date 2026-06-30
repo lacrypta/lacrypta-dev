@@ -9,6 +9,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -17,6 +18,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Coins,
+  Gavel,
   Loader2,
   Lock,
   Megaphone,
@@ -25,6 +27,7 @@ import {
   Plus,
   Radio,
   Trophy,
+  Upload,
   Vote,
   X,
   Users,
@@ -53,10 +56,17 @@ import {
   subscribeToVotingPeriod,
 } from "@/lib/votingClient";
 import LiveTally from "@/components/voting/LiveTally";
+import FinalResultsTable from "@/components/voting/FinalResultsTable";
 import {
   useAdminLiveTally,
   type AdminVoterAllocation,
 } from "@/lib/useAdminLiveTally";
+import {
+  matchJudgesCsv,
+  parseJudgesCsv,
+  type JudgesCsv,
+  type JudgesMatch,
+} from "@/lib/judgesCsv";
 
 /** Shape of the close-preview the backend returns (decrypted, admin-only). */
 type ClosePreviewData = {
@@ -70,6 +80,16 @@ type ClosePreviewData = {
     total: number;
   }[];
   rejected: { pubkey: string; reason: string }[];
+};
+
+/** Server response after uploading the judges' CSV. */
+type JudgesUploadResult = {
+  ok?: boolean;
+  judges?: string[];
+  matched?: { projectId: string; name: string; scores: number[] }[];
+  unmatched?: string[];
+  invalid?: string[];
+  eventId?: string;
 };
 
 type Pubkeys = { adminPubkey: string | null; publisherPubkey: string | null };
@@ -664,12 +684,21 @@ function VotingSectionInner() {
               {period.status === "closed" && results && (
                 <>
                   <LiveTally results={results} closed />
-                  {results.winners && results.winners.length > 0 && (
-                    <WinnersPanel
-                      winners={results.winners}
+                  {results.final && results.final.length > 0 ? (
+                    <FinalResultsTable
+                      judges={results.judges ?? []}
+                      rows={results.final}
                       hackathonId={hackathonId}
-                      countedBallots={results.countedBallotIds?.length ?? 0}
                     />
+                  ) : (
+                    results.winners &&
+                    results.winners.length > 0 && (
+                      <WinnersPanel
+                        winners={results.winners}
+                        hackathonId={hackathonId}
+                        countedBallots={results.countedBallotIds?.length ?? 0}
+                      />
+                    )
                   )}
                 </>
               )}
@@ -1208,7 +1237,49 @@ function useAdminVoting(
     }
   }, [auth, busy, hackathonId, onPeriod, push, signRequest]);
 
-  return { step, busy, runAction, closePreview, closeConfirm };
+  /** Upload judges' CSV: the backend matches, self-encrypts and publishes the
+   *  judges event (kept secret until the final result is published at close). */
+  const uploadJudges = useCallback(
+    async (csv: JudgesCsv): Promise<JudgesUploadResult | null> => {
+      if (!auth || busy) return null;
+      setStep("publishing");
+      try {
+        const request = await signRequest("upload-judges");
+        const res = await fetch(`/api/hackathons/${hackathonId}/voting`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ request, judges: csv }),
+        });
+        const data = (await res.json().catch(() => ({}))) as JudgesUploadResult & {
+          error?: string;
+        };
+        if (!res.ok || !data.ok) {
+          throw new Error(
+            data.error || "No se pudieron guardar los votos de jueces.",
+          );
+        }
+        push({
+          kind: "success",
+          title: "Jueces guardados",
+          description: `${data.matched?.length ?? 0} proyecto(s) · evento encriptado publicado.`,
+        });
+        return data;
+      } catch (error) {
+        push({
+          kind: "error",
+          title: "Error al guardar jueces",
+          description:
+            error instanceof Error ? error.message : "Error desconocido.",
+        });
+        return null;
+      } finally {
+        setStep("idle");
+      }
+    },
+    [auth, busy, hackathonId, push, signRequest],
+  );
+
+  return { step, busy, runAction, closePreview, closeConfirm, uploadJudges };
 }
 
 type AdminVoting = ReturnType<typeof useAdminVoting>;
@@ -1220,7 +1291,8 @@ function AdminVotingControls({
   period: VotingPeriod | null;
   admin: AdminVoting;
 }) {
-  const { step, busy, runAction, closePreview, closeConfirm } = admin;
+  const { step, busy, runAction, closePreview, closeConfirm, uploadJudges } =
+    admin;
   const [preview, setPreview] = useState<ClosePreviewData | null>(null);
   useScrollLock(!!preview);
 
@@ -1287,6 +1359,10 @@ function AdminVotingControls({
         )}
       </div>
 
+      {period?.status === "open" && (
+        <JudgesUpload period={period} busy={busy} onUpload={uploadJudges} />
+      )}
+
       {preview && period && (
         <CloseReviewModal
           period={period}
@@ -1300,6 +1376,172 @@ function AdminVotingControls({
         />
       )}
     </>
+  );
+}
+
+/* ─────────────────── Judges' CSV upload (admin only) ─────────────────────── */
+
+const avg = (xs: number[]) =>
+  xs.length ? xs.reduce((s, n) => s + n, 0) / xs.length : 0;
+
+function JudgesUpload({
+  period,
+  busy,
+  onUpload,
+}: {
+  period: VotingPeriod;
+  busy: boolean;
+  onUpload: (csv: JudgesCsv) => Promise<JudgesUploadResult | null>;
+}) {
+  const [text, setText] = useState("");
+  const [parsed, setParsed] = useState<JudgesCsv | null>(null);
+  const [match, setMatch] = useState<JudgesMatch | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<JudgesUploadResult | null>(null);
+
+  const projects = useMemo(
+    () => period.projects.map((p) => ({ id: p.id, name: p.name })),
+    [period.projects],
+  );
+
+  const apply = useCallback(
+    (raw: string) => {
+      setText(raw);
+      setSaved(null);
+      if (!raw.trim()) {
+        setParsed(null);
+        setMatch(null);
+        setError(null);
+        return;
+      }
+      try {
+        const csv = parseJudgesCsv(raw);
+        setParsed(csv);
+        setMatch(matchJudgesCsv(csv, projects));
+        setError(null);
+      } catch (e) {
+        setParsed(null);
+        setMatch(null);
+        setError(e instanceof Error ? e.message : "CSV inválido.");
+      }
+    },
+    [projects],
+  );
+
+  async function onFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    apply(await file.text());
+  }
+
+  async function submit() {
+    if (!parsed) return;
+    const res = await onUpload(parsed);
+    if (res) setSaved(res);
+  }
+
+  const canSubmit =
+    !!parsed && !!match && Object.keys(match.scores).length > 0 && !busy;
+
+  return (
+    <div className="mt-4 rounded-xl border border-nostr/30 bg-nostr/[0.04] p-4">
+      <div className="flex items-center gap-2">
+        <Gavel className="h-4 w-4 text-nostr" />
+        <span className="text-[10px] font-mono font-semibold tracking-widest text-nostr uppercase">
+          Votos de jueces (CSV)
+        </span>
+      </div>
+      <p className="mt-1 text-[11px] font-mono text-foreground-subtle">
+        Formato: <code>project,juez1,juez2,…</code>. El promedio de los jueces se
+        guarda en un evento <span className="text-nostr">encriptado</span> firmado
+        por La Crypta y se combina al cerrar (30% jueces · 70% popular).
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <label className="inline-flex items-center gap-2 rounded-lg border border-border bg-white/[0.03] px-3 py-1.5 text-[11px] font-mono font-bold uppercase tracking-widest text-foreground-muted hover:bg-white/[0.06] cursor-pointer transition-colors">
+          <Upload className="h-3.5 w-3.5" />
+          Elegir CSV
+          <input type="file" accept=".csv,text/csv,text/plain" onChange={onFile} className="hidden" />
+        </label>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!canSubmit}
+          className="inline-flex items-center gap-2 rounded-lg border border-nostr/40 bg-nostr/10 px-3 py-1.5 text-[11px] font-mono font-bold uppercase tracking-widest text-nostr hover:bg-nostr/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Gavel className="h-3.5 w-3.5" />}
+          Generar evento de jueces
+        </button>
+      </div>
+
+      <textarea
+        value={text}
+        onChange={(e) => apply(e.target.value)}
+        rows={4}
+        spellCheck={false}
+        placeholder={"project,gorilaltor,gorilatron,claudio\nMi Proyecto,8,7,9"}
+        className="mt-3 w-full rounded-lg border border-border bg-background/60 px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-foreground-subtle focus:border-nostr/50 focus:outline-none"
+      />
+
+      {error && (
+        <p className="mt-2 text-[11px] font-mono text-danger">{error}</p>
+      )}
+
+      {match && (
+        <div className="mt-3 space-y-2">
+          <div className="text-[10px] font-mono text-foreground-subtle">
+            {match.judges.length} juez(ces): {match.judges.join(" · ")} —{" "}
+            <span className="text-success">{match.matched.length} matcheados</span>
+            {match.unmatched.length > 0 && (
+              <span className="text-danger"> · {match.unmatched.length} sin match</span>
+            )}
+            {match.invalid.length > 0 && (
+              <span className="text-bitcoin"> · {match.invalid.length} inválidos</span>
+            )}
+          </div>
+          {match.matched.length > 0 && (
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-left text-[11px] font-mono">
+                <thead>
+                  <tr className="text-foreground-subtle bg-white/[0.02]">
+                    <th className="px-2 py-1">proyecto</th>
+                    {match.judges.map((j) => (
+                      <th key={j} className="px-2 py-1 text-right">{j}</th>
+                    ))}
+                    <th className="px-2 py-1 text-right text-nostr">prom.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {match.matched.map((m) => (
+                    <tr key={m.projectId}>
+                      <td className="px-2 py-1 truncate max-w-[12rem]">{m.name}</td>
+                      {m.scores.map((s, i) => (
+                        <td key={i} className="px-2 py-1 text-right tabular-nums">{s}</td>
+                      ))}
+                      <td className="px-2 py-1 text-right tabular-nums text-nostr">
+                        {avg(m.scores).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {match.unmatched.length > 0 && (
+            <p className="text-[10px] font-mono text-danger">
+              Sin match (revisá el nombre): {match.unmatched.join(", ")}
+            </p>
+          )}
+        </div>
+      )}
+
+      {saved?.ok && (
+        <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-mono text-success">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Evento de jueces encriptado y publicado ({saved.matched?.length ?? 0} proyectos).
+        </p>
+      )}
+    </div>
   );
 }
 

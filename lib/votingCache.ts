@@ -10,7 +10,9 @@ import { cacheLife, cacheTag } from "next/cache";
 import { DEFAULT_RELAYS } from "./nostrRelayConfig";
 import { nostrVotingTag } from "./nostrCacheTags";
 import {
+  JUDGES_KIND,
   VOTING_KIND,
+  judgesDTag,
   parseVotingPeriod,
   votingPeriodDTag,
   type VotingPeriod,
@@ -85,6 +87,61 @@ export async function fetchVotingPeriodFromRelays(
     if (d !== votingPeriodDTag(hackathonId)) continue;
     const period = parseVotingPeriod(ev.content);
     if (period) return { period, eventCreatedAt: ev.created_at };
+  }
+  return null;
+}
+
+/**
+ * Uncached relay fetch of the judges' scores event (raw, still NIP-44
+ * encrypted). The caller decrypts it server-side with LACRYPTA_NSEC (the event
+ * is self-encrypted: author == La Crypta, encrypted to its own pubkey).
+ */
+export async function fetchJudgesEventFromRelays(
+  hackathonId: string,
+  timeoutMs = 4500,
+): Promise<{ content: string; pubkey: string; created_at: number } | null> {
+  const publisherPubkey = await publisherPubkeyFromNsec();
+  if (!publisherPubkey) return null;
+
+  const relays = DEFAULT_RELAYS;
+  const { SimplePool } = await import("nostr-tools/pool");
+  const pool = new SimplePool();
+  const events: IncomingEvent[] = [];
+
+  const closer = pool.subscribe(
+    relays,
+    {
+      kinds: [JUDGES_KIND],
+      authors: [publisherPubkey],
+      "#d": [judgesDTag(hackathonId)],
+    },
+    {
+      onevent(ev: IncomingEvent) {
+        events.push(ev);
+      },
+      oneose() {
+        /* timeout-driven */
+      },
+    },
+  );
+
+  await new Promise((r) => setTimeout(r, timeoutMs));
+  try {
+    closer.close();
+  } catch {
+    /* noop */
+  }
+  try {
+    pool.close(relays);
+  } catch {
+    /* noop */
+  }
+
+  events.sort((a, b) => b.created_at - a.created_at || a.id.localeCompare(b.id));
+  for (const ev of events) {
+    const d = ev.tags.find((t) => t[0] === "d")?.[1];
+    if (d !== judgesDTag(hackathonId)) continue;
+    return { content: ev.content, pubkey: ev.pubkey, created_at: ev.created_at };
   }
   return null;
 }

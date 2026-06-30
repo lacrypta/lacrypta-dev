@@ -28,6 +28,14 @@ export const VOTE_ENC = "nip44";
  *  different projects rather than backing a single one. */
 export const VOTES_PER_HACKATHON = 5;
 
+/** Judges' scores event (server-signed, NIP-44 self-encrypted), merged into the
+ *  final result at close. `d = lacrypta.dev:judges:<hackathonId>`. */
+export const JUDGES_KIND = 30078;
+export const JUDGES_T_TAG = "lacrypta-dev-judges";
+/** Weight split for the combined final score — must sum to 1. */
+export const POPULAR_WEIGHT = 0.7;
+export const JUDGES_WEIGHT = 0.3;
+
 /**
  * Dev/test isolation: with `NEXT_PUBLIC_VOTING_NS=test` every d-tag moves to
  * the `lacrypta.dev:test:` namespace, so test events on the public relays are
@@ -48,6 +56,10 @@ export function votingPeriodDTag(hackathonId: string): string {
 
 export function voteDTag(hackathonId: string): string {
   return `${dTagPrefix()}:vote:${hackathonId}`;
+}
+
+export function judgesDTag(hackathonId: string): string {
+  return `${dTagPrefix()}:judges:${hackathonId}`;
 }
 
 export type VotingEligibleVoter = {
@@ -95,6 +107,38 @@ export type VotingResults = {
   /** The exact ballot event ids counted into this result — the FREEZE set.
    *  Ballots re-published after close (new ids) are never in this set. */
   countedBallotIds?: string[];
+  /** Judge column names, present when a judges event was merged at close. */
+  judges?: string[];
+  /** Combined final ranking (70% popular + 30% judges), present when judges
+   *  were merged. Authoritative ranking when present. */
+  final?: FinalRow[];
+};
+
+/** Decrypted judges document — per-project raw scores aligned to `judges[]`. */
+export type JudgesDoc = {
+  version: number;
+  hackathonId: string;
+  /** Judge names in column order, e.g. ["gorilaltor","gorilatron","claudio"]. */
+  judges: string[];
+  /** projectId → raw score per judge, aligned to `judges[]`. */
+  scores: Record<string, number[]>;
+};
+
+/** A row of the combined final ranking (popular + judges). */
+export type FinalRow = {
+  /** 1-based rank by finalScore. */
+  position: number;
+  projectId: string;
+  name: string;
+  popularVotes: number;
+  popularVoters: number;
+  /** Raw per-judge scores aligned to `judges[]` (0-filled if missing). */
+  judgeScores: number[];
+  judgeAvg: number;
+  popShare: number;
+  judgeShare: number;
+  /** 0–100: 100 × (POPULAR_WEIGHT·popShare + JUDGES_WEIGHT·judgeShare). */
+  finalScore: number;
 };
 
 /** A ballot whose encrypted content has already been decrypted (by the backend
@@ -459,6 +503,109 @@ export function computeVotingRanking(
       voters: row.voters,
       recipientPubkey: resolveRecipient(row.projectId),
     }));
+}
+
+// ── Judges' scores ──────────────────────────────────────────────────────────
+
+export function serializeJudgesDoc(doc: JudgesDoc): string {
+  return JSON.stringify(doc);
+}
+
+/** Defensive parse of a decrypted judges document — null on garbage. */
+export function parseJudgesDoc(content: string): JudgesDoc | null {
+  try {
+    const parsed = JSON.parse(content) as Partial<JudgesDoc>;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      typeof parsed.hackathonId !== "string" ||
+      !Array.isArray(parsed.judges) ||
+      !parsed.scores ||
+      typeof parsed.scores !== "object" ||
+      Array.isArray(parsed.scores)
+    ) {
+      return null;
+    }
+    const judges = parsed.judges.filter((j): j is string => typeof j === "string");
+    const scores: Record<string, number[]> = {};
+    for (const [projectId, arr] of Object.entries(parsed.scores)) {
+      if (!Array.isArray(arr)) continue;
+      scores[projectId] = arr.map((n) =>
+        typeof n === "number" && Number.isFinite(n) ? n : 0,
+      );
+    }
+    return {
+      version:
+        typeof parsed.version === "number" ? parsed.version : VOTING_SCHEMA_VERSION,
+      hackathonId: parsed.hackathonId,
+      judges,
+      scores,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Average of a judge score array; empty/missing → 0. */
+export function judgeAverage(scores: number[] | undefined): number {
+  if (!scores || scores.length === 0) return 0;
+  return scores.reduce((s, n) => s + n, 0) / scores.length;
+}
+
+/**
+ * Combines the popular tally with judges' averages into the final ranking using
+ * the *share* model: each dimension is normalised by its total, then weighted
+ * (70% popular / 30% judges) and scaled to 0–100. Projects missing a judge score
+ * get judgeAvg = 0. Sorted by finalScore desc (tiebreak popularVotes desc, name).
+ */
+export function computeFinalRanking(
+  tally: VotingTallyRow[],
+  judgesDoc: Pick<JudgesDoc, "judges" | "scores"> | null,
+  weights: { popular: number; judges: number } = {
+    popular: POPULAR_WEIGHT,
+    judges: JUDGES_WEIGHT,
+  },
+): { judges: string[]; rows: FinalRow[] } {
+  const judges = judgesDoc?.judges ?? [];
+  const totalVotes = tally.reduce((s, r) => s + r.votes, 0);
+  const judgeAvgById = new Map<string, number>(
+    tally.map((r) => [r.projectId, judgeAverage(judgesDoc?.scores[r.projectId])]),
+  );
+  const totalJudgeAvg = [...judgeAvgById.values()].reduce((s, n) => s + n, 0);
+
+  const rows: FinalRow[] = tally
+    .map((r) => {
+      const judgeAvg = judgeAvgById.get(r.projectId) ?? 0;
+      const popShare = totalVotes > 0 ? r.votes / totalVotes : 0;
+      const judgeShare = totalJudgeAvg > 0 ? judgeAvg / totalJudgeAvg : 0;
+      const finalScore =
+        100 * (weights.popular * popShare + weights.judges * judgeShare);
+      const raw = judgesDoc?.scores[r.projectId] ?? [];
+      const judgeScores = judges.map((_, i) =>
+        typeof raw[i] === "number" ? raw[i] : 0,
+      );
+      return {
+        position: 0,
+        projectId: r.projectId,
+        name: r.name,
+        popularVotes: r.votes,
+        popularVoters: r.voters,
+        judgeScores,
+        judgeAvg,
+        popShare,
+        judgeShare,
+        finalScore,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.finalScore - a.finalScore ||
+        b.popularVotes - a.popularVotes ||
+        a.name.localeCompare(b.name),
+    )
+    .map((r, i) => ({ ...r, position: i + 1 }));
+
+  return { judges, rows };
 }
 
 /** @deprecated v1 plaintext live tally. v2 hides the tally until close. */
