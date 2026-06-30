@@ -453,6 +453,11 @@ export default async function HackathonPage({
   // at page level so open/close revalidations refresh this page too.
   cacheTag(nostrVotingTag(id));
   const votingPeriod = await getCachedVotingPeriod(id);
+  // Once community voting closed with a published result, that result is the
+  // prize-deciding outcome — the generic "Premios" structure below is redundant
+  // (the closed voting hero already shows each project's prize), so hide it.
+  const resultsPublished =
+    votingPeriod?.status === "closed" && !!votingPeriod.results;
   const status = hackathonStatus(hackathon);
   const statusMeta = STATUS_META[status];
   const projects = rankedProjects(id);
@@ -574,6 +579,7 @@ export default async function HackathonPage({
             <SponsorStrip sponsors={hackathon.sponsors} />
           )}
 
+          {!resultsPublished && (
           <div className="mt-6">
             <Card
               title="Premios"
@@ -686,6 +692,7 @@ export default async function HackathonPage({
               )}
             </Card>
           </div>
+          )}
         </div>
       </section>
 

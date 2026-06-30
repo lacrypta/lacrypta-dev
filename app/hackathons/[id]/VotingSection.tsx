@@ -273,10 +273,18 @@ export function VotingProvider({
     );
   }, [hackathonId, pubkeys.publisherPubkey]);
 
-  // Live ballots while voting is open.
+  const isAdmin =
+    !!auth?.pubkey &&
+    !!pubkeys.adminPubkey &&
+    auth.pubkey === pubkeys.adminPubkey;
+
+  // Live ballots while voting is open — and also after it closes for the admin,
+  // so the padrón modal can show who voted for what once the result is frozen
+  // (no ballots are subscribed for regular users on a closed period).
   const votingOpen = period?.status === "open";
+  const watchBallots = votingOpen || (period?.status === "closed" && isAdmin);
   useEffect(() => {
-    if (!votingOpen) return;
+    if (!watchBallots) return;
     return subscribeToBallots(hackathonId, (ev) => {
       setBallots((prev) => {
         const key = ev.pubkey.toLowerCase();
@@ -293,12 +301,7 @@ export function VotingProvider({
         return next;
       });
     });
-  }, [hackathonId, votingOpen]);
-
-  const isAdmin =
-    !!auth?.pubkey &&
-    !!pubkeys.adminPubkey &&
-    auth.pubkey === pubkeys.adminPubkey;
+  }, [hackathonId, watchBallots]);
 
   const admin = useAdminVoting(hackathonId, setPeriod);
 
@@ -796,11 +799,11 @@ function VotingDetailModal({
   useEffect(() => setMounted(true), []);
 
   // Admins can reveal each voter's actual allocations on demand. Ballots are
-  // encrypted, so one `close-preview` decrypt (admin-gated, no publish) loads
-  // every voter's breakdown; we only fetch it the first time a voter is opened.
-  // Only available while open — once closed the round can't be previewed.
-  const canReveal = isAdmin && !closed;
-  const tally = useAdminLiveTally(period.hackathonId);
+  // encrypted, so one decrypt round-trip (admin-gated, no publish) loads every
+  // voter's breakdown; we only fetch it the first time a voter is opened. Works
+  // both while open (`close-preview`) and after close (`reveal-ballots`).
+  const canReveal = isAdmin;
+  const tally = useAdminLiveTally(period.hackathonId, closed);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const projectNames = useMemo(
     () => new Map(period.projects.map((p) => [p.id, p.name])),
@@ -943,10 +946,12 @@ function VotingDetailModal({
 
         <div className="px-5 py-3 border-t border-border text-[10px] font-mono text-foreground-subtle inline-flex items-center gap-1.5">
           <Lock className="h-3 w-3 shrink-0" />
-          {closed
-            ? "Resultados congelados y publicados en Nostr."
-            : canReveal
-              ? "Tocá “VOTÓ” para descifrar qué votó cada quien — solo lo ves vos, no se publica nada."
+          {canReveal
+            ? closed
+              ? "Votación cerrada. Tocá “VOTÓ” para descifrar qué votó cada quien — solo lo ves vos, no se publica nada."
+              : "Tocá “VOTÓ” para descifrar qué votó cada quien — solo lo ves vos, no se publica nada."
+            : closed
+              ? "Resultados congelados y publicados en Nostr."
               : "Los votos están cifrados — el detalle (qué votó cada uno) se revela al cerrar la votación."}
           {" · "}
           {period.projects.length} proyectos votables

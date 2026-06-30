@@ -34,8 +34,14 @@ export type AdminLiveTally = {
  * sign a NIP-98 (kind 27235) request but never writes to any relay, so it's
  * safe to call repeatedly to peek at how the voting is going.
  */
-export function useAdminLiveTally(hackathonId: string): AdminLiveTally {
+export function useAdminLiveTally(
+  hackathonId: string,
+  /** When the voting is already closed, use the `reveal-ballots` action (audit
+   *  after the result is frozen) instead of `close-preview` (pre-close peek). */
+  closed = false,
+): AdminLiveTally {
   const { auth } = useAuth();
+  const action = closed ? "reveal-ballots" : "close-preview";
   const [results, setResults] = useState<VotingResults | null>(null);
   const [perVoter, setPerVoter] = useState<AdminVoterAllocation[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -55,11 +61,11 @@ export function useAdminLiveTally(hackathonId: string): AdminLiveTally {
         kind: 27235,
         pubkey: signer.pubkey,
         created_at: Math.floor(Date.now() / 1000),
-        content: "close-preview · votación comunitaria",
+        content: `${action} · votación comunitaria`,
         tags: [
           ["u", `/api/hackathons/${hackathonId}/voting`],
           ["method", "POST"],
-          ["action", "close-preview"],
+          ["action", action],
           ["h", hackathonId],
         ],
       });
@@ -91,7 +97,7 @@ export function useAdminLiveTally(hackathonId: string): AdminLiveTally {
       inFlight.current = false;
       setLoading(false);
     }
-  }, [auth, hackathonId]);
+  }, [auth, hackathonId, action]);
 
   return { results, perVoter, loading, error, refresh };
 }
