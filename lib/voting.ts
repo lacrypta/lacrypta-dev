@@ -118,7 +118,7 @@ export type VotingResults = {
 export type JudgesDoc = {
   version: number;
   hackathonId: string;
-  /** Judge names in column order, e.g. ["gorilaltor","gorilatron","claudio"]. */
+  /** Judge names in column order, e.g. ["gorilator","gorilatron","claudio"]. */
   judges: string[];
   /** projectId → raw score per judge, aligned to `judges[]`. */
   scores: Record<string, number[]>;

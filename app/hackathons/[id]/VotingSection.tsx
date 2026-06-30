@@ -53,6 +53,7 @@ import {
   fetchAllBallotEvents,
   publishBallot,
   subscribeToBallots,
+  subscribeToJudgesEvent,
   subscribeToVotingPeriod,
 } from "@/lib/votingClient";
 import LiveTally from "@/components/voting/LiveTally";
@@ -1393,11 +1394,24 @@ function JudgesUpload({
   busy: boolean;
   onUpload: (csv: JudgesCsv) => Promise<JudgesUploadResult | null>;
 }) {
+  const { pubkeys } = useVotingContext();
   const [text, setText] = useState("");
   const [parsed, setParsed] = useState<JudgesCsv | null>(null);
   const [match, setMatch] = useState<JudgesMatch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<JudgesUploadResult | null>(null);
+  // Detect an already-published judges event for this hackathon (e.g. on a
+  // reload after a previous upload) so we can flag it even without `saved`.
+  const [judgesPublished, setJudgesPublished] = useState(false);
+
+  useEffect(() => {
+    if (!pubkeys.publisherPubkey) return;
+    return subscribeToJudgesEvent(
+      period.hackathonId,
+      pubkeys.publisherPubkey,
+      () => setJudgesPublished(true),
+    );
+  }, [period.hackathonId, pubkeys.publisherPubkey]);
 
   const projects = useMemo(
     () => period.projects.map((p) => ({ id: p.id, name: p.name })),
@@ -1450,6 +1464,12 @@ function JudgesUpload({
         <span className="text-[10px] font-mono font-semibold tracking-widest text-nostr uppercase">
           Votos de jueces (CSV)
         </span>
+        {(judgesPublished || saved?.ok) && (
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-widest text-success">
+            <CheckCircle2 className="h-3 w-3" />
+            Puntaje de Jueces publicado
+          </span>
+        )}
       </div>
       <p className="mt-1 text-[11px] font-mono text-foreground-subtle">
         Formato: <code>project,juez1,juez2,…</code>. El promedio de los jueces se
@@ -1479,7 +1499,7 @@ function JudgesUpload({
         onChange={(e) => apply(e.target.value)}
         rows={4}
         spellCheck={false}
-        placeholder={"project,gorilaltor,gorilatron,claudio\nMi Proyecto,8,7,9"}
+        placeholder={"project,gorilator,gorilatron,claudio\nMi Proyecto,8,7,9"}
         className="mt-3 w-full rounded-lg border border-border bg-background/60 px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-foreground-subtle focus:border-nostr/50 focus:outline-none"
       />
 
