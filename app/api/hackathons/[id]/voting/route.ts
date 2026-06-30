@@ -16,29 +16,38 @@ import { isDevMode } from "@/lib/devMode";
 import { devPubkeyForPubkey } from "@/lib/devImpersonation";
 import { nostrVotingTag } from "@/lib/nostrCacheTags";
 import {
+  fetchJudgesEventFromRelays,
   fetchVotingPeriodFromRelays,
   getCachedVotingPeriod,
 } from "@/lib/votingCache";
 import {
+  JUDGES_KIND,
+  JUDGES_T_TAG,
   VOTE_ENC,
   VOTING_KIND,
   VOTING_SCHEMA_VERSION,
   VOTING_T_TAG,
   buildEligibleVoters,
+  computeFinalRanking,
   computeVotingRanking,
   isVotingTestNamespace,
+  judgesDTag,
   parseBallotContent,
+  parseJudgesDoc,
+  serializeJudgesDoc,
   serializeVotingPeriod,
   tallyDecryptedBallots,
   voteDTag,
   votingPeriodDTag,
   type DecryptedBallot,
+  type JudgesDoc,
   type VotingEligibleVoter,
   type VotingPeriod,
   type VotingProjectRef,
   type VotingResults,
   type VotingWinner,
 } from "@/lib/voting";
+import { matchJudgesCsv, type JudgesCsv } from "@/lib/judgesCsv";
 
 const OPEN_ACTION = "open-voting";
 /** Legacy single-shot close (kept as an alias for close-confirm). */
@@ -52,6 +61,8 @@ const CLOSE_ACTIONS = new Set([
   CLOSE_PREVIEW_ACTION,
   CLOSE_CONFIRM_ACTION,
 ]);
+/** Admin uploads judges' CSV scores → server self-encrypts + publishes them. */
+const UPLOAD_JUDGES_ACTION = "upload-judges";
 const PROFILE_KIND = 0;
 const PROFILE_SOURCE_NPUB =
   "npub1rujdpkd8mwezrvpqd2rx2zphfaztqrtsfg6w3vdnljdghs2q8qrqtt9u68";
@@ -497,6 +508,28 @@ async function decryptBallotContent(
   }
 }
 
+/** Fetches + self-decrypts the judges' scores event (signed by La Crypta and
+ *  NIP-44 encrypted to its own pubkey). Returns null if absent/unreadable. */
+async function fetchJudgesDoc(
+  secret: Uint8Array,
+  hackathonId: string,
+): Promise<JudgesDoc | null> {
+  const ev = await fetchJudgesEventFromRelays(hackathonId);
+  if (!ev) return null;
+  try {
+    const { getPublicKey } = await import("nostr-tools/pure");
+    const nip44 = await import("nostr-tools/nip44");
+    const selfPub = getPublicKey(secret);
+    const plaintext = nip44.decrypt(
+      ev.content,
+      nip44.getConversationKey(secret, selfPub),
+    );
+    return parseJudgesDoc(plaintext);
+  } catch {
+    return null;
+  }
+}
+
 export type ClosePreview = {
   tally: VotingResults;
   winners: VotingWinner[];
@@ -593,8 +626,20 @@ async function buildClosePreview(
     total: Object.values(allocations).reduce((s, n) => s + n, 0),
   }));
 
+  // Merge judges' scores (if uploaded): 70% popular share + 30% judges share.
+  const judgesDoc = await fetchJudgesDoc(secret, hackathonId);
+  const finalRanking = judgesDoc
+    ? computeFinalRanking(results.tally, judgesDoc)
+    : null;
+
   return {
-    tally: { ...results, winners },
+    tally: {
+      ...results,
+      winners,
+      ...(finalRanking
+        ? { judges: finalRanking.judges, final: finalRanking.rows }
+        : {}),
+    },
     winners,
     countedBallotIds: results.countedBallotIds ?? [],
     perVoter,
@@ -635,11 +680,16 @@ export async function POST(
   // Normalize slug → canonical id so voting data keys off "zaps", not "gaming".
   const id = hackathon.id;
 
-  let body: { request?: SignedEvent; ballots?: SignedEvent[] };
+  let body: {
+    request?: SignedEvent;
+    ballots?: SignedEvent[];
+    judges?: JudgesCsv;
+  };
   try {
     body = (await req.json()) as {
       request?: SignedEvent;
       ballots?: SignedEvent[];
+      judges?: JudgesCsv;
     };
   } catch {
     return jsonError("Body JSON invalido.");
@@ -664,11 +714,93 @@ export async function POST(
       return jsonError("Request expirado.", 401);
     }
     const action = requestTagValue(request, "action") ?? "";
-    if (action !== OPEN_ACTION && !CLOSE_ACTIONS.has(action)) {
+    if (
+      action !== OPEN_ACTION &&
+      action !== UPLOAD_JUDGES_ACTION &&
+      !CLOSE_ACTIONS.has(action)
+    ) {
       return jsonError("Request no autorizado para administrar la votación.", 401);
     }
     if (requestTagValue(request, "h") !== id) {
       return jsonError("El request no corresponde a este hackatón.", 401);
+    }
+
+    // ── Upload judges' CSV: match → self-encrypt → publish (admin-gated) ──
+    if (action === UPLOAD_JUDGES_ACTION) {
+      const csv = body.judges;
+      if (
+        !csv ||
+        !Array.isArray(csv.judges) ||
+        csv.judges.length === 0 ||
+        !Array.isArray(csv.rows)
+      ) {
+        return jsonError("Falta el CSV de jueces (judges/rows).");
+      }
+      const projects = await votableProjects(id);
+      const match = matchJudgesCsv(csv, projects.map((p) => ({ id: p.id, name: p.name })));
+      if (Object.keys(match.scores).length === 0) {
+        return NextResponse.json(
+          {
+            error: "Ningún proyecto del CSV coincidió con los proyectos votables.",
+            unmatched: match.unmatched,
+            invalid: match.invalid,
+          },
+          { status: 422 },
+        );
+      }
+
+      const doc: JudgesDoc = {
+        version: VOTING_SCHEMA_VERSION,
+        hackathonId: id,
+        judges: match.judges,
+        scores: match.scores,
+      };
+
+      const { getPublicKey } = await import("nostr-tools/pure");
+      const nip44 = await import("nostr-tools/nip44");
+      const selfPub = getPublicKey(secret);
+      const ciphertext = nip44.encrypt(
+        serializeJudgesDoc(doc),
+        nip44.getConversationKey(secret, selfPub),
+      );
+
+      const existingJudges = await fetchJudgesEventFromRelays(id);
+      const createdAt = Math.max(
+        Math.floor(Date.now() / 1000),
+        (existingJudges?.created_at ?? 0) + 1,
+      );
+      const signed = finalizeEvent(
+        {
+          kind: JUDGES_KIND,
+          created_at: createdAt,
+          content: ciphertext,
+          tags: [
+            ["d", judgesDTag(id)],
+            ["t", JUDGES_T_TAG],
+            ["h", id],
+            ["enc", VOTE_ENC],
+            ["client", "La Crypta Dev"],
+          ],
+        },
+        secret,
+      ) as SignedEvent;
+
+      const relays = await publishToRelays(signed, DEFAULT_RELAYS);
+      if (!relays.some((r) => r.ok)) {
+        return NextResponse.json(
+          { error: "Ningún relay aceptó el evento de jueces.", relays },
+          { status: 502 },
+        );
+      }
+      return NextResponse.json({
+        ok: true,
+        judges: match.judges,
+        matched: match.matched.map((m) => ({ projectId: m.projectId, name: m.name, scores: m.scores })),
+        unmatched: match.unmatched,
+        invalid: match.invalid,
+        eventId: signed.id,
+        relays,
+      });
     }
 
     // ── Close step 1: decrypt + tally + return preview (admin-gated, no publish) ──

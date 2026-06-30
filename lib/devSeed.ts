@@ -71,6 +71,12 @@ const PROJECTS: ProjectSpec[] = [
   { id: "dummy-soberano", name: "Soberano", description: "Wallet de identidad + pagos.", repo: "https://github.com/dummy/soberano", hackathon: "identity", author: 7, team: [0] },
   { id: "dummy-tienda-zap", name: "TiendaZap", description: "Catálogo y cobros Lightning.", repo: "https://github.com/dummy/tienda-zap", hackathon: "commerce", author: 7 },
   { id: "dummy-arcade", name: "SatArcade", description: "Arcade retro pay-per-play.", repo: "https://github.com/dummy/sat-arcade", hackathon: "zaps", author: 7 },
+  { id: "dummy-lightning-runner", name: "Lightning Runner", description: "Endless runner que mina sats al correr.", repo: "https://github.com/dummy/lightning-runner", hackathon: "zaps", author: 3, team: [1] },
+  { id: "dummy-zap-chess", name: "ZapChess", description: "Ajedrez por dinero: cada jaque mate cobra el bote.", repo: "https://github.com/dummy/zap-chess", hackathon: "zaps", author: 2 },
+  { id: "dummy-block-blast", name: "BlockBlast", description: "Battle royale on-chain con leaderboards Nostr.", repo: "https://github.com/dummy/block-blast", hackathon: "zaps", author: 4, team: [5, 3] },
+  { id: "dummy-sat-snake", name: "SatSnake", description: "Snake multijugador donde la manzana es un zap.", repo: "https://github.com/dummy/sat-snake", hackathon: "zaps", author: 0 },
+  { id: "dummy-pixel-pump", name: "PixelPump", description: "Plataforma de mini-juegos con login Nostr y premios.", repo: "https://github.com/dummy/pixel-pump", hackathon: "zaps", author: 5, team: [6] },
+  { id: "dummy-bolt-quest", name: "BoltQuest", description: "RPG por turnos con recompensas Lightning.", repo: "https://github.com/dummy/bolt-quest", hackathon: "zaps", author: 6, team: [7] },
 ];
 
 function avatarFor(name: string): string {
