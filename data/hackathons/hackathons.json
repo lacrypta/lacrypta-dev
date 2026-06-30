@@ -116,49 +116,50 @@
       "dates": [
         { "date": "2026-06-02", "day": 2, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
         { "date": "2026-06-23", "day": 23, "type": "pitch-final", "title": "Community Call — Pitch Final", "description": "Últimos pitches antes de la entrega. Feedback final de mentores." },
-        { "date": "2026-06-30", "day": 30, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
+        { "date": "2026-06-29", "day": 29, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
       ]
     },
     {
       "id": "media",
-      "number": 5,
-      "name": "MEDIA",
-      "focus": "Decentralized Storage",
-      "description": "Blossom, CDN descentralizado, media + Lightning.",
-      "difficulty": "Advanced",
-      "stars": 3,
-      "month": "Julio",
-      "monthShort": "JUL",
-      "year": 2026,
-      "icon": "📸",
-      "tags": ["Blossom", "CDN", "Media"],
-      "topics": ["Blossom Protocol", "Media Hosting", "CDN Decentralizado", "Monetización"],
-      "dates": [
-        { "date": "2026-07-07", "day": 7, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
-        { "date": "2026-07-14", "day": 14, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
-        { "date": "2026-07-21", "day": 21, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
-        { "date": "2026-07-28", "day": 28, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
-      ]
-    },
-    {
-      "id": "ai-agents",
+      "slug": "gaming-2",
       "number": 6,
-      "name": "AI AGENTS",
-      "focus": "Bots & Automation",
-      "description": "Agentes autónomos, workflows, AI + Bitcoin.",
-      "difficulty": "Advanced",
-      "stars": 3,
+      "name": "GAMING 2",
+      "focus": "Game Dev · Temporada 2",
+      "description": "Segunda temporada de GAMING: más juegos, mecánicas interactivas, leaderboards y multiplayer sobre Bitcoin, Lightning y Nostr.",
+      "difficulty": "Intermediate",
+      "stars": 2,
       "month": "Agosto",
       "monthShort": "AGO",
       "year": 2026,
-      "icon": "🤖",
-      "tags": ["AI", "Automation", "Bitcoin"],
-      "topics": ["Agentes Autónomos", "LLM + Lightning", "Workflows", "NWC"],
+      "icon": "🎮",
+      "tags": ["Gaming", "Lightning", "Nostr"],
+      "topics": ["Game Development", "Game Loops", "Nostr Login", "Lightning Rewards", "Leaderboards", "Multiplayer"],
       "dates": [
         { "date": "2026-08-04", "day": 4, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
         { "date": "2026-08-11", "day": 11, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
         { "date": "2026-08-18", "day": 18, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
         { "date": "2026-08-25", "day": 25, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
+      ]
+    },
+    {
+      "id": "ai-agents",
+      "number": 5,
+      "name": "AI AGENTS",
+      "focus": "Bots & Automation",
+      "description": "Agentes autónomos, workflows, AI + Bitcoin.",
+      "difficulty": "Advanced",
+      "stars": 3,
+      "month": "Julio",
+      "monthShort": "JUL",
+      "year": 2026,
+      "icon": "🤖",
+      "tags": ["AI", "Automation", "Bitcoin"],
+      "topics": ["Agentes Autónomos", "LLM + Lightning", "Workflows", "NWC"],
+      "dates": [
+        { "date": "2026-07-07", "day": 7, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
+        { "date": "2026-07-14", "day": 14, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
+        { "date": "2026-07-21", "day": 21, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
+        { "date": "2026-07-28", "day": 28, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
       ]
     },
     {

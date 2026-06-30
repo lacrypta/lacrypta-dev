@@ -17,6 +17,7 @@ import {
   Vote,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useHackathonTab } from "@/lib/hackathonTabsContext";
 import { hackathonSlugForId, prizeForPosition, formatSats } from "@/lib/hackathons";
 import { useVotingLive } from "@/lib/useVotingLive";
 import { useAdminLiveTally } from "@/lib/useAdminLiveTally";
@@ -54,6 +55,10 @@ export default function VotingHero({
   const { ready } = useAuth();
   const live = useVotingLive(hackathonId, initialPeriod);
   const { period, viewer } = live;
+  // Set only inside HackathonTabs (the hackathon detail page) — the ballot
+  // (#votar) lives in the "Proyectos" tab, a different panel than this hero's
+  // "Resultados" tab, so the CTA must switch tabs before it can scroll there.
+  const hackathonTab = useHackathonTab();
 
   const slug = hackathonSlugForId(hackathonId);
   // On the hackathon page the CTA scrolls to the ballot; on home it links there.
@@ -62,12 +67,19 @@ export default function VotingHero({
   const scrollToBallot = useCallback(
     (e: React.MouseEvent) => {
       if (variant !== "page") return;
-      const el = document.getElementById("votar");
-      if (!el) return;
       e.preventDefault();
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (hackathonTab && hackathonTab.tab !== "proyectos") {
+        hackathonTab.setTab("proyectos");
+      }
+      // Defer to the next frame so the now-visible "Proyectos" panel is laid
+      // out before we measure/scroll to it (it's `display:none` until then).
+      requestAnimationFrame(() => {
+        document
+          .getElementById("votar")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     },
-    [variant],
+    [variant, hackathonTab],
   );
 
   if (!period) {

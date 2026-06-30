@@ -130,15 +130,16 @@ export default async function HackathonsPage() {
   return (
     <>
       <PageHero
-        eyebrow="LIGHTNING HACKATHONS 2026"
-        eyebrowIcon={<Zap className="h-3 w-3" />}
         title={
           <>
-            8 hackatones ·{" "}
-            <span className="text-gradient-bitcoin">
-              {formatSats(PROGRAM.totalPrize)} sats
-            </span>{" "}
-            en premios
+            <span className="whitespace-nowrap">8 hackatones ·</span>
+            <br />
+            <span className="whitespace-nowrap">
+              <span className="text-gradient-bitcoin">
+                {formatSats(PROGRAM.totalPrize)} sats
+              </span>{" "}
+              en premios
+            </span>
           </>
         }
       />

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import {
   ArrowRight,
@@ -171,8 +172,8 @@ export default function HackathonTimeline({
                     aria-label={`${h.name} — ${meta.label}`}
                     className="group relative flex flex-1 flex-col items-center gap-2 rounded-lg pt-[6px] outline-none focus-visible:ring-2 focus-visible:ring-cyan/60"
                   >
-                    {/* Dot */}
-                    <span className="relative flex h-6 w-6 items-center justify-center">
+                    {/* Dot — nudged up to sit centered on the rail line above. */}
+                    <span className="relative -mt-[7px] flex h-6 w-6 items-center justify-center">
                       {selected && (
                         <motion.span
                           layoutId="rail-active"
@@ -458,6 +459,7 @@ function InfoChip({
 }
 
 function StageCard({ h }: { h: TimelineHackathon }) {
+  const router = useRouter();
   const isActive = h.status === "active";
   const isClosed = h.status === "closed";
 
@@ -496,8 +498,14 @@ function StageCard({ h }: { h: TimelineHackathon }) {
 
   return (
     <div
+      role="link"
+      tabIndex={0}
+      onClick={() => router.push(`/hackathons/${h.slug}`)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") router.push(`/hackathons/${h.slug}`);
+      }}
       className={cn(
-        "group relative rounded-3xl border bg-background-card",
+        "group relative cursor-pointer rounded-3xl border bg-background-card outline-none focus-visible:ring-2 focus-visible:ring-cyan/60",
         accent.ring,
         accent.glow,
       )}
@@ -543,8 +551,12 @@ function StageCard({ h }: { h: TimelineHackathon }) {
             </p>
           </div>
 
-          {/* Compact icon meta — hover any chip to read the detail. */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Compact icon meta — hover any chip to read the detail. Stop
+           *  propagation so tapping a chip doesn't trigger the card's nav. */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex flex-wrap items-center gap-2"
+          >
             <span
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-mono font-semibold uppercase tracking-wider",
@@ -605,8 +617,12 @@ function StageCard({ h }: { h: TimelineHackathon }) {
             )}
           </div>
 
-          {/* CTA */}
-          <div className="flex flex-col items-start gap-3 border-t border-border pt-4 sm:flex-row sm:items-center">
+          {/* CTA — the whole card already navigates on click; stop propagation
+           *  here so the inscription button doesn't also trigger that nav. */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex flex-col items-start gap-3 border-t border-border pt-4 sm:flex-row sm:items-center"
+          >
             {h.inscriptionOpen && (
               <HackathonInscripcionButton hackathonId={h.id} />
             )}

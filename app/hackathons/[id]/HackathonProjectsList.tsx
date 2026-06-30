@@ -46,6 +46,7 @@ import { useHackathonResults, type WinnerEntry } from "@/lib/nostrReports";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
 import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
+import { useHackathonTab } from "@/lib/hackathonTabsContext";
 import {
   rememberScrollPosition,
   restoreScrollPosition,
@@ -112,6 +113,10 @@ export default function HackathonProjectsList({
   initialNostrSubmissions?: HackathonSubmission[];
 }) {
   const router = useRouter();
+  // Set only inside HackathonTabs (the hackathon detail page) — this list lives
+  // in the "Proyectos" tab, so a "project published" toast must switch there
+  // before scrolling to it.
+  const hackathonTab = useHackathonTab();
   const [nostrSubmissions, setNostrSubmissions] = useState<
     HackathonSubmission[]
   >(initialNostrSubmissions);
@@ -337,9 +342,15 @@ export default function HackathonProjectsList({
         }>
       ).detail;
       if (hackathonId !== hackathon.id) return;
-      sectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
+      if (hackathonTab && hackathonTab.tab !== "proyectos") {
+        hackathonTab.setTab("proyectos");
+      }
+      // Defer so the panel is visible (not `display:none`) before measuring.
+      requestAnimationFrame(() => {
+        sectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
       });
       if (project) upsertCommunityProject(project);
       refreshFromRelays({ manual: true });
@@ -348,7 +359,7 @@ export default function HackathonProjectsList({
     return () =>
       window.removeEventListener("labs:project-published", onPublished);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hackathon.id]);
+  }, [hackathon.id, hackathonTab]);
 
   const curated = merged.filter((p) => !p.nostrEventId);
   const nostrCount = merged.length - curated.length;
