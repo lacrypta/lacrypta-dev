@@ -597,10 +597,27 @@ function ClosedHero({
   onCta: (e: React.MouseEvent) => void;
 }) {
   const slug = hackathonSlugForId(hackathonId);
+  // The podium reflects the DEFINITIVE result: the combined 70/30 ranking when
+  // judges' scores were merged (headline metric = final score), else the raw
+  // popular vote (metric = votes). The detailed breakdown table renders below.
+  const hasFinal =
+    !!period.results?.final && period.results.final.length > 0;
   // Up to 6 prize positions; the top 3 go on the podium, 4–6 in the list below.
-  const winners = (period.results?.winners ?? []).slice(0, 6);
-  const podium = winners.slice(0, 3);
-  const runnersUp = winners.slice(3, 6);
+  const entries: PodiumEntry[] = hasFinal
+    ? period.results!.final!.slice(0, 6).map((r) => ({
+        position: r.position,
+        projectId: r.projectId,
+        projectName: r.name,
+        metric: `${r.finalScore.toFixed(1)} pts`,
+      }))
+    : (period.results?.winners ?? []).slice(0, 6).map((w) => ({
+        position: w.position,
+        projectId: w.projectId,
+        projectName: w.projectName,
+        metric: `${w.votes} ${w.votes === 1 ? "voto" : "votos"}`,
+      }));
+  const podium = entries.slice(0, 3);
+  const runnersUp = entries.slice(3, 6);
   // Classic podium reading order on wide screens: 2nd · 1st · 3rd (1st centered).
   const podiumOrder =
     podium.length === 3 ? [1, 0, 2] : podium.map((_, i) => i);
@@ -634,7 +651,7 @@ function ClosedHero({
         </div>
       </div>
 
-      {winners.length === 0 ? (
+      {entries.length === 0 ? (
         <p className="rounded-2xl border border-border bg-white/[0.02] px-4 py-6 text-center text-sm text-foreground-subtle">
           La votación cerró sin votos registrados.
         </p>
@@ -647,7 +664,7 @@ function ClosedHero({
               .map((idx) => (
                 <PodiumCard
                   key={podium[idx].projectId}
-                  winner={podium[idx]}
+                  entry={podium[idx]}
                   slug={slug}
                 />
               ))}
@@ -656,21 +673,20 @@ function ClosedHero({
           {/* Positions 4–6 */}
           {runnersUp.length > 0 && (
             <ol className="space-y-2">
-              {runnersUp.map((w, i) => (
-                <RunnerRow key={w.projectId} winner={w} slug={slug} index={i} />
+              {runnersUp.map((e, i) => (
+                <RunnerRow key={e.projectId} entry={e} slug={slug} index={i} />
               ))}
             </ol>
           )}
         </div>
       )}
 
-      {/* Official combined ranking (70% popular · 30% judges). Present only when
-       *  the admin uploaded judges' scores before closing — the podium above is
-       *  the community vote; this table is the prize-deciding blended result. */}
-      {period.results?.final && period.results.final.length > 0 && (
+      {/* Detailed combined breakdown (per-judge scores + 70/30 math). The podium
+       *  above already reflects this ranking; the table shows how it was built. */}
+      {hasFinal && (
         <FinalResultsTable
-          judges={period.results.judges ?? []}
-          rows={period.results.final}
+          judges={period.results!.judges ?? []}
+          rows={period.results!.final!}
           hackathonId={hackathonId}
         />
       )}
@@ -678,8 +694,18 @@ function ClosedHero({
   );
 }
 
-function PodiumCard({ winner, slug }: { winner: VotingWinner; slug: string }) {
-  const pos = winner.position;
+/** One podium/runner-up slot — driven by either the final 70/30 ranking or the
+ *  raw popular vote, with a pre-formatted headline metric ("21.1 pts" / "12
+ *  votos"). */
+type PodiumEntry = {
+  position: number;
+  projectId: string;
+  projectName: string;
+  metric: string;
+};
+
+function PodiumCard({ entry, slug }: { entry: PodiumEntry; slug: string }) {
+  const pos = entry.position;
   const isFirst = pos === 1;
   const prize = prizeForPosition(pos);
   const tone = RANK_TONE[pos] ?? RANK_TONE[3];
@@ -718,17 +744,17 @@ function PodiumCard({ winner, slug }: { winner: VotingWinner; slug: string }) {
         {pos}°
       </span>
       <Link
-        href={`/hackathons/${slug}/${winner.projectId}`}
-        title={winner.projectName}
+        href={`/hackathons/${slug}/${entry.projectId}`}
+        title={entry.projectName}
         className={cn(
           "mt-1.5 block w-full truncate px-1 font-semibold hover:underline",
           isFirst ? "text-sm sm:text-base" : "text-xs sm:text-sm",
         )}
       >
-        {winner.projectName}
+        {entry.projectName}
       </Link>
       <span className="mt-1 text-[11px] font-mono text-foreground-subtle tabular-nums">
-        {winner.votes} {winner.votes === 1 ? "voto" : "votos"}
+        {entry.metric}
       </span>
       {prize != null && (
         <span
@@ -746,15 +772,15 @@ function PodiumCard({ winner, slug }: { winner: VotingWinner; slug: string }) {
 }
 
 function RunnerRow({
-  winner,
+  entry,
   slug,
   index,
 }: {
-  winner: VotingWinner;
+  entry: PodiumEntry;
   slug: string;
   index: number;
 }) {
-  const prize = prizeForPosition(winner.position);
+  const prize = prizeForPosition(entry.position);
 
   return (
     <motion.li
@@ -763,14 +789,14 @@ function RunnerRow({
       transition={{ delay: 0.32 + index * 0.07, duration: 0.4 }}
     >
       <Link
-        href={`/hackathons/${slug}/${winner.projectId}`}
+        href={`/hackathons/${slug}/${entry.projectId}`}
         className="group flex items-center gap-3 rounded-xl border border-border bg-white/[0.02] px-3 py-2.5 transition-colors hover:bg-white/[0.05]"
       >
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-white/[0.03] font-display text-sm font-black tabular-nums text-foreground-muted">
-          {winner.position}
+          {entry.position}
         </span>
         <span className="min-w-0 flex-1 truncate text-sm font-semibold group-hover:text-bitcoin">
-          {winner.projectName}
+          {entry.projectName}
         </span>
         {prize != null && (
           <span className="hidden items-center gap-1 rounded-full border border-border bg-white/[0.03] px-2 py-0.5 text-[10px] font-mono font-bold tabular-nums text-lightning sm:inline-flex">
@@ -779,7 +805,7 @@ function RunnerRow({
           </span>
         )}
         <span className="text-sm font-mono font-bold tabular-nums text-nostr">
-          {winner.votes} {winner.votes === 1 ? "voto" : "votos"}
+          {entry.metric}
         </span>
       </Link>
     </motion.li>

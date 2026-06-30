@@ -56,6 +56,10 @@ const CLOSE_ACTION = "close-voting";
 const CLOSE_PREVIEW_ACTION = "close-preview";
 /** Step 2: re-validate the confirmed set, sign + publish the frozen result. */
 const CLOSE_CONFIRM_ACTION = "close-confirm";
+/** Admin audit: decrypt + return per-voter ballots WITHOUT publishing. Unlike
+ *  close-preview it also works once the voting is closed, so the admin can see
+ *  who voted for what after the result is frozen. */
+const REVEAL_ACTION = "reveal-ballots";
 const CLOSE_ACTIONS = new Set([
   CLOSE_ACTION,
   CLOSE_PREVIEW_ACTION,
@@ -717,6 +721,7 @@ export async function POST(
     if (
       action !== OPEN_ACTION &&
       action !== UPLOAD_JUDGES_ACTION &&
+      action !== REVEAL_ACTION &&
       !CLOSE_ACTIONS.has(action)
     ) {
       return jsonError("Request no autorizado para administrar la votación.", 401);
@@ -803,10 +808,15 @@ export async function POST(
       });
     }
 
-    // ── Close step 1: decrypt + tally + return preview (admin-gated, no publish) ──
-    if (action === CLOSE_PREVIEW_ACTION) {
+    // ── Decrypt + tally + return per-voter preview (admin-gated, no publish) ──
+    //    close-preview: pre-close peek, requires the voting to be OPEN.
+    //    reveal-ballots: post-close audit, also works once it's CLOSED.
+    if (action === CLOSE_PREVIEW_ACTION || action === REVEAL_ACTION) {
       const existing = await fetchVotingPeriodFromRelays(id);
-      if (!existing || existing.period.status !== "open") {
+      if (!existing) {
+        return jsonError("No hay una votación para esta convocatoria.", 409);
+      }
+      if (action === CLOSE_PREVIEW_ACTION && existing.period.status !== "open") {
         return jsonError("No hay una votación abierta para previsualizar.", 409);
       }
       const ballots =
