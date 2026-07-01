@@ -174,6 +174,7 @@ export default function VotingHero({
               hackathonId={hackathonId}
               ballotHref={ballotHref}
               onCta={scrollToBallot}
+              variant={variant}
             />
           )}
         </motion.div>
@@ -603,11 +604,13 @@ function ClosedHero({
   hackathonId,
   ballotHref,
   onCta,
+  variant,
 }: {
   period: VotingPeriod;
   hackathonId: string;
   ballotHref: string;
   onCta: (e: React.MouseEvent) => void;
+  variant: "home" | "page";
 }) {
   const slug = hackathonSlugForId(hackathonId);
   // The podium reflects the DEFINITIVE result: the combined 70/30 ranking when
@@ -711,8 +714,10 @@ function ClosedHero({
       )}
 
       {/* Detailed combined breakdown (per-judge scores + 70/30 math). The podium
-       *  above already reflects this ranking; the table shows how it was built. */}
-      {hasFinal && (
+       *  above already reflects this ranking; the table shows how it was built.
+       *  Page-only — the home hero stays a compact teaser, the full table lives
+       *  on the hackathon results page. */}
+      {hasFinal && variant === "page" && (
         <FinalResultsTable
           judges={period.results!.judges ?? []}
           rows={period.results!.final!}
