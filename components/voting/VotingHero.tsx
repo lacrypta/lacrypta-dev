@@ -657,11 +657,6 @@ function ClosedHero({
           <h2 className="mt-4 font-display text-3xl font-black leading-[0.95] tracking-tight sm:text-4xl">
             La comunidad ya <span className="text-gradient-bitcoin">eligió</span>
           </h2>
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-foreground-muted sm:text-base">
-            La votación cerró y el resultado quedó firmado por La Crypta en
-            Nostr. Estos son los proyectos que se llevaron los votos —y los
-            premios— de la comunidad.
-          </p>
         </div>
         <div className="lg:pb-1">
           <CtaButton
