@@ -19,6 +19,7 @@ import { cn } from "@/lib/cn";
 import HackathonTimeline, {
   type TimelineHackathon,
 } from "@/app/hackathons/HackathonTimeline";
+import PilaresDisclosure from "@/app/hackathons/PilaresDisclosure";
 
 export const metadata: Metadata = {
   title: "Hackatones",
@@ -345,36 +346,27 @@ const PILARES: ReadonlyArray<{
  *  as supporting context, not as another list of clickable hackathons. */
 function PilaresSection() {
   return (
-    <section className="relative overflow-hidden border-t border-border bg-[radial-gradient(ellipse_at_top,_rgba(247,147,26,0.10),_transparent_55%),radial-gradient(ellipse_at_bottom,_rgba(168,85,247,0.10),_transparent_55%),linear-gradient(180deg,#0c1024_0%,#0a0d1a_100%)]">
-      {/* Subtle ambient glows so the section doesn't read as a flat block. */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-24 left-1/4 h-72 w-72 rounded-full bg-bitcoin/[0.10] blur-3xl" />
-        <div className="absolute -bottom-24 right-1/4 h-72 w-72 rounded-full bg-nostr/[0.10] blur-3xl" />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-full max-w-3xl bg-gradient-to-r from-transparent via-bitcoin/60 to-transparent" />
+    <PilaresDisclosure>
+      <div className="max-w-2xl mb-12">
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-mono font-semibold tracking-widest text-bitcoin uppercase">
+          <Sparkles className="h-3 w-3" />
+          Nuestro enfoque
+        </span>
+        <h2 className="mt-3 font-display text-3xl sm:text-4xl font-bold tracking-tight">
+          Bitcoin como medio de intercambio
+        </h2>
+        <p className="mt-3 text-foreground-muted leading-relaxed">
+          Onchain es reserva de valor. Nosotros optimizamos las transacciones.
+          Cada hackatón permite construir con cualquiera de estas tecnologías.
+        </p>
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-        <div className="max-w-2xl mb-12">
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-mono font-semibold tracking-widest text-bitcoin uppercase">
-            <Sparkles className="h-3 w-3" />
-            Nuestro enfoque
-          </span>
-          <h2 className="mt-3 font-display text-3xl sm:text-4xl font-bold tracking-tight">
-            Bitcoin como medio de intercambio
-          </h2>
-          <p className="mt-3 text-foreground-muted leading-relaxed">
-            Onchain es reserva de valor. Nosotros optimizamos las transacciones.
-            Cada hackatón permite construir con cualquiera de estas tecnologías.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-          {PILARES.map((p) => (
-            <PilarCard key={p.name} pilar={p} />
-          ))}
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+        {PILARES.map((p) => (
+          <PilarCard key={p.name} pilar={p} />
+        ))}
       </div>
-    </section>
+    </PilaresDisclosure>
   );
 }
 
