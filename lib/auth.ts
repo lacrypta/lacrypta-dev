@@ -52,6 +52,7 @@ export function setAuth(auth: Auth) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(auth));
+    signerProbeCache = null;
     window.dispatchEvent(new CustomEvent(EVENT));
   } catch {
     /* quota */
@@ -61,6 +62,7 @@ export function setAuth(auth: Auth) {
 export function clearAuth(reason: LogoutReason = "user") {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(STORAGE_KEY);
+  signerProbeCache = null;
   try {
     window.localStorage.setItem(LOGOUT_REASON_KEY, reason);
   } catch {
@@ -112,6 +114,14 @@ export function waitForNostrSigner(timeoutMs = 3000): Promise<boolean> {
  *  browser. NIP-46 is trusted without a probe — the bunker is remote, and
  *  unavailability surfaces as a signing error rather than a missing signer.
  *  `local` is trusted because the secret key is already in-hand. */
+// Dedupe the NIP-07 probe across every `useAuth()` consumer. Each mounted
+// component that calls useAuth runs this probe, and for NIP-07 that hits
+// `window.nostr.getPublicKey()` — with many components (e.g. one PrizeZapButton
+// per podium slot) the extension gets flooded with identical getPublicKey
+// calls. Cache the in-flight/resolved probe per session key so they share a
+// single round-trip; invalidated on any auth change (setAuth/clearAuth).
+let signerProbeCache: { key: string; promise: Promise<boolean> } | null = null;
+
 export async function probeSignerAvailable(
   auth: Auth,
   timeoutMs = 3000,
@@ -120,17 +130,35 @@ export async function probeSignerAvailable(
   if (auth.method === "local") {
     return Array.isArray(auth.localSecret) && auth.localSecret.length === 32;
   }
-  const present = await waitForNostrSigner(timeoutMs);
-  if (!present) return false;
-  try {
-    // Some extensions expose window.nostr but a different pubkey (e.g. user
-    // switched account in Alby). Treat that as a mismatch → auto-logout so
-    // the app doesn't sign with the wrong key.
-    const pk = await window.nostr!.getPublicKey();
-    return pk === auth.pubkey;
-  } catch {
-    return false;
+  const key = `${auth.method}:${auth.pubkey}`;
+  if (signerProbeCache && signerProbeCache.key === key) {
+    return signerProbeCache.promise;
   }
+  const promise = (async () => {
+    const present = await waitForNostrSigner(timeoutMs);
+    if (!present) return false;
+    try {
+      // Some extensions expose window.nostr but a different pubkey (e.g. user
+      // switched account in Alby). Treat that as a mismatch → auto-logout so
+      // the app doesn't sign with the wrong key.
+      const pk = await window.nostr!.getPublicKey();
+      return pk === auth.pubkey;
+    } catch {
+      return false;
+    }
+  })();
+  // Don't cache a rejected/false probe forever — a false result triggers
+  // auto-logout (which clears the cache anyway), and transient failures should
+  // be re-probeable on the next mount.
+  signerProbeCache = { key, promise };
+  promise
+    .then((ok) => {
+      if (!ok && signerProbeCache?.key === key) signerProbeCache = null;
+    })
+    .catch(() => {
+      if (signerProbeCache?.key === key) signerProbeCache = null;
+    });
+  return promise;
 }
 
 export function useAuth(): {

@@ -20,6 +20,10 @@ node scripts/build-hackathon-reports.mjs
 
 The parser is regex-based and depends on specific markdown structure (`**Posición:** N°`, `**Score final: X**`, `### <emoji> Name (Model) — score`, `## 💡 Feedback Consolidado` with `### Fortalezas` / `### Áreas de Mejora` lists). New reports must follow that shape or fields will silently parse as `null`/empty.
 
+`build-hackathon-reports.mjs` regenerates a hackathon's entry strictly from its `.md` files — but if a hackathon's report dir has zero `.md` files (or doesn't exist at all, e.g. `identity`/`commerce`, whose `reports.json` data predates this script and has no `.md` source in-tree), it preserves that hackathon's existing `reports.json` entry as-is with a warning, rather than dropping it. Deleting a report's `.md` file on purpose still removes it from the hackathon's own regenerated set.
+
+Report positions feed the soldiers' score on `/soldados` (`lib/soldiers.ts`), so after regenerating `reports.json` the script also runs `scripts/publish-soldiers-ranking.mjs` — a headless version of the `/soldados` "Recrear ranking" admin action that self-signs with `LACRYPTA_NSEC` and republishes the ranking Nostr snapshot (see `lib/soldiersRanking.ts`, `app/api/soldiers/ranking/route.ts`). It targets `NEXT_PUBLIC_SITE_URL`, no-ops when `LACRYPTA_NSEC` isn't set, and never fails the reports build (network/secret issues just print a warning). Skip it explicitly with `SKIP_RANKING_PUBLISH=1`, or run it standalone via `pnpm run ranking:publish`. **This publishes a real event to public Nostr relays** — never run it (or the reports script without `SKIP_RANKING_PUBLISH=1`) against production secrets from an environment you don't intend to publish from.
+
 ## Two-source content model
 
 Project content comes from **both** curated JSON and community Nostr events, merged at view time:

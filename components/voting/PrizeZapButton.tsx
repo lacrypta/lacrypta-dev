@@ -29,7 +29,6 @@ import {
   type PrizeZapTarget,
 } from "@/lib/prizeZaps";
 import { formatSats, hackathonSlugForId } from "@/lib/hackathons";
-import { resolveLacryptaPubkey } from "@/lib/nostrReports";
 import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/cn";
 
@@ -74,10 +73,20 @@ export default function PrizeZapButton({ target }: { target: PrizeZapTarget }) {
   }, [checking, paid, paying, target.sats]);
 
   useEffect(() => {
+    // Gate on the ADMIN pubkey (NEXT_PUBLIC_LACRYPTA_ADMIN_NPUB), matching
+    // every other admin control (PrizeBadgeButton, VotingSection, ...) — and
+    // matching payPrizeZap, which keys the whole flow on the logged-in
+    // signer (the admin). The publisher key (LACRYPTA_NSEC) is a different
+    // identity and must not gate this button.
     let cancelled = false;
-    resolveLacryptaPubkey().then((pk) => {
-      if (!cancelled) setAdminPubkey(pk || null);
-    });
+    fetch("/api/lacrypta-pubkeys")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { adminPubkey?: string } | null) => {
+        if (!cancelled) setAdminPubkey(data?.adminPubkey ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setAdminPubkey(null);
+      });
     return () => {
       cancelled = true;
     };
@@ -115,25 +124,78 @@ export default function PrizeZapButton({ target }: { target: PrizeZapTarget }) {
     return () => {
       cancelled = true;
     };
-  }, [adminPubkey, auth, isAdmin, target]);
+    // Depend on target's identifying fields, NOT the object reference — callers
+    // (e.g. VotingHero) build `target` inline, so a new object every render
+    // would re-run this probe endlessly and keep `checking` (→ disabled) stuck.
+  }, [
+    adminPubkey,
+    auth,
+    isAdmin,
+    target.hackathonId,
+    target.projectId,
+    target.recipientPubkey,
+    target.sats,
+    target.position,
+  ]);
 
   useEffect(() => {
-    setRecipientPaymentInfo(
-      target.recipientLightningAddress
-        ? {
-            lightningAddress: target.recipientLightningAddress,
-            zapEndpoint: target.recipientZapEndpoint ?? null,
-            source: "lud16",
-          }
-        : target.recipientZapEndpoint
-          ? {
-              lightningAddress: null,
-              zapEndpoint: target.recipientZapEndpoint,
-              source: "zap-endpoint",
-            }
-          : null,
-    );
-  }, [target.recipientLightningAddress, target.recipientZapEndpoint]);
+    // When the caller pre-resolves the address (the hackathon page fetches the
+    // winner's lud16 server-side), use it directly.
+    if (target.recipientLightningAddress) {
+      setRecipientPaymentInfo({
+        lightningAddress: target.recipientLightningAddress,
+        zapEndpoint: target.recipientZapEndpoint ?? null,
+        source: "lud16",
+      });
+      return;
+    }
+    if (target.recipientZapEndpoint) {
+      setRecipientPaymentInfo({
+        lightningAddress: null,
+        zapEndpoint: target.recipientZapEndpoint,
+        source: "zap-endpoint",
+      });
+      return;
+    }
+    // Otherwise (e.g. the results podium only knows the pubkey), resolve it
+    // server-side: profile lud16 → submission nip05 fallback (see
+    // /api/prize-recipient). Fills "Destino" and gives the pay step an endpoint.
+    if (!target.recipientPubkey) {
+      setRecipientPaymentInfo(null);
+      return;
+    }
+    let cancelled = false;
+    setRecipientPaymentInfo(null);
+    fetch(`/api/prize-recipient?pubkey=${target.recipientPubkey}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((info: PrizeZapRecipientPaymentInfo | null) => {
+        if (cancelled) return;
+        setRecipientPaymentInfo(
+          info?.lightningAddress
+            ? {
+                lightningAddress: info.lightningAddress,
+                zapEndpoint: info.zapEndpoint ?? null,
+                source: info.source,
+              }
+            : { lightningAddress: null, zapEndpoint: null, source: "none" },
+        );
+      })
+      .catch(() => {
+        if (!cancelled)
+          setRecipientPaymentInfo({
+            lightningAddress: null,
+            zapEndpoint: null,
+            source: "none",
+          });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    target.recipientLightningAddress,
+    target.recipientZapEndpoint,
+    target.recipientPubkey,
+  ]);
 
   async function handlePay(e: React.MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
@@ -149,7 +211,40 @@ export default function PrizeZapButton({ target }: { target: PrizeZapTarget }) {
     setProgressLog([]);
     try {
       const signer = await getSigner(auth);
-      const record = await payPrizeZap(target, signer, (progress) => {
+      // Resolve the destination reliably from the server (profile lud16 →
+      // submission nip05) instead of depending on the display effect having
+      // finished. This keeps payPrizeZap off its flaky client-side profile
+      // lookup (the source of "No encontré el perfil Nostr del ganador").
+      let lightningAddress =
+        target.recipientLightningAddress ??
+        recipientPaymentInfo?.lightningAddress ??
+        null;
+      let zapEndpoint =
+        target.recipientZapEndpoint ??
+        recipientPaymentInfo?.zapEndpoint ??
+        null;
+      if (!zapEndpoint && target.recipientPubkey) {
+        try {
+          const res = await fetch(
+            `/api/prize-recipient?pubkey=${target.recipientPubkey}`,
+          );
+          if (res.ok) {
+            const info = (await res.json()) as PrizeZapRecipientPaymentInfo;
+            if (info?.zapEndpoint) {
+              zapEndpoint = info.zapEndpoint;
+              lightningAddress = info.lightningAddress ?? lightningAddress;
+            }
+          }
+        } catch {
+          /* fall back to payPrizeZap's own lookup below */
+        }
+      }
+      const effectiveTarget: PrizeZapTarget = {
+        ...target,
+        recipientLightningAddress: lightningAddress,
+        recipientZapEndpoint: zapEndpoint,
+      };
+      const record = await payPrizeZap(effectiveTarget, signer, (progress) => {
         setProgressLog((prev) => [...prev, progress]);
       });
       setLocalRecord(record);
