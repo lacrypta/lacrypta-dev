@@ -172,6 +172,7 @@ export default function VotingHero({
             <ClosedHero
               period={period}
               hackathonId={hackathonId}
+              hackathonName={hackathonName}
               ballotHref={ballotHref}
               onCta={scrollToBallot}
               variant={variant}
@@ -602,12 +603,14 @@ const RANK_TONE: Record<
 function ClosedHero({
   period,
   hackathonId,
+  hackathonName,
   ballotHref,
   onCta,
   variant,
 }: {
   period: VotingPeriod;
   hackathonId: string;
+  hackathonName: string;
   ballotHref: string;
   onCta: (e: React.MouseEvent) => void;
   variant: "home" | "page";
@@ -655,7 +658,8 @@ function ClosedHero({
             Resultados publicados
           </div>
           <h2 className="mt-4 font-display text-3xl font-black leading-[0.95] tracking-tight sm:text-4xl">
-            La comunidad ya <span className="text-gradient-bitcoin">eligió</span>
+            Hackatón de{" "}
+            <span className="text-gradient-bitcoin">{hackathonName}</span>
           </h2>
         </div>
         <div className="lg:pb-1">
