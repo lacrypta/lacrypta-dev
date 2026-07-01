@@ -9,6 +9,8 @@
     "start": "next start",
     "test:email-login": "node --import tsx --test tests/emailLogin.test.ts",
     "gen:dev-keys": "node scripts/gen-dev-keys.mjs",
+    "reports:build": "node scripts/build-hackathon-reports.mjs",
+    "ranking:publish": "node scripts/publish-soldiers-ranking.mjs",
     "relay:up": "docker compose -f dev/relay/docker-compose.yml up -d",
     "relay:down": "docker compose -f dev/relay/docker-compose.yml down",
     "relay:logs": "docker compose -f dev/relay/docker-compose.yml logs -f"

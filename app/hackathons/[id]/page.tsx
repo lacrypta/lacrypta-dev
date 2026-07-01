@@ -56,7 +56,7 @@ import VotingHero from "@/components/voting/VotingHero";
 import HackathonResultsClient from "./HackathonResultsClient";
 import AdminBadgesLink from "./AdminBadgesLink";
 import PrizeBadgeButton, { type PrizeBadgeTask } from "./PrizeBadgeButton";
-import PrizeZapButton from "./PrizeZapButton";
+import PrizeZapButton from "@/components/voting/PrizeZapButton";
 import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
 
 export function generateStaticParams() {
