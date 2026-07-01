@@ -85,7 +85,7 @@ const SECTIONS: Section[] = [
       { icon: Award, title: "Ganá premios por participar" },
     ],
     stats: [
-      { value: 48, label: "Proyectos concursados" },
+      { value: 50, label: "Proyectos concursados", suffix: "+" },
       { value: 4, label: "Hackatones" },
     ],
   },
