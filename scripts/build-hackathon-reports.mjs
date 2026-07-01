@@ -5,6 +5,7 @@
 import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const reportsDir = join(root, "data/hackathons/reports");
@@ -148,6 +149,13 @@ function parseReport(md) {
   return { ...header, judges, feedback };
 }
 
+// Some hackathons (e.g. "identity", "commerce") have no `.md` source at all
+// yet reports.json still carries hand-maintained/legacy data for them —
+// preserve those entries untouched instead of silently dropping them when a
+// hackathon dir has zero `.md` files. Hackathons that DO have `.md` files are
+// still regenerated strictly from source, so deleting a report's `.md` on
+// purpose still removes it.
+const previous = existsSync(outFile) ? JSON.parse(readFileSync(outFile, "utf8")) : {};
 const out = {};
 
 for (const hackathonDir of readdirSync(reportsDir, { withFileTypes: true })) {
@@ -163,6 +171,21 @@ for (const hackathonDir of readdirSync(reportsDir, { withFileTypes: true })) {
   }
   if (Object.keys(reports).length > 0) {
     out[hackathonId] = reports;
+  } else if (previous[hackathonId]) {
+    console.warn(
+      `warning: no .md files found for "${hackathonId}" — keeping its existing reports.json entry as-is.`,
+    );
+    out[hackathonId] = previous[hackathonId];
+  }
+}
+// Hackathons with no reports directory at all (no .md source ever existed
+// in-tree for them) — preserve as-is too.
+for (const hackathonId of Object.keys(previous)) {
+  if (!out[hackathonId] && !existsSync(join(reportsDir, hackathonId))) {
+    console.warn(
+      `warning: no reports directory for "${hackathonId}" — keeping its existing reports.json entry as-is.`,
+    );
+    out[hackathonId] = previous[hackathonId];
   }
 }
 
@@ -174,3 +197,21 @@ const totalReports = Object.values(out).reduce(
 console.log(
   `parsed ${totalReports} reports across ${Object.keys(out).length} hackathon(s) → ${outFile}`,
 );
+
+// Report positions feed the /soldados score (lib/soldiers.ts), so new
+// results are stale there until the ranking snapshot is republished.
+// Best-effort — network/secret issues here shouldn't fail the reports build.
+if (process.env.SKIP_RANKING_PUBLISH !== "1") {
+  const publish = spawnSync(
+    process.execPath,
+    [join(root, "scripts/publish-soldiers-ranking.mjs")],
+    { stdio: "inherit" },
+  );
+  if (publish.status !== 0) {
+    console.warn(
+      "warning: failed to republish soldiers ranking — rerun `node scripts/publish-soldiers-ranking.mjs` manually, or set SKIP_RANKING_PUBLISH=1 to silence this.",
+    );
+  }
+} else {
+  console.log("SKIP_RANKING_PUBLISH=1 — not republishing the soldiers ranking.");
+}

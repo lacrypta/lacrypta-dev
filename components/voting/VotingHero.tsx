@@ -29,6 +29,7 @@ import {
 import { cn } from "@/lib/cn";
 import LiveTally from "@/components/voting/LiveTally";
 import FinalResultsTable from "@/components/voting/FinalResultsTable";
+import PrizeZapButton from "@/components/voting/PrizeZapButton";
 
 /**
  * Gamified, live "community voting" hero. Reused on the home page and the
@@ -614,6 +615,13 @@ function ClosedHero({
   // popular vote (metric = votes). The detailed breakdown table renders below.
   const hasFinal =
     !!period.results?.final && period.results.final.length > 0;
+  // `winners` is always computed at close (see computeVotingRanking), even
+  // when `final` (judges-merged) also is — it's the only place the prize
+  // recipient's pubkey is resolved, frozen at close time. Keyed by projectId
+  // so it stays correct regardless of which ranking `entries` uses.
+  const recipientByProject = new Map(
+    (period.results?.winners ?? []).map((w) => [w.projectId, w.recipientPubkey]),
+  );
   // Up to 6 prize positions; the top 3 go on the podium, 4–6 in the list below.
   const entries: PodiumEntry[] = hasFinal
     ? period.results!.final!.slice(0, 6).map((r) => ({
@@ -678,6 +686,8 @@ function ClosedHero({
                   key={podium[idx].projectId}
                   entry={podium[idx]}
                   slug={slug}
+                  hackathonId={hackathonId}
+                  recipientPubkey={recipientByProject.get(podium[idx].projectId) ?? null}
                 />
               ))}
           </div>
@@ -686,7 +696,14 @@ function ClosedHero({
           {runnersUp.length > 0 && (
             <ol className="space-y-2">
               {runnersUp.map((e, i) => (
-                <RunnerRow key={e.projectId} entry={e} slug={slug} index={i} />
+                <RunnerRow
+                  key={e.projectId}
+                  entry={e}
+                  slug={slug}
+                  index={i}
+                  hackathonId={hackathonId}
+                  recipientPubkey={recipientByProject.get(e.projectId) ?? null}
+                />
               ))}
             </ol>
           )}
@@ -716,7 +733,17 @@ type PodiumEntry = {
   metric: string;
 };
 
-function PodiumCard({ entry, slug }: { entry: PodiumEntry; slug: string }) {
+function PodiumCard({
+  entry,
+  slug,
+  hackathonId,
+  recipientPubkey,
+}: {
+  entry: PodiumEntry;
+  slug: string;
+  hackathonId: string;
+  recipientPubkey: string | null;
+}) {
   const pos = entry.position;
   const isFirst = pos === 1;
   const prize = prizeForPosition(pos);
@@ -779,6 +806,20 @@ function PodiumCard({ entry, slug }: { entry: PodiumEntry; slug: string }) {
           {formatSats(prize)} sats
         </span>
       )}
+      {prize != null && recipientPubkey && (
+        <div className="mt-1.5">
+          <PrizeZapButton
+            target={{
+              hackathonId,
+              projectId: entry.projectId,
+              projectName: entry.projectName,
+              position: pos,
+              recipientPubkey,
+              sats: prize,
+            }}
+          />
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -787,10 +828,14 @@ function RunnerRow({
   entry,
   slug,
   index,
+  hackathonId,
+  recipientPubkey,
 }: {
   entry: PodiumEntry;
   slug: string;
   index: number;
+  hackathonId: string;
+  recipientPubkey: string | null;
 }) {
   const prize = prizeForPosition(entry.position);
 
@@ -799,10 +844,11 @@ function RunnerRow({
       initial={{ opacity: 0, x: 10 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: 0.32 + index * 0.07, duration: 0.4 }}
+      className="flex items-center gap-2"
     >
       <Link
         href={`/hackathons/${slug}/${entry.projectId}`}
-        className="group flex items-center gap-3 rounded-xl border border-border bg-white/[0.02] px-3 py-2.5 transition-colors hover:bg-white/[0.05]"
+        className="group flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-border bg-white/[0.02] px-3 py-2.5 transition-colors hover:bg-white/[0.05]"
       >
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-white/[0.03] font-display text-sm font-black tabular-nums text-foreground-muted">
           {entry.position}
@@ -820,6 +866,18 @@ function RunnerRow({
           {entry.metric}
         </span>
       </Link>
+      {prize != null && recipientPubkey && (
+        <PrizeZapButton
+          target={{
+            hackathonId,
+            projectId: entry.projectId,
+            projectName: entry.projectName,
+            position: entry.position,
+            recipientPubkey,
+            sats: prize,
+          }}
+        />
+      )}
     </motion.li>
   );
 }
