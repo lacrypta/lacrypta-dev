@@ -125,7 +125,7 @@ export default function VotingHero({
   return (
     <section
       className={cn(
-        variant === "page" ? "scroll-mt-24" : "pt-24 sm:pt-28",
+        variant === "page" ? "scroll-mt-24" : "pt-24 pb-16 sm:pt-28 sm:pb-20",
       )}
     >
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
@@ -172,8 +172,10 @@ export default function VotingHero({
             <ClosedHero
               period={period}
               hackathonId={hackathonId}
+              hackathonName={hackathonName}
               ballotHref={ballotHref}
               onCta={scrollToBallot}
+              variant={variant}
             />
           )}
         </motion.div>
@@ -601,13 +603,17 @@ const RANK_TONE: Record<
 function ClosedHero({
   period,
   hackathonId,
+  hackathonName,
   ballotHref,
   onCta,
+  variant,
 }: {
   period: VotingPeriod;
   hackathonId: string;
+  hackathonName: string;
   ballotHref: string;
   onCta: (e: React.MouseEvent) => void;
+  variant: "home" | "page";
 }) {
   const slug = hackathonSlugForId(hackathonId);
   // The podium reflects the DEFINITIVE result: the combined 70/30 ranking when
@@ -652,13 +658,9 @@ function ClosedHero({
             Resultados publicados
           </div>
           <h2 className="mt-4 font-display text-3xl font-black leading-[0.95] tracking-tight sm:text-4xl">
-            La comunidad ya <span className="text-gradient-bitcoin">eligió</span>
+            Hackatón de{" "}
+            <span className="text-gradient-bitcoin">{hackathonName}</span>
           </h2>
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-foreground-muted sm:text-base">
-            La votación cerró y el resultado quedó firmado por La Crypta en
-            Nostr. Estos son los proyectos que se llevaron los votos —y los
-            premios— de la comunidad.
-          </p>
         </div>
         <div className="lg:pb-1">
           <CtaButton
@@ -711,8 +713,10 @@ function ClosedHero({
       )}
 
       {/* Detailed combined breakdown (per-judge scores + 70/30 math). The podium
-       *  above already reflects this ranking; the table shows how it was built. */}
-      {hasFinal && (
+       *  above already reflects this ranking; the table shows how it was built.
+       *  Page-only — the home hero stays a compact teaser, the full table lives
+       *  on the hackathon results page. */}
+      {hasFinal && variant === "page" && (
         <FinalResultsTable
           judges={period.results!.judges ?? []}
           rows={period.results!.final!}
