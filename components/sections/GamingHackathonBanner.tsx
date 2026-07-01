@@ -213,33 +213,23 @@ export default function GamingHackathonBanner() {
           )}
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Link
+              href={`/hackathons/${slug}`}
+              className="group inline-flex items-center justify-center gap-3 rounded-2xl bg-bitcoin px-7 py-4 font-display text-base font-black uppercase tracking-wide text-black shadow-[0_0_42px_rgba(247,147,26,0.38)] transition-all hover:scale-[1.025] hover:shadow-[0_0_64px_rgba(247,147,26,0.55)] active:scale-[0.98]"
+            >
+              Ver hackatón
+              <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+            </Link>
             {upcoming ? (
               <a
                 href={youtube}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group inline-flex items-center justify-center gap-3 rounded-2xl bg-bitcoin px-7 py-4 font-display text-base font-black uppercase tracking-wide text-black shadow-[0_0_42px_rgba(247,147,26,0.38)] transition-all hover:scale-[1.025] hover:shadow-[0_0_64px_rgba(247,147,26,0.55)] active:scale-[0.98]"
+                className="group inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-white/[0.04] px-4 py-2.5 text-xs font-mono font-bold uppercase tracking-widest text-foreground-muted transition-colors hover:border-border-strong hover:text-foreground sm:justify-start"
               >
-                <MonitorPlay className="h-5 w-5" />
+                <MonitorPlay className="h-4 w-4" />
                 Ver en vivo
               </a>
-            ) : (
-              <Link
-                href={`/hackathons/${slug}`}
-                className="group inline-flex items-center justify-center gap-3 rounded-2xl bg-bitcoin px-7 py-4 font-display text-base font-black uppercase tracking-wide text-black shadow-[0_0_42px_rgba(247,147,26,0.38)] transition-all hover:scale-[1.025] hover:shadow-[0_0_64px_rgba(247,147,26,0.55)] active:scale-[0.98]"
-              >
-                Ver hackatón
-                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </Link>
-            )}
-            {upcoming ? (
-              <Link
-                href={`/hackathons/${slug}`}
-                className="group inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-white/[0.04] px-5 py-4 text-sm font-mono font-bold text-foreground-muted transition-colors hover:border-border-strong hover:text-foreground sm:justify-start"
-              >
-                Ver hackatón
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </Link>
             ) : (
               <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-white/[0.04] px-5 py-4 text-sm font-mono font-bold text-foreground-muted sm:justify-start">
                 <Trophy className="h-4 w-4 text-bitcoin" />
