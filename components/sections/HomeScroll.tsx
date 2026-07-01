@@ -288,7 +288,7 @@ function SlidePanel({ section }: { section: Section }) {
         </h2>
 
         {section.description && (
-          <p className="mb-8 max-w-2xl text-base leading-relaxed text-foreground-muted sm:text-lg">
+          <p className="mb-6 max-w-2xl text-base leading-relaxed text-foreground-muted sm:text-lg">
             {section.description}
           </p>
         )}
@@ -298,7 +298,7 @@ function SlidePanel({ section }: { section: Section }) {
         )}
 
         {section.pillars ? (
-          <TechMatrix pillars={section.pillars} className="mb-8" />
+          <TechMatrix pillars={section.pillars} className="mb-6" />
         ) : (
           <ul className="mb-8 space-y-3.5">
             {section.features?.map((f, fi) => {
@@ -599,7 +599,7 @@ function TechMatrix({
       onMouseMove={reduced ? undefined : handleMove}
       onMouseLeave={reduced ? undefined : handleLeave}
       className={cn(
-        "relative w-full h-[460px] sm:h-[520px] rounded-3xl border border-cyan/25 overflow-hidden",
+        "relative w-full h-[38vh] min-h-[280px] max-h-[440px] rounded-3xl border border-cyan/25 overflow-hidden",
         className,
       )}
       style={{
