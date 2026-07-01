@@ -7,12 +7,11 @@ import {
   useInView,
   useMotionValue,
   useReducedMotion,
-  useScroll,
   useSpring,
   useTransform,
-  useMotionValueEvent,
   type MotionValue,
 } from "framer-motion";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -138,287 +137,138 @@ const SECTIONS: Section[] = [
 const N = SECTIONS.length;
 
 export default function HomeScroll() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: containerRef });
-  const [activeSection, setActiveSection] = useState(0);
+  const [index, setIndex] = useState(0);
+  const swipeStartX = useRef<number | null>(null);
 
-  useMotionValueEvent(scrollYProgress, "change", (v) => {
-    const idx = Math.min(Math.floor(v * N), N - 1);
-    setActiveSection(idx);
-  });
-
-  const scrollToSection = useCallback((index: number) => {
-    if (!containerRef.current) return;
-    const container = containerRef.current;
-    const maxScroll = container.offsetHeight - window.innerHeight + container.offsetTop;
-    // Land ~20% into the section so features start revealing
-    const target = ((index + 0.2) / N) * maxScroll;
-    window.scrollTo({ top: target, behavior: "smooth" });
-  }, []);
+  const go = useCallback(
+    (i: number) => setIndex(Math.max(0, Math.min(N - 1, i))),
+    [],
+  );
 
   return (
-    <>
-      {/* ── Desktop ─────────────────────────────────────────────────── */}
-      <div
-        ref={containerRef}
-        style={{ height: `${N * 200}vh` }}
-        className="hidden lg:block"
-      >
-        <div className="sticky top-16 h-[calc(100vh-4rem)] flex overflow-hidden">
-          {/* Ambient glow */}
-          <div className="absolute inset-0 pointer-events-none -z-10">
-            {SECTIONS.map((s, i) => (
-              <div
-                key={s.id}
-                className={cn(
-                  "absolute inset-0 blur-[180px] opacity-0 transition-opacity duration-1000",
-                  i === activeSection && "opacity-[0.13]",
-                  i === 0 && "bg-bitcoin",
-                  i === 1 && "bg-nostr",
-                  i === 2 && "bg-cyan",
-                )}
-              />
-            ))}
-          </div>
-
-          {/* Section content panels — all absolutely stacked */}
-          <div className="flex-1 relative">
-            {SECTIONS.map((section, i) => (
-              <SectionPanel
-                key={section.id}
-                section={section}
-                index={i}
-                scrollYProgress={scrollYProgress}
-              />
-            ))}
-          </div>
-
-          {/* Timeline */}
-          <Timeline
-            activeSection={activeSection}
-            scrollYProgress={scrollYProgress}
-            onNavigate={scrollToSection}
+    <section
+      className="relative overflow-hidden bg-[#05070e]"
+      aria-roledescription="carrusel"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft") go(index - 1);
+        else if (e.key === "ArrowRight") go(index + 1);
+      }}
+    >
+      {/* Ambient glow tinted by the active section */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        {SECTIONS.map((s, i) => (
+          <div
+            key={s.id}
+            className={cn(
+              "absolute inset-0 blur-[170px] transition-opacity duration-700",
+              i === index ? "opacity-[0.13]" : "opacity-0",
+              i === 0 && "bg-bitcoin",
+              i === 1 && "bg-nostr",
+              i === 2 && "bg-cyan",
+            )}
           />
-        </div>
+        ))}
       </div>
 
-      {/* ── Mobile ──────────────────────────────────────────────────── */}
-      <div className="lg:hidden">
-        {SECTIONS.map((s) => {
-          const Icon = s.icon;
-          return (
-            <section
+      <div
+        className="relative overflow-hidden"
+        onPointerDown={(e) => {
+          swipeStartX.current = e.clientX;
+        }}
+        onPointerUp={(e) => {
+          const start = swipeStartX.current;
+          swipeStartX.current = null;
+          if (start == null) return;
+          const dx = e.clientX - start;
+          if (dx < -50 && index < N - 1) go(index + 1);
+          else if (dx > 50 && index > 0) go(index - 1);
+        }}
+      >
+        <div
+          className="flex transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          style={{
+            width: `${N * 100}%`,
+            transform: `translateX(-${(100 / N) * index}%)`,
+          }}
+        >
+          {SECTIONS.map((s, i) => (
+            <div
               key={s.id}
-              className="relative overflow-hidden min-h-[80vh] flex flex-col justify-center px-6 py-24 border-b border-border last:border-0"
+              className="shrink-0"
+              style={{ width: `${100 / N}%` }}
+              aria-hidden={i !== index}
             >
-              {s.id === "hackathons" && <FloatingTechIcons variant="mobile" />}
-              {s.id === "projects" && (
-                <Link
-                  href={s.href}
-                  className="absolute top-20 right-6 z-20 inline-flex items-center gap-3 px-7 py-4 rounded-2xl font-display font-black text-xl uppercase tracking-wide border-2 bg-nostr/15 border-nostr/60 text-nostr shadow-[0_0_50px_rgba(168,85,247,0.40)] hover:scale-[1.04] active:scale-[0.97] transition-all"
-                >
-                  {s.cta}
-                  <ArrowRight className="h-6 w-6" />
-                </Link>
-              )}
-              <div
-                className={cn(
-                  "relative z-10 text-[10px] font-mono tracking-[0.2em] uppercase mb-5",
-                  s.colorClass,
-                )}
-              >
-                {s.number} / 0{N}
-              </div>
-              <div
-                className={cn(
-                  "p-3 rounded-2xl border w-fit mb-6",
-                  s.bgClass,
-                  s.borderClass,
-                )}
-              >
-                <Icon className={cn("h-7 w-7", s.colorClass)} />
-              </div>
-              <h2 className="font-display text-4xl font-bold tracking-tight mb-3 relative z-10">
-                {s.label}
-              </h2>
-              {s.description && (
-                <p className="text-foreground-muted leading-relaxed mb-8 relative z-10">
-                  {s.description}
-                </p>
-              )}
-              {s.id === "projects" && (
-                <BigProjectCount count={PROJECTS.length} className="mb-8" />
-              )}
-              {s.pillars ? (
-                <TechMatrix pillars={s.pillars} className="mb-8" />
-              ) : (
-                <ul className="space-y-4 mb-8">
-                  {s.features?.map((f, fi) => {
-                    const FIcon = f.icon;
-                    return (
-                      <motion.li
-                        key={f.title}
-                        initial={{ opacity: 0, x: -12 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true, margin: "-40px" }}
-                        transition={{ duration: 0.45, delay: fi * 0.08, ease: "easeOut" }}
-                        className="flex items-start gap-3"
-                      >
-                        <span
-                          className={cn(
-                            "p-1.5 rounded-lg border shrink-0 mt-0.5",
-                            s.bgClass,
-                            s.borderClass,
-                          )}
-                        >
-                          <FIcon className={cn("h-3.5 w-3.5", s.colorClass)} />
-                        </span>
-                        <div>
-                          <div className="font-semibold text-sm">{f.title}</div>
-                          {f.description && (
-                            <div className="text-sm text-foreground-muted mt-0.5">
-                              {f.description}
-                            </div>
-                          )}
-                        </div>
-                      </motion.li>
-                    );
-                  })}
-                </ul>
-              )}
-              {s.techTags && (
-                <TechChips
-                  tags={s.techTags}
-                  colorClass={s.colorClass}
-                  bgClass={s.bgClass}
-                  borderClass={s.borderClass}
-                  className="mb-8"
-                />
-              )}
-              {s.stats && (
-                <StatsRow
-                  stats={s.stats}
-                  colorClass={s.colorClass}
-                  borderClass={s.borderClass}
-                  className="mb-8"
-                />
-              )}
-              {s.id === "projects" && (
-                <ProjectMarquee
-                  names={PROJECTS.map((p) => p.name)}
-                  className="mb-8"
-                />
-              )}
-              {s.id !== "projects" && (
-                <Link
-                  href={s.href}
-                  className={cn(
-                    "inline-flex items-center gap-3 px-7 py-4 rounded-2xl font-display font-black text-xl uppercase tracking-wide border-2 w-fit transition-all hover:scale-[1.04] active:scale-[0.97]",
-                    s.bgClass,
-                    s.borderClass,
-                    s.colorClass,
-                  )}
-                >
-                  {s.cta} <ArrowRight className="h-6 w-6" />
-                </Link>
-              )}
-            </section>
-          );
-        })}
+              <SlidePanel section={s} />
+            </div>
+          ))}
+        </div>
+
+        {/* Arrows */}
+        <button
+          type="button"
+          onClick={() => go(index - 1)}
+          disabled={index === 0}
+          aria-label="Sección anterior"
+          className="absolute left-3 top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background-card/70 p-2.5 text-foreground-muted backdrop-blur-sm transition-colors hover:border-border-strong hover:text-foreground disabled:pointer-events-none disabled:opacity-0 sm:flex lg:left-6"
+        >
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+        <button
+          type="button"
+          onClick={() => go(index + 1)}
+          disabled={index === N - 1}
+          aria-label="Sección siguiente"
+          className="absolute right-3 top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background-card/70 p-2.5 text-foreground-muted backdrop-blur-sm transition-colors hover:border-border-strong hover:text-foreground disabled:pointer-events-none disabled:opacity-0 sm:flex lg:right-6"
+        >
+          <ChevronRight className="h-6 w-6" />
+        </button>
       </div>
-    </>
+
+      {/* Dots */}
+      <div className="flex items-center justify-center gap-3 pb-12 pt-2">
+        {SECTIONS.map((s, i) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => go(i)}
+            aria-label={`Ir a ${s.label}`}
+            aria-current={i === index}
+            className="group py-2"
+          >
+            <span
+              className={cn(
+                "block h-2.5 rounded-full transition-all duration-300",
+                i === index
+                  ? cn("w-8", s.dotBgClass)
+                  : "w-2.5 bg-foreground-subtle/40 group-hover:bg-foreground-subtle",
+              )}
+            />
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
-/* ── Section panel ────────────────────────────────────────────────────── */
-function SectionPanel({
-  section,
-  index,
-  scrollYProgress,
-}: {
-  section: Section;
-  index: number;
-  scrollYProgress: MotionValue<number>;
-}) {
-  const span = 1 / N;
-  const start = index * span;
-  const end = start + span;
-
-  // Whole-panel opacity: fade in quickly, stay, fade out at end
-  const opacity = useTransform(
-    scrollYProgress,
-    [start, start + span * 0.07, end - span * 0.07, end],
-    [0, 1, 1, 0],
-  );
-  const yShift = useTransform(
-    scrollYProgress,
-    [start, start + span * 0.07],
-    [36, 0],
-  );
-
-  // Feature reveals — staggered across 15%-65% of the section's range
-  const featurePcts = [0.15, 0.32, 0.49];
-  const featureOpacities = featurePcts.map((pct) =>
-    useTransform(
-      scrollYProgress,
-      [start + span * pct, start + span * (pct + 0.12)],
-      [0, 1],
-    ),
-  );
-  const featureYs = featurePcts.map((pct) =>
-    useTransform(
-      scrollYProgress,
-      [start + span * pct, start + span * (pct + 0.12)],
-      [18, 0],
-    ),
-  );
-  const ctaOpacity = useTransform(
-    scrollYProgress,
-    [start + span * 0.66, start + span * 0.76],
-    [0, 1],
-  );
-
-  // Only the visible panel should capture clicks. Without this, faded panels
-  // stacked on top (later in DOM order) intercept pointer events and block
-  // the active panel's CTA.
-  const panelPointerEvents = useTransform(opacity, (o) =>
-    o > 0.5 ? "auto" : "none",
-  );
-
+/* ── Slide panel ──────────────────────────────────────────────────────── */
+function SlidePanel({ section }: { section: Section }) {
   const Icon = section.icon;
-
   return (
-    <motion.div
-      style={{ opacity, y: yShift }}
-      className="absolute inset-0 flex items-center px-12 xl:px-20 py-12 pointer-events-none"
-    >
+    <div className="relative flex h-[86vh] min-h-[600px] max-h-[940px] flex-col justify-center overflow-hidden px-6 sm:px-12 lg:px-20">
       {section.id === "hackathons" && <FloatingTechIcons variant="desktop" />}
-      {section.id === "projects" && (
-        <motion.div
-          style={{ opacity: ctaOpacity, pointerEvents: panelPointerEvents }}
-          className="absolute top-16 xl:top-24 right-12 xl:right-20 z-20"
-        >
-          <Link
-            href={section.href}
-            className="group inline-flex items-center gap-3 rounded-2xl border-2 border-nostr/60 bg-nostr/15 px-10 py-6 font-display font-black text-2xl xl:text-3xl uppercase tracking-wide text-nostr shadow-[0_0_60px_rgba(168,85,247,0.45)] hover:scale-[1.04] active:scale-[0.97] transition-all"
-          >
-            {section.cta}
-            <ArrowRight className="h-7 w-7 group-hover:translate-x-1 transition-transform" />
-          </Link>
-        </motion.div>
-      )}
-      <motion.div
+
+      <div
         className={cn(
-          "relative z-10 w-full",
-          section.id === "tech" ? "max-w-3xl" : "max-w-lg",
+          "relative z-10 mx-auto w-full",
+          section.id === "tech" ? "max-w-4xl" : "max-w-2xl lg:max-w-3xl",
         )}
-        style={{ pointerEvents: panelPointerEvents }}
       >
-        {/* Number + icon row */}
-        <div className="flex items-center gap-3 mb-7">
+        {/* Number + icon */}
+        <div className="mb-6 flex items-center gap-3">
           <span
             className={cn(
-              "text-[11px] font-mono tracking-[0.2em] uppercase",
+              "text-[11px] font-mono uppercase tracking-[0.2em]",
               section.colorClass,
             )}
           >
@@ -426,7 +276,7 @@ function SectionPanel({
           </span>
           <div
             className={cn(
-              "p-2 rounded-xl border",
+              "rounded-xl border p-2",
               section.bgClass,
               section.borderClass,
             )}
@@ -435,52 +285,50 @@ function SectionPanel({
           </div>
         </div>
 
-        {/* Title */}
-        <h2 className="font-display text-5xl xl:text-6xl 2xl:text-7xl font-bold tracking-tight mb-5 leading-[0.95]">
+        <h2 className="mb-4 font-display text-4xl font-bold leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl">
           {section.label}
         </h2>
 
-        {/* Description */}
         {section.description && (
-          <p className="text-base xl:text-lg text-foreground-muted leading-relaxed mb-10">
+          <p className="mb-8 max-w-2xl text-base leading-relaxed text-foreground-muted sm:text-lg">
             {section.description}
           </p>
         )}
 
         {section.id === "projects" && (
-          <BigProjectCount count={PROJECTS.length} className="mb-10" />
+          <BigProjectCount count={PROJECTS.length} className="mb-8" />
         )}
 
         {section.pillars ? (
-          <TechMatrix pillars={section.pillars} className="mb-10" />
+          <TechMatrix pillars={section.pillars} className="mb-8" />
         ) : (
-          <ul className="space-y-4 mb-10">
+          <ul className="mb-8 space-y-3.5">
             {section.features?.map((f, fi) => {
               const FIcon = f.icon;
               return (
                 <motion.li
                   key={f.title}
-                  style={{
-                    opacity: featureOpacities[fi],
-                    y: featureYs[fi],
-                  }}
-                  className="flex items-start gap-4"
+                  initial={{ opacity: 0, x: -12 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ duration: 0.45, delay: fi * 0.08, ease: "easeOut" }}
+                  className="flex items-start gap-3"
                 >
                   <span
                     className={cn(
-                      "p-2 rounded-xl border shrink-0 mt-0.5",
+                      "mt-0.5 shrink-0 rounded-lg border p-1.5",
                       section.bgClass,
                       section.borderClass,
                     )}
                   >
-                    <FIcon className={cn("h-4 w-4", section.colorClass)} />
+                    <FIcon className={cn("h-3.5 w-3.5", section.colorClass)} />
                   </span>
                   <div>
-                    <div className="font-semibold text-sm text-foreground">
+                    <div className="text-sm font-semibold sm:text-base">
                       {f.title}
                     </div>
                     {f.description && (
-                      <div className="text-sm text-foreground-muted mt-0.5">
+                      <div className="mt-0.5 text-sm text-foreground-muted">
                         {f.description}
                       </div>
                     )}
@@ -496,202 +344,27 @@ function SectionPanel({
             stats={section.stats}
             colorClass={section.colorClass}
             borderClass={section.borderClass}
-            className="mb-10"
+            className="mb-8 max-w-md"
           />
         )}
 
         {section.id === "projects" && (
-          <ProjectMarquee
-            names={PROJECTS.map((p) => p.name)}
-            className="mb-10"
-          />
+          <ProjectMarquee names={PROJECTS.map((p) => p.name)} className="mb-8" />
         )}
 
-        {/* CTA — hidden for projects (rendered top-right) */}
-        {section.id !== "projects" && (
-          <motion.div style={{ opacity: ctaOpacity }}>
-            <Link
-              href={section.href}
-              className={cn(
-                "group inline-flex items-center gap-3 px-8 py-5 rounded-2xl font-display font-black text-xl xl:text-2xl uppercase tracking-wide",
-                "border-2 transition-all hover:scale-[1.04] active:scale-[0.97]",
-                section.bgClass,
-                section.borderClass,
-                section.colorClass,
-              )}
-            >
-              {section.cta}
-              <ArrowRight className="h-6 w-6 xl:h-7 xl:w-7 group-hover:translate-x-1 transition-transform" />
-            </Link>
-          </motion.div>
-        )}
-      </motion.div>
-    </motion.div>
-  );
-}
-
-/* ── Timeline ─────────────────────────────────────────────────────────── */
-function Timeline({
-  activeSection,
-  scrollYProgress,
-  onNavigate,
-}: {
-  activeSection: number;
-  scrollYProgress: MotionValue<number>;
-  onNavigate: (index: number) => void;
-}) {
-  // Fill line goes from dot 0 to dot N-1 as scrollYProgress goes 0 → (N-1)/N
-  const fillPct = useTransform(
-    scrollYProgress,
-    [0, (N - 1) / N],
-    ["0%", "100%"],
-  );
-
-  return (
-    <div className="w-48 xl:w-56 shrink-0 flex flex-col justify-center items-start py-16 pr-10 xl:pr-16">
-      {/* Track + dots container — centred vertically, 55% of panel height */}
-      <div className="relative w-full" style={{ height: "55%" }}>
-        {/* Background track */}
-        <div className="absolute left-[7px] top-3 bottom-3 w-[2px] rounded-full bg-border" />
-
-        {/* Filled track */}
-        <motion.div
-          className="absolute left-[7px] top-3 w-[2px] rounded-full origin-top"
-          style={{
-            height: fillPct,
-            background:
-              "linear-gradient(to bottom, #f7931a 0%, #a855f7 50%, #22d3ee 100%)",
-          }}
-        />
-
-        {/* Dots + labels at top / middle / bottom */}
-        <div className="absolute inset-0 flex flex-col justify-between">
-          {SECTIONS.map((s, i) => {
-            const isActive = i === activeSection;
-            const isPast = i < activeSection;
-
-            return (
-              <button
-                key={s.id}
-                onClick={() => onNavigate(i)}
-                className="flex items-center gap-3.5 group text-left"
-                aria-label={`Ir a ${s.label}`}
-              >
-                {/* Dot */}
-                <div
-                  className={cn(
-                    "relative h-[14px] w-[14px] rounded-full border-2 shrink-0 transition-all duration-500",
-                    isActive
-                      ? cn("border-current scale-125", s.colorClass)
-                      : isPast
-                        ? cn("border-current", s.colorClass)
-                        : "border-foreground-subtle bg-background",
-                  )}
-                >
-                  {/* Inner fill */}
-                  {(isActive || isPast) && (
-                    <span
-                      className={cn(
-                        "absolute inset-0 m-auto rounded-full transition-all duration-500",
-                        isActive ? "h-[5px] w-[5px] animate-pulse" : "h-[4px] w-[4px]",
-                        s.dotBgClass,
-                      )}
-                    />
-                  )}
-
-                  {/* Active glow ring */}
-                  {isActive && (
-                    <span
-                      className={cn(
-                        "absolute -inset-1.5 rounded-full opacity-25 animate-ping",
-                        s.dotBgClass,
-                      )}
-                    />
-                  )}
-                </div>
-
-                {/* Label */}
-                <div>
-                  <p
-                    className={cn(
-                      "text-[11px] font-mono tracking-[0.15em] uppercase leading-none transition-all duration-300",
-                      isActive
-                        ? cn("font-bold", s.colorClass)
-                        : isPast
-                          ? "text-foreground-muted"
-                          : "text-foreground-subtle group-hover:text-foreground-muted",
-                    )}
-                  >
-                    {s.label}
-                  </p>
-                  <p
-                    className={cn(
-                      "text-[10px] leading-snug mt-0.5 transition-all duration-300",
-                      isActive
-                        ? "text-foreground-subtle"
-                        : "text-transparent group-hover:text-foreground-subtle",
-                    )}
-                  >
-                    {s.tagline}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Tech chips ───────────────────────────────────────────────────────── */
-function TechChips({
-  tags,
-  colorClass,
-  bgClass,
-  borderClass,
-  className,
-  orientation = "horizontal",
-}: {
-  tags: string[];
-  colorClass: string;
-  bgClass: string;
-  borderClass: string;
-  className?: string;
-  orientation?: "horizontal" | "vertical";
-}) {
-  return (
-    <div
-      className={cn(
-        orientation === "vertical"
-          ? "flex flex-col gap-2 items-start"
-          : "flex flex-wrap gap-2",
-        className,
-      )}
-    >
-      {tags.map((t, i) => (
-        <motion.span
-          key={t}
-          initial={{ opacity: 0, scale: 0.85, x: orientation === "vertical" ? 12 : 0, y: orientation === "vertical" ? 0 : 6 }}
-          whileInView={{ opacity: 1, scale: 1, x: 0, y: 0 }}
-          viewport={{ once: true, margin: "-30px" }}
-          transition={{
-            duration: 0.4,
-            delay: 0.05 + i * 0.08,
-            ease: [0.22, 1, 0.36, 1],
-          }}
-          whileHover={{ y: -2, transition: { duration: 0.2 } }}
+        <Link
+          href={section.href}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-mono font-bold tracking-[0.18em] uppercase",
-            bgClass,
-            borderClass,
-            colorClass,
+            "group inline-flex w-fit items-center gap-3 rounded-2xl border-2 px-7 py-4 font-display text-lg font-black uppercase tracking-wide transition-all hover:scale-[1.04] active:scale-[0.97] sm:text-xl",
+            section.bgClass,
+            section.borderClass,
+            section.colorClass,
           )}
         >
-          <span className={cn("h-1.5 w-1.5 rounded-full animate-pulse", colorClass.replace("text-", "bg-"))} />
-          {t}
-        </motion.span>
-      ))}
+          {section.cta}
+          <ArrowRight className="h-6 w-6 transition-transform group-hover:translate-x-1" />
+        </Link>
+      </div>
     </div>
   );
 }
