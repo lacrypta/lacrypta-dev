@@ -25,7 +25,6 @@ export default async function ProjectsPage() {
             de La Crypta.
           </span>
         }
-        description="Proyectos grandes y chicos, lanzados y en progreso, todos open source. Construidos por la comunidad de La Crypta en Buenos Aires y más allá."
       />
       <ProjectsGrid initialNostrProjects={initialNostrProjects} />
     </>
