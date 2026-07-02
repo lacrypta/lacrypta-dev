@@ -198,6 +198,9 @@ export default function HomeScroll() {
               className="shrink-0"
               style={{ width: `${100 / N}%` }}
               aria-hidden={i !== index}
+              // Keep offscreen slides out of the tab order too — otherwise their
+              // CTA <Link> stays keyboard-focusable (React 19 boolean `inert`).
+              inert={i !== index}
             >
               <SlidePanel section={s} />
             </div>
