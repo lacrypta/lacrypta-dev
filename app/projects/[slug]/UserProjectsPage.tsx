@@ -11,8 +11,9 @@ import {
 } from "@/lib/userProjects";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
-import { hackathonSlugForId } from "@/lib/hackathons";
 import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
+import { projectHref } from "@/lib/projectLinks";
+import { seedProjectEntities } from "@/lib/entityStore";
 
 const STATUS_BADGE: Record<string, string> = {
   official:  "bg-bitcoin/10 border-bitcoin/40 text-bitcoin",
@@ -30,6 +31,22 @@ export default function UserProjectsPage({ pubkey }: { pubkey: string }) {
   useEffect(() => {
     fetchUserProjects(pubkey, TOP10_RELAYS).then((doc) => {
       setProjects(doc.projects);
+      // Seed the entity store so project-detail navigations paint instantly.
+      seedProjectEntities(
+        doc.projects.map((p) => ({
+          id: p.id,
+          slug: p.slug,
+          name: p.name,
+          description: p.description,
+          logo: p.logo,
+          cover: p.cover,
+          status: p.status,
+          hackathon: p.hackathon,
+          author: pubkey,
+          tech: p.tech,
+          updatedAt: p.updatedAt,
+        })),
+      );
     });
     fetchAuthorPictures([pubkey], TOP10_RELAYS).then((pics) => {
       setAuthorPicture(pics.get(pubkey));
@@ -85,9 +102,7 @@ export default function UserProjectsPage({ pubkey }: { pubkey: string }) {
         ) : (
           <div className="space-y-3">
             {projects.map((p) => {
-              const href = p.hackathon
-                ? `/hackathons/${hackathonSlugForId(p.hackathon)}/${p.id}`
-                : `/projects/${pubkey}/${p.id}`;
+              const href = projectHref(p);
               const team = dedupeSoldierProfileMembers(p.team);
               return (
                 <Link

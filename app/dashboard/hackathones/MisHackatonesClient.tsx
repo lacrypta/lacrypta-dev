@@ -12,6 +12,7 @@ import {
   type UserProject,
 } from "@/lib/userProjects";
 import { HACKATHONS, hackathonSlugForId } from "@/lib/hackathons";
+import { projectHref } from "@/lib/projectLinks";
 import { cn } from "@/lib/cn";
 
 const HACKATHON_NAME = new Map(HACKATHONS.map((h) => [h.id, h.name]));
@@ -140,7 +141,7 @@ export default function MisHackatonesClient() {
                   {g.projects.map((p) => (
                     <li key={p.id}>
                       <Link
-                        href={`/hackathons/${hackathonSlugForId(g.hackathonId)}/${p.id}`}
+                        href={projectHref(p)}
                         className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-white/[0.03] transition-colors group"
                       >
                         <div className="min-w-0">

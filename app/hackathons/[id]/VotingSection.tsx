@@ -35,7 +35,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import type { Auth } from "@/lib/auth";
-import { hackathonSlugForId } from "@/lib/hackathons";
+import { votingProjectHref } from "@/lib/projectLinks";
 import { getSigner, type SignedEvent } from "@/lib/nostrSigner";
 import { useToast } from "@/components/Toast";
 import { useScrollLock } from "@/lib/useScrollLock";
@@ -565,7 +565,6 @@ export default function VotingSection(props: Partial<VotingSectionProps> = {}) {
 
 function VotingSectionInner() {
   const {
-    hackathonId,
     hackathonName,
     auth,
     ready,
@@ -692,14 +691,12 @@ function VotingSectionInner() {
                     <FinalResultsTable
                       judges={results.judges ?? []}
                       rows={results.final}
-                      hackathonId={hackathonId}
                     />
                   ) : (
                     results.winners &&
                     results.winners.length > 0 && (
                       <WinnersPanel
                         winners={results.winners}
-                        hackathonId={hackathonId}
                         countedBallots={results.countedBallotIds?.length ?? 0}
                       />
                     )
@@ -1920,11 +1917,9 @@ const MEDAL = ["🥇", "🥈", "🥉"];
 
 function WinnersPanel({
   winners,
-  hackathonId,
   countedBallots,
 }: {
   winners: VotingWinner[];
-  hackathonId: string;
   countedBallots: number;
 }) {
   return (
@@ -1945,7 +1940,7 @@ function WinnersPanel({
               {MEDAL[w.position - 1] ?? `${w.position}°`}
             </span>
             <Link
-              href={`/hackathons/${hackathonSlugForId(hackathonId)}/${w.projectId}`}
+              href={votingProjectHref(w.projectId)}
               className="flex-1 min-w-0 text-sm font-semibold truncate hover:text-bitcoin transition-colors"
             >
               {w.projectName}

@@ -41,6 +41,7 @@ import {
 import { getSoldiers, type Soldier } from "@/lib/soldiers";
 import { cn } from "@/lib/cn";
 import { breadcrumbLd, eventLd, jsonLdScript } from "@/lib/jsonld";
+import { SITE_URL } from "@/lib/siteUrl";
 import {
   getNostrHackathonSubmissions,
   NOSTR_PROJECTS_TAG,
@@ -48,7 +49,13 @@ import {
 } from "@/lib/nostrCache";
 import { getCachedNostrProfile } from "@/lib/nostrProfileCache";
 import { getCachedVotingPeriod } from "@/lib/votingCache";
-import { nostrVotingTag } from "@/lib/nostrCacheTags";
+import {
+  NOSTR_PROJECT_REGISTRY_TAG,
+  nostrVotingTag,
+} from "@/lib/nostrCacheTags";
+import { curatedProjectHref } from "@/lib/projectLinks";
+import { getProjectRegistryState } from "@/lib/projectRegistry";
+import { attachProjectSlugs } from "@/lib/projectResolver";
 import HackathonProjectsList from "./HackathonProjectsList";
 import HackathonTabs from "./HackathonTabs";
 import { VotingProvider, HackathonVotingActions } from "./VotingSection";
@@ -444,6 +451,9 @@ export default async function HackathonPage({
   "use cache";
   cacheTag(NOSTR_PROJECTS_TAG);
   cacheTag(NOSTR_SUBMISSIONS_TAG);
+  // Registry slugs decorate the submissions below; inner "use cache" tags
+  // don't bubble, so register the registry tag at page level too.
+  cacheTag(NOSTR_PROJECT_REGISTRY_TAG);
   const { id: routeParam } = await params;
   const hackathon = getHackathon(routeParam);
   if (!hackathon) notFound();
@@ -478,9 +488,16 @@ export default async function HackathonPage({
   const prizeByProjectId = new Map(
     awards.map((a) => [a.project.id, a] as const),
   );
-  const nostrSubmissions = (await getNostrHackathonSubmissions(id)).map(
-    fromCachedNostrSubmission,
-  );
+  const [cachedSubmissions, projectRegistry] = await Promise.all([
+    getNostrHackathonSubmissions(id),
+    getProjectRegistryState(),
+  ]);
+  // Attach canonical registry slugs so client components can link
+  // `/projects/<slug>` without carrying registry state.
+  const nostrSubmissions = attachProjectSlugs(
+    cachedSubmissions,
+    projectRegistry,
+  ).map(fromCachedNostrSubmission);
   const prizeBadgeIssuerPubkey =
     status === "closed"
       ? await getCachedHackathonBadgePublisherPubkey().catch(() => "")
@@ -505,11 +522,11 @@ export default async function HackathonPage({
       {jsonLdScript(eventLd(hackathon), "ld-event")}
       {jsonLdScript(
         breadcrumbLd([
-          { name: "Inicio", url: "https://lacrypta.dev" },
-          { name: "Hackatones", url: "https://lacrypta.dev/hackathons" },
+          { name: "Inicio", url: SITE_URL },
+          { name: "Hackatones", url: `${SITE_URL}/hackathons` },
           {
             name: hackathon.name,
-            url: `https://lacrypta.dev/hackathons/${hackathonSlug(hackathon)}`,
+            url: `${SITE_URL}/hackathons/${hackathonSlug(hackathon)}`,
           },
         ]),
         "ld-breadcrumbs",
@@ -596,7 +613,7 @@ export default async function HackathonPage({
        *  (they need the VotingProvider context, so the hero lives inside it).
        *  Renders nothing until voting has been opened at least once (admins see
        *  the open-voting control). */}
-      <Suspense fallback={null}>
+      <Suspense fallback={<HackathonSectionSkeleton />}>
         <VotingProvider
           hackathonId={hackathon.id}
           hackathonName={hackathon.name}
@@ -662,7 +679,7 @@ export default async function HackathonPage({
                                   className="flex items-center gap-2"
                                 >
                                   <Link
-                                    href={`/hackathons/${hackathonSlug(hackathon)}/${a.project.id}`}
+                                    href={curatedProjectHref(a.project.id)}
                                     className={cn(
                                       "group flex min-w-0 flex-1 items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
                                       a.position === 1
@@ -843,6 +860,38 @@ export default async function HackathonPage({
           />
         </VotingProvider>
       </Suspense>
+    </div>
+  );
+}
+
+/**
+ * Suspense fallback for the tabs + projects section: reserves the vertical
+ * space and sketches the tab bar, list header and a few project rows so cold
+ * navigations show structure instead of a blank region.
+ */
+function HackathonSectionSkeleton() {
+  return (
+    <div
+      aria-hidden
+      className="min-h-[600px] py-12 border-t border-border animate-pulse"
+    >
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-36 rounded-full bg-white/[0.06]" />
+          <div className="h-9 w-36 rounded-full bg-white/[0.04]" />
+          <div className="h-9 w-28 rounded-full bg-white/[0.04]" />
+        </div>
+        <div className="mt-10 h-3 w-52 rounded bg-white/[0.05]" />
+        <div className="mt-3 h-8 w-64 rounded bg-white/[0.07]" />
+        <div className="mt-8 space-y-2">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="h-20 rounded-xl border border-border bg-background-card"
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

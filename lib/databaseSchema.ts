@@ -5,7 +5,7 @@
  *
  * Keep in sync with lib/databaseCatalog.ts (CATEGORIES) and the real types in
  * lib/hackathons.ts, lib/userProjects.ts, lib/voting.ts, lib/nostrReports.ts,
- * lib/hackathonBadges.ts and lib/soldiers.ts.
+ * lib/hackathonBadges.ts, lib/soldiers.ts and lib/projectRegistryContract.ts.
  */
 
 export type SchemaAccent =
@@ -338,6 +338,42 @@ export const SCHEMA_ENTITIES: SchemaEntity[] = [
     relations: [
       { to: "hackathon", kind: "belongsTo", label: "de un hackatón", via: "h" },
       { to: "project", kind: "references", label: "rankea proyectos", via: "podium" },
+    ],
+  },
+  {
+    id: "project-registry",
+    label: "Registro de slugs",
+    kind: 30078,
+    group: "event",
+    accent: "cyan",
+    source: "lib/projectRegistryContract.ts",
+    summary:
+      "Registro oficial de slugs firmado por La Crypta. Evento único que fija la URL canónica /projects/<slug> de cada proyecto.",
+    categoryId: "project-slug-registry",
+    replaceability: "parameterized",
+    tTag: "lacrypta-dev-projects-registry",
+    dTag: "lacrypta.dev:projects:registry",
+    fields: [
+      { name: "version", type: "number" },
+      { name: "updatedAt", type: "ISO string" },
+      {
+        name: "entries",
+        type: "ProjectRegistryEntry[]",
+        kind: "ref",
+        ref: "project",
+        note: "{ slug; id; author?; hackathon?; name; curated?; registeredAt }",
+      },
+    ],
+    tags: [
+      { tag: "d", value: "lacrypta.dev:projects:registry", note: "evento único" },
+      { tag: "t", value: "lacrypta-dev-projects-registry" },
+      { tag: "client", value: "La Crypta Dev" },
+      { tag: "projects", value: "<count>", note: "cantidad de entradas" },
+    ],
+    relations: [
+      { to: "project", kind: "references", label: "fija slugs de proyectos", via: "entries" },
+      { to: "hackathon", kind: "references", label: "agrupa por hackatón", via: "entries.hackathon" },
+      { to: "profile", kind: "references", label: "autor de cada entrada", via: "entries.author" },
     ],
   },
   {

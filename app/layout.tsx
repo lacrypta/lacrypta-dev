@@ -13,6 +13,7 @@ import {
   GoogleTagManagerScript,
 } from "@/components/GoogleTagManager";
 import { jsonLdScript, organizationLd } from "@/lib/jsonld";
+import { SITE_URL } from "@/lib/siteUrl";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -33,7 +34,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://lacrypta.dev"),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "La Crypta Dev — Explorando Bitcoin, Lightning y Nostr",
     template: "%s · La Crypta Dev",
@@ -62,7 +63,7 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "La Crypta Dev",
     locale: "es_AR",
-    url: "https://lacrypta.dev",
+    url: SITE_URL,
   },
   twitter: {
     card: "summary_large_image",

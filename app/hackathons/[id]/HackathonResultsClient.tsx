@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Trophy, Loader2 } from "lucide-react";
 import { useHackathonResults, type HackathonResults } from "@/lib/nostrReports";
-import { formatSats, hackathonSlugForId } from "@/lib/hackathons";
+import { formatSats } from "@/lib/hackathons";
+import { curatedProjectHref, projectHref } from "@/lib/projectLinks";
 import { cn } from "@/lib/cn";
 
 function medal(position: number): string {
@@ -12,6 +13,20 @@ function medal(position: number): string {
   if (position === 2) return "🥈";
   if (position === 3) return "🥉";
   return `#${position}`;
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Results only carry the winner's project id. Nostr submissions use uuid ids
+ * (their canonical URL is the id itself until registered); curated ids are
+ * human slugs whose canonical form is the lowercased id.
+ */
+function winnerHref(projectId: string): string {
+  return UUID_RE.test(projectId)
+    ? projectHref({ id: projectId })
+    : curatedProjectHref(projectId);
 }
 
 /**
@@ -134,13 +149,7 @@ function PodiumStep({
   );
 }
 
-function PrizeList({
-  hackathonId,
-  results,
-}: {
-  hackathonId: string;
-  results: HackathonResults;
-}) {
+function PrizeList({ results }: { results: HackathonResults }) {
   return (
     <ol className="space-y-2">
       {results.winners
@@ -149,7 +158,7 @@ function PrizeList({
         .map((w) => (
           <li key={w.projectId}>
             <Link
-              href={`/hackathons/${hackathonSlugForId(hackathonId)}/${w.projectId}`}
+              href={winnerHref(w.projectId)}
               className={cn(
                 "group flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
                 w.position === 1
@@ -197,5 +206,5 @@ export default function HackathonResultsClient({
     );
   }
 
-  return <PrizeList hackathonId={hackathonId} results={results} />;
+  return <PrizeList results={results} />;
 }

@@ -19,6 +19,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useHackathonTab } from "@/lib/hackathonTabsContext";
 import { hackathonSlugForId, prizeForPosition, formatSats } from "@/lib/hackathons";
+import { votingProjectHref } from "@/lib/projectLinks";
 import { useVotingLive } from "@/lib/useVotingLive";
 import { useAdminLiveTally } from "@/lib/useAdminLiveTally";
 import {
@@ -615,7 +616,6 @@ function ClosedHero({
   onCta: (e: React.MouseEvent) => void;
   variant: "home" | "page";
 }) {
-  const slug = hackathonSlugForId(hackathonId);
   // The podium reflects the DEFINITIVE result: the combined 70/30 ranking when
   // judges' scores were merged (headline metric = final score), else the raw
   // popular vote (metric = votes). The detailed breakdown table renders below.
@@ -687,7 +687,6 @@ function ClosedHero({
                 <PodiumCard
                   key={podium[idx].projectId}
                   entry={podium[idx]}
-                  slug={slug}
                   hackathonId={hackathonId}
                   recipientPubkey={recipientByProject.get(podium[idx].projectId) ?? null}
                 />
@@ -701,7 +700,6 @@ function ClosedHero({
                 <RunnerRow
                   key={e.projectId}
                   entry={e}
-                  slug={slug}
                   index={i}
                   hackathonId={hackathonId}
                   recipientPubkey={recipientByProject.get(e.projectId) ?? null}
@@ -720,7 +718,6 @@ function ClosedHero({
         <FinalResultsTable
           judges={period.results!.judges ?? []}
           rows={period.results!.final!}
-          hackathonId={hackathonId}
         />
       )}
     </div>
@@ -739,12 +736,10 @@ type PodiumEntry = {
 
 function PodiumCard({
   entry,
-  slug,
   hackathonId,
   recipientPubkey,
 }: {
   entry: PodiumEntry;
-  slug: string;
   hackathonId: string;
   recipientPubkey: string | null;
 }) {
@@ -787,7 +782,7 @@ function PodiumCard({
         {pos}°
       </span>
       <Link
-        href={`/hackathons/${slug}/${entry.projectId}`}
+        href={votingProjectHref(entry.projectId)}
         title={entry.projectName}
         className={cn(
           "mt-1.5 block w-full truncate px-1 font-semibold hover:underline",
@@ -830,13 +825,11 @@ function PodiumCard({
 
 function RunnerRow({
   entry,
-  slug,
   index,
   hackathonId,
   recipientPubkey,
 }: {
   entry: PodiumEntry;
-  slug: string;
   index: number;
   hackathonId: string;
   recipientPubkey: string | null;
@@ -851,7 +844,7 @@ function RunnerRow({
       className="flex items-center gap-2"
     >
       <Link
-        href={`/hackathons/${slug}/${entry.projectId}`}
+        href={votingProjectHref(entry.projectId)}
         className="group flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-border bg-white/[0.02] px-3 py-2.5 transition-colors hover:bg-white/[0.05]"
       >
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-white/[0.03] font-display text-sm font-black tabular-nums text-foreground-muted">

@@ -13,6 +13,12 @@ import {
 } from "lucide-react";
 import { GithubIcon } from "@/components/BrandIcons";
 import { hackathonSlugForId } from "@/lib/hackathons";
+import { curatedProjectHref, projectHref } from "@/lib/projectLinks";
+import {
+  getProjectRegistryState,
+  registryEntryForProject,
+  type ProjectRegistryState,
+} from "@/lib/projectRegistry";
 import { HACKATHON_LABELS } from "@/lib/projects";
 import {
   getSoldierBySlug,
@@ -102,6 +108,10 @@ export default async function SoldierProfilePage({
   const profile = soldier.pubkey
     ? await getCachedNostrProfile(soldier.pubkey)
     : null;
+
+  // Registry slugs for project links — shares the cached relay round-trip
+  // with the project pages, no extra fetch.
+  const registry = await getProjectRegistryState();
 
   const displayName =
     profile?.display_name || profile?.name || soldier.name;
@@ -262,7 +272,11 @@ export default async function SoldierProfilePage({
             >
               <ul className="divide-y divide-border -my-2">
                 {sortedProjects.map((p, i) => (
-                  <ProjectRow key={`${p.projectId}-${i}`} project={p} />
+                  <ProjectRow
+                    key={`${p.projectId}-${i}`}
+                    project={p}
+                    href={soldierProjectHref(p, registry)}
+                  />
                 ))}
               </ul>
             </Card>
@@ -431,22 +445,31 @@ function Card({
   );
 }
 
-function projectHref(project: SoldierProjectRef): string {
-  // 1. Hackathon-scoped project → /hackathons/<h>/<projectId>
-  if (project.hackathonId) {
-    return `/hackathons/${hackathonSlugForId(project.hackathonId)}/${project.projectId}`;
+function soldierProjectHref(
+  project: SoldierProjectRef,
+  registry: ProjectRegistryState,
+): string {
+  // Curated ids are their own canonical slug (lowercased).
+  if (project.source === "curated") {
+    return curatedProjectHref(project.projectId);
   }
-  // 2. Nostr-only project with known author → /projects/<author>/<projectId>
-  if (project.source === "nostr" && project.authorPubkey) {
-    return `/projects/${project.authorPubkey}/${project.projectId}`;
-  }
-  // 3. Curated non-hackathon project → /projects/<projectId> (dispatched
-  //    by /projects/[pubkey]/page.tsx, which detects curated ids).
-  return `/projects/${project.projectId}`;
+  // Nostr project → registry slug when registered, else the stable id (the
+  // canonical route resolves it and 308s to the slug once it exists).
+  const entry = registryEntryForProject(registry, {
+    id: project.projectId,
+    name: project.projectName,
+    author: project.authorPubkey,
+  });
+  return projectHref({ slug: entry?.slug, id: project.projectId });
 }
 
-function ProjectRow({ project }: { project: SoldierProjectRef }) {
-  const href = projectHref(project);
+function ProjectRow({
+  project,
+  href,
+}: {
+  project: SoldierProjectRef;
+  href: string;
+}) {
   return (
     <li className="py-2.5">
       <Link

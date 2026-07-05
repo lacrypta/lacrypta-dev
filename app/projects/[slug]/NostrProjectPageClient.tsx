@@ -32,7 +32,7 @@ import {
   type CommunityScanProgress,
   type RelayScanStatus,
 } from "@/lib/userProjects";
-import { getHackathon, hackathonSlugForId, type Hackathon, type ProjectReport } from "@/lib/hackathons";
+import { getHackathon, hackathonSlugForId, type ProjectReport } from "@/lib/hackathons";
 import { useProjectReport } from "@/lib/nostrReports";
 import { useAuth } from "@/lib/auth";
 import { getSigner } from "@/lib/nostrSigner";
@@ -40,21 +40,20 @@ import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/cn";
 import { projectMatchesIdentifier } from "@/lib/projectIdentity";
 import { mergeDataRelays } from "@/lib/nostrRelayConfig";
+import { seedProjectEntities, seedProfileEntities, useProjectEntity } from "@/lib/entityStore";
 import NewProjectModal from "@/components/NewProjectModal";
 import { ProjectDetailView } from "@/components/ProjectDetailView";
 
 type SearchPhase = "cache" | "snapshot" | "relays";
 
 function ProjectRelaySearchLoading({
-  hackathonId,
-  hackathonName,
   projectId,
+  knownName,
   phase,
   progress,
 }: {
-  hackathonId: string;
-  hackathonName: string;
   projectId: string;
+  knownName?: string;
   phase: SearchPhase;
   progress: CommunityScanProgress | null;
 }) {
@@ -93,11 +92,11 @@ function ProjectRelaySearchLoading({
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <Link
-          href={`/hackathons/${hackathonSlugForId(hackathonId)}`}
+          href="/projects"
           className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-foreground-muted hover:text-foreground transition-colors mb-6"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          {hackathonName}
+          Proyectos
         </Link>
 
         <motion.div
@@ -159,7 +158,7 @@ function ProjectRelaySearchLoading({
                 {headline}
               </div>
               <h1 className="mt-4 font-display text-3xl font-bold tracking-tight sm:text-5xl">
-                Cargando proyecto
+                {knownName ?? "Cargando proyecto"}
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-foreground-muted">
                 Buscando el evento NIP-78 más nuevo para{" "}
@@ -443,21 +442,26 @@ function FeedbackCard({
   );
 }
 
+/**
+ * Client side of the canonical Nostr project page. The hackathon context is
+ * derived from the project data itself (projects may have none); `author`
+ * narrows relay lookups when the caller knows it (registry-backed URLs).
+ */
 export default function NostrProjectPage({
-  hackathonId,
   projectId,
+  author,
+  canonicalSlug,
   initialProject,
 }: {
-  hackathonId: string;
   projectId: string;
+  author?: string;
+  canonicalSlug?: string;
   initialProject?: CommunityProject;
 }) {
   const [project, setProject] = useState<CommunityProject | null | undefined>(
     initialProject ?? undefined,
   );
   const [authorPicture, setAuthorPicture] = useState<string | undefined>();
-  const hackathon = getHackathon(hackathonId) as Hackathon;
-  const { report } = useProjectReport(hackathonId, projectId);
   const { auth } = useAuth();
   const router = useRouter();
   const { push: pushToast } = useToast();
@@ -465,11 +469,17 @@ export default function NostrProjectPage({
   const [archiveStep, setArchiveStep] = useState<"idle" | "confirm" | "archiving">("idle");
   const [revalidating, setRevalidating] = useState(false);
   const [cachePending, setCachePending] = useState(false);
-  const [searchPhase, setSearchPhase] = useState<
-    "cache" | "snapshot" | "relays"
-  >("cache");
+  const [searchPhase, setSearchPhase] = useState<SearchPhase>("cache");
   const [searchProgress, setSearchProgress] =
     useState<CommunityScanProgress | null>(null);
+  const knownEntity = useProjectEntity(canonicalSlug ?? projectId);
+  const hackathon = project?.hackathon ? getHackathon(project.hackathon) : null;
+  // Report lookups key off the project's own id (report events + reports.json
+  // are keyed by it) — never the URL slug.
+  const { report } = useProjectReport(
+    project?.hackathon ?? "",
+    project?.id ?? projectId,
+  );
   const relays = useMemo(() => {
     return mergeDataRelays(DEFAULT_USER_RELAYS, auth?.bunker?.relays);
   }, [auth]);
@@ -478,11 +488,32 @@ export default function NostrProjectPage({
     let cancelled = false;
     const snapshotAbort = new AbortController();
 
+    const matches = (p: CommunityProject) =>
+      projectMatchesIdentifier(p, projectId) && (!author || p.author === author);
+
     function showProject(next: CommunityProject) {
       setProject(next);
       upsertCachedCommunityProject(next);
+      seedProjectEntities([
+        {
+          id: next.id,
+          slug: next.slug ?? canonicalSlug,
+          name: next.name,
+          description: next.description,
+          logo: next.logo,
+          cover: next.cover,
+          status: next.status,
+          hackathon: next.hackathon,
+          author: next.author,
+          tech: next.tech,
+          updatedAt: next.eventCreatedAt,
+        },
+      ]);
       fetchAuthorPictures([next.author], TOP10_RELAYS).then((pics) => {
-        if (!cancelled) setAuthorPicture(pics.get(next.author));
+        if (cancelled) return;
+        const picture = pics.get(next.author);
+        setAuthorPicture(picture);
+        if (picture) seedProfileEntities([{ pubkey: next.author, picture }]);
       });
     }
 
@@ -491,7 +522,6 @@ export default function NostrProjectPage({
       try {
         const snapshot = await refreshNostrServerCache({
           scopes: ["projects"],
-          hackathonId,
           projectId: candidate.id,
           author: candidate.author,
           candidateEventId: candidate.eventId,
@@ -502,7 +532,6 @@ export default function NostrProjectPage({
         const fromServer =
           snapshot?.projects.find(
             (p) =>
-              p.hackathon === hackathonId &&
               p.author === candidate.author &&
               projectMatchesIdentifier(p, candidate.id),
           ) ?? null;
@@ -531,12 +560,7 @@ export default function NostrProjectPage({
       setSearchPhase("cache");
       setSearchProgress(null);
       const cached = getCachedCommunityProjects();
-      let latest =
-        cached?.find(
-          (p) =>
-            p.hackathon === hackathonId &&
-            projectMatchesIdentifier(p, projectId),
-        ) ?? null;
+      let latest = cached?.find(matches) ?? null;
       if (!latest && initialProject) latest = initialProject;
       if (latest && !cancelled) {
         showProject(latest);
@@ -550,12 +574,7 @@ export default function NostrProjectPage({
           const snapshot = await fetchCommunityProjectsSnapshot({
             signal: snapshotAbort.signal,
           });
-          const fromSnapshot =
-            snapshot.projects.find(
-              (p) =>
-                p.hackathon === hackathonId &&
-                projectMatchesIdentifier(p, projectId),
-            ) ?? null;
+          const fromSnapshot = snapshot.projects.find(matches) ?? null;
           if (fromSnapshot && !cancelled) {
             if (!latest || fromSnapshot.eventCreatedAt >= latest.eventCreatedAt) {
               latest = fromSnapshot;
@@ -571,7 +590,7 @@ export default function NostrProjectPage({
           latest?.id ?? projectId,
           TOP10_RELAYS,
           5000,
-          latest?.author,
+          latest?.author ?? author,
           {
             signal: snapshotAbort.signal,
             onProgress: (progress) => {
@@ -584,7 +603,7 @@ export default function NostrProjectPage({
 
         if (
           fresh &&
-          fresh.hackathon === hackathonId &&
+          matches(fresh) &&
           (!latest || fresh.eventCreatedAt > latest.eventCreatedAt)
         ) {
           showProject(fresh);
@@ -598,12 +617,7 @@ export default function NostrProjectPage({
             },
           });
           if (cancelled) return;
-          const aliased =
-            broad.find(
-              (p) =>
-                p.hackathon === hackathonId &&
-                projectMatchesIdentifier(p, projectId),
-            ) ?? null;
+          const aliased = broad.find(matches) ?? null;
           if (aliased) {
             showProject(aliased);
             await refreshServerForProject(aliased);
@@ -624,7 +638,7 @@ export default function NostrProjectPage({
       cancelled = true;
       snapshotAbort.abort();
     };
-  }, [hackathonId, projectId, initialProject, router]);
+  }, [projectId, author, canonicalSlug, initialProject, router]);
 
   async function handleArchive() {
     if (!auth || !project) return;
@@ -650,9 +664,8 @@ export default function NostrProjectPage({
   if (project === undefined) {
     return (
       <ProjectRelaySearchLoading
-        hackathonId={hackathonId}
-        hackathonName={hackathon?.name ?? "Hackatones"}
         projectId={projectId}
+        knownName={knownEntity?.name}
         phase={searchPhase}
         progress={searchProgress}
       />
@@ -664,11 +677,11 @@ export default function NostrProjectPage({
       <div className="relative pt-24 pb-16">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link
-            href={`/hackathons/${hackathonSlugForId(hackathonId)}`}
+            href="/projects"
             className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-foreground-muted hover:text-foreground transition-colors mb-6"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            {hackathon?.name ?? "Hackatones"}
+            Proyectos
           </Link>
           <p className="mt-8 text-sm text-foreground-muted">
             Proyecto no encontrado.
@@ -678,7 +691,22 @@ export default function NostrProjectPage({
     );
   }
 
-  const reportSlot = report ? <HackathonReport report={report} /> : undefined;
+  const backHref = project.hackathon
+    ? `/hackathons/${hackathonSlugForId(project.hackathon)}`
+    : "/projects";
+  const backLabel =
+    hackathon?.name ??
+    (project.hackathon ? project.hackathon.toUpperCase() : "Proyectos");
+  const contextLabel = hackathon
+    ? `${hackathon.icon ?? ""} ${hackathon.name}${
+        hackathon.monthShort && hackathon.year
+          ? ` · ${hackathon.monthShort} ${hackathon.year}`
+          : ""
+      }`
+    : undefined;
+
+  const reportSlot =
+    project.hackathon && report ? <HackathonReport report={report} /> : undefined;
   const isAuthor = auth?.pubkey === project.author;
 
   return (
@@ -687,13 +715,9 @@ export default function NostrProjectPage({
         project={project}
         authorPubkey={project.author}
         authorPicture={authorPicture}
-        backHref={`/hackathons/${hackathonSlugForId(hackathonId)}`}
-        backLabel={hackathon?.name ?? "Hackatones"}
-        contextLabel={`${hackathon?.icon ?? ""} ${hackathon?.name ?? hackathonId}${
-          hackathon?.monthShort && hackathon?.year
-            ? ` · ${hackathon.monthShort} ${hackathon.year}`
-            : ""
-        }`}
+        backHref={backHref}
+        backLabel={backLabel}
+        contextLabel={contextLabel}
         isAuthor={isAuthor}
         revalidating={revalidating || cachePending}
         onEdit={isAuthor ? () => setEditOpen(true) : undefined}

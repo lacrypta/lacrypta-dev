@@ -29,6 +29,7 @@ import {
   type PrizeZapTarget,
 } from "@/lib/prizeZaps";
 import { formatSats, hackathonSlugForId } from "@/lib/hackathons";
+import { votingProjectHref } from "@/lib/projectLinks";
 import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/cn";
 
@@ -1517,7 +1518,7 @@ function PrizeZapProofModal({
                   <ProofRow
                     label="Proyecto"
                     value={target.projectId}
-                    href={`/hackathons/${hackathonSlugForId(target.hackathonId)}/${target.projectId}`}
+                    href={votingProjectHref(target.projectId)}
                   />
                   <ProofRow label="Puesto" value={`#${target.position}`} />
                   <ProofRow label="Monto" value={`${target.sats} sats (${amountMsats} msats)`} />

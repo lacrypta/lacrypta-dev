@@ -107,6 +107,9 @@ export type ProjectStatus =
 
 export type HackathonProject = {
   id: string;
+  /** Canonical URL slug from the project registry, attached server-side.
+   *  Optional everywhere; `projectHref()` falls back to `id`. */
+  slug?: string;
   name: string;
   description: string;
   team: TeamMember[];
@@ -246,7 +249,7 @@ export type HackathonSubmission = HackathonProject & {
   nostrCreatedAt?: number;
 };
 
-function comparableProjectName(name: string): string {
+export function comparableProjectName(name: string): string {
   return name
     .trim()
     .toLowerCase()
@@ -255,7 +258,7 @@ function comparableProjectName(name: string): string {
     .replace(/[^a-z0-9]+/g, "");
 }
 
-function comparableRepo(repo?: string): string | null {
+export function comparableRepo(repo?: string): string | null {
   if (!repo) return null;
   try {
     const url = new URL(repo);

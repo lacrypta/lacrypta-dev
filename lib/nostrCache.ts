@@ -44,6 +44,9 @@ export type CachedNostrTeamMember = {
 
 export type CachedNostrProject = {
   id: string;
+  /** Canonical URL slug from the project registry, attached after fetch by
+   *  `lib/projectResolver.ts:attachProjectSlugs` — never parsed from events. */
+  slug?: string;
   name: string;
   description: string;
   hackathon: string | null;
@@ -224,7 +227,7 @@ async function getSubmissionsSnapshotCached(): Promise<
   CachedNostrSubmissionsSnapshot
 > {
   "use cache";
-  cacheLife("days");
+  cacheLife("nostr");
   cacheTag(NOSTR_PROJECTS_TAG);
   cacheTag(NOSTR_SUBMISSIONS_TAG);
   try {

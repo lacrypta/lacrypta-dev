@@ -11,6 +11,10 @@ import {
   PROJECT_D_PREFIX,
 } from "./userProjects";
 import { HACKATHON_BADGE_CATALOG_TAG } from "./hackathonBadges";
+import {
+  PROJECT_REGISTRY_KIND,
+  PROJECT_REGISTRY_D_TAG,
+} from "./projectRegistryContract";
 
 export type RelayFilter = {
   kinds: number[];
@@ -134,6 +138,26 @@ export const CATEGORIES: EventCategory[] = [
         authors: [lacryptaPubkey],
         "#t": [HACKATHON_BADGE_CATALOG_TAG],
         limit: 100,
+      };
+    },
+  },
+  {
+    id: "project-slug-registry",
+    label: "Registro de slugs de proyectos",
+    shortLabel: "Registro slugs",
+    description:
+      "kind:30078 firmado por La Crypta · tag t=lacrypta-dev-projects-registry. Evento único que fija la URL canónica de cada proyecto.",
+    kind: PROJECT_REGISTRY_KIND,
+    source: "lib/projectRegistry.ts",
+    replaceability: "parameterized",
+    requiresLacryptaPubkey: true,
+    buildFilter: ({ lacryptaPubkey }) => {
+      if (!lacryptaPubkey) return null;
+      return {
+        kinds: [PROJECT_REGISTRY_KIND],
+        authors: [lacryptaPubkey],
+        "#d": [PROJECT_REGISTRY_D_TAG],
+        limit: 1,
       };
     },
   },
@@ -266,6 +290,10 @@ export function eventDisplayTitle(
   }
   if (category.id === "hackathon-badge-catalogs" && d) {
     return d.replace("lacrypta.dev:hackathon-badges:", "");
+  }
+  if (category.id === "project-slug-registry") {
+    const count = ev.tags.find((t) => t[0] === "projects")?.[1];
+    return count ? `Registro de slugs (${count} proyectos)` : "Registro de slugs";
   }
   if (category.id === "lacrypta-profile") {
     try {

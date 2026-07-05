@@ -1,7 +1,3 @@
-import type { Metadata } from "next";
-import { Suspense } from "react";
-import { notFound } from "next/navigation";
-import { connection } from "next/server";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -15,111 +11,170 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import {
-  HACKATHONS,
   formatSats,
-  getHackathon,
-  getProject,
-  getHackathonProjects,
   hackathonSlug,
-  hackathonSlugForId,
   prizeForProject,
+  type Hackathon,
+  type HackathonProject,
 } from "@/lib/hackathons";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
 import { breadcrumbLd, creativeWorkLd, jsonLdScript } from "@/lib/jsonld";
-import {
-  getNostrProject,
-  getNostrSubmissionsSnapshot,
-} from "@/lib/nostrCache";
+import { SITE_URL } from "@/lib/siteUrl";
 import {
   dedupeSoldierProfileMembers,
   soldierProfileHref,
 } from "@/lib/soldierProfileLinks";
-import NostrProjectServer from "./NostrProjectServer";
+import type { ResolvedProject } from "@/lib/projectResolver";
+import CuratedProjectPage from "./CuratedProjectPage";
+import NostrProjectPageClient from "./NostrProjectPageClient";
 
-export async function generateStaticParams() {
-  const hackathonIds = new Set(HACKATHONS.map((h) => h.id));
-  // Dedup keys off the canonical hackathon id; the emitted route segment is the
-  // public slug (e.g. "gaming" for the "zaps" hackathon).
-  const seen = new Set<string>();
-  const out: { id: string; projectId: string }[] = [];
-
-  for (const h of HACKATHONS) {
-    for (const p of getHackathonProjects(h.id)) {
-      const key = `${h.id}/${p.id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ id: hackathonSlug(h), projectId: p.id });
-    }
-  }
-
-  // Prerender every Nostr-submitted project visible at build time. Without
-  // this, community-only projects (no curated JSON entry) 404 in production
-  // because the dynamic fallback never gets a chance to run.
-  const { projects } = await getNostrSubmissionsSnapshot();
-  for (const p of projects) {
-    if (!p.hackathon || !hackathonIds.has(p.hackathon)) continue;
-    const key = `${p.hackathon}/${p.id}`;
-    if (seen.has(key)) continue; // dedup vs curated AND other community events
-    seen.add(key);
-    out.push({ id: hackathonSlugForId(p.hackathon), projectId: p.id });
-  }
-
-  return out;
-}
-
-function truncate(s: string, max = 155): string {
-  if (s.length <= max) return s;
-  return s.slice(0, max - 1).trimEnd() + "…";
-}
-
-export async function generateMetadata({
-  params,
+/**
+ * Canonical project page body. Renders the richest view the resolved data
+ * allows: hackathon-curated (report, judges, prize) > homepage-curated >
+ * community Nostr (SSR SEO body + live client).
+ */
+export default function UnifiedProjectView({
+  resolved,
 }: {
-  params: Promise<{ id: string; projectId: string }>;
-}): Promise<Metadata> {
-  await connection();
-  const { id: routeParam, projectId } = await params;
-  const h = getHackathon(routeParam);
-  if (!h) return { title: "Proyecto" };
-  // Data lookups key off the canonical id; the public URL uses the slug.
-  const id = h.id;
-
-  const curated = getProject(id, projectId);
-  let name: string | null = null;
-  let description = "";
-
-  if (curated) {
-    name = curated.name;
-    description = curated.description;
-  } else {
-    const fromNostr = await getNostrProject(id, projectId);
-    if (fromNostr) {
-      name = fromNostr.name;
-      description = fromNostr.description;
-    }
+  resolved: ResolvedProject;
+}) {
+  if (resolved.curated) {
+    return (
+      <CuratedHackathonProject
+        project={resolved.curated}
+        hackathon={resolved.hackathon}
+        canonicalSlug={resolved.canonicalSlug}
+      />
+    );
   }
-
-  if (!name) return { title: "Proyecto" };
-
-  const url = `/hackathons/${hackathonSlug(h)}/${projectId}`;
-  const desc = truncate(description || `Proyecto presentado en ${h.name}.`);
-  return {
-    title: `${name} · ${h.name}`,
-    description: desc,
-    alternates: { canonical: url },
-    openGraph: {
-      title: `${name} · ${h.name}`,
-      description: desc,
-      url,
-      type: "article",
-    },
-    twitter: {
-      title: `${name} · ${h.name}`,
-      description: desc,
-    },
-  };
+  // Homepage-curated wins over community events: names are attacker-choosable,
+  // so a Nostr event must never displace a curated project's canonical page.
+  if (resolved.home) {
+    return <CuratedProjectPage project={resolved.home} />;
+  }
+  if (resolved.nostr) {
+    return <NostrProject resolved={resolved} />;
+  }
+  // Registered project whose event isn't in the snapshot (yet) — let the
+  // client scan relays live.
+  return (
+    <NostrProjectPageClient
+      projectId={resolved.registryEntry?.id ?? resolved.canonicalSlug}
+      author={resolved.registryEntry?.author}
+      canonicalSlug={resolved.canonicalSlug}
+    />
+  );
 }
+
+/* ───────────────────── community project (Nostr) ───────────────────────── */
+
+function NostrProject({ resolved }: { resolved: ResolvedProject }) {
+  const project = resolved.nostr!;
+  const hackathon = resolved.hackathon;
+  const url = `${SITE_URL}/projects/${resolved.canonicalSlug}`;
+  const team = dedupeSoldierProfileMembers(project.team);
+
+  const projectLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: project.name,
+    description: project.description,
+    url,
+    image: project.cover ?? project.logo ?? `${url}/opengraph-image`,
+    applicationCategory: "DeveloperApplication",
+    operatingSystem: "Web",
+    codeRepository: project.repo,
+    inLanguage: "es",
+    isPartOf: hackathon
+      ? {
+          "@type": "Event",
+          name: `${hackathon.name} — Hackatón #${hackathon.number}`,
+          url: `${SITE_URL}/hackathons/${hackathonSlug(hackathon)}`,
+        }
+      : undefined,
+    author: team.map((m) => ({
+      "@type": "Person",
+      name: m.name || m.nip05 || "Anonymous",
+      url: m.github ? `https://github.com/${m.github}` : undefined,
+    })),
+    publisher: { "@id": `${SITE_URL}/#organization` },
+    keywords: project.tech?.join(", "),
+  };
+
+  return (
+    <>
+      {jsonLdScript(projectLd, "ld-project")}
+      {jsonLdScript(
+        breadcrumbLd([
+          { name: "Inicio", url: SITE_URL },
+          { name: "Proyectos", url: `${SITE_URL}/projects` },
+          ...(hackathon
+            ? [
+                {
+                  name: hackathon.name,
+                  url: `${SITE_URL}/hackathons/${hackathonSlug(hackathon)}`,
+                },
+              ]
+            : []),
+          { name: project.name, url },
+        ]),
+        "ld-breadcrumbs",
+      )}
+
+      <div className="sr-only">
+        <h1>{project.name}</h1>
+        <p>{project.description}</p>
+        {hackathon && (
+          <p>
+            Proyecto presentado en {hackathon.name} — Hackatón #{hackathon.number}{" "}
+            ({hackathon.month} {hackathon.year}).
+          </p>
+        )}
+        <p>Estado: {project.status}.</p>
+        {team.length > 0 && (
+          <>
+            <h2>Equipo</h2>
+            <ul>
+              {team.map((m) => (
+                <li key={`${m.name}-${m.role}`}>
+                  {m.name} — {m.role}
+                  {m.github ? ` (github.com/${m.github})` : ""}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {(project.repo || project.demo) && (
+          <ul>
+            {project.repo && (
+              <li>
+                Repositorio: <a href={project.repo}>{project.repo}</a>
+              </li>
+            )}
+            {project.demo && (
+              <li>
+                Demo: <a href={project.demo}>{project.demo}</a>
+              </li>
+            )}
+          </ul>
+        )}
+        {project.tech && project.tech.length > 0 && (
+          <p>Stack: {project.tech.join(", ")}.</p>
+        )}
+      </div>
+
+      <NostrProjectPageClient
+        projectId={project.id}
+        author={project.author}
+        canonicalSlug={resolved.canonicalSlug}
+        initialProject={project}
+      />
+    </>
+  );
+}
+
+/* ─────────────────── curated hackathon project ─────────────────────────── */
 
 function medal(position: number | null | undefined): string {
   if (position === 1) return "🥇";
@@ -137,131 +192,67 @@ const STATUS_BADGE: Record<string, string> = {
   idea: "bg-white/5 border-border text-foreground-subtle",
 };
 
-type ProjectPageParams = {
-  id: string;
-  projectId: string;
-};
-
-export default function ProjectPage({
-  params,
+function CuratedHackathonProject({
+  project,
+  hackathon,
+  canonicalSlug,
 }: {
-  params: Promise<ProjectPageParams>;
+  project: HackathonProject;
+  hackathon: Hackathon | null;
+  canonicalSlug: string;
 }) {
-  return (
-    <Suspense fallback={<ProjectPageFallback />}>
-      <ProjectPageContent params={params} />
-    </Suspense>
-  );
-}
-
-function ProjectPageFallback() {
-  return (
-    <div className="relative pt-24 pb-16">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="h-4 w-36 rounded bg-white/5 mb-8" />
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 animate-pulse">
-          <div className="min-w-0 space-y-6">
-            <div className="flex items-center gap-2">
-              <div className="h-4 w-28 rounded-full bg-white/5" />
-              <div className="h-4 w-16 rounded-full bg-white/5" />
-            </div>
-            <div className="space-y-2">
-              <div className="h-10 w-3/4 rounded-lg bg-white/5" />
-              <div className="h-10 w-1/2 rounded-lg bg-white/5" />
-            </div>
-            <div className="space-y-2">
-              <div className="h-4 w-full rounded bg-white/5" />
-              <div className="h-4 w-[92%] rounded bg-white/5" />
-              <div className="h-4 w-4/5 rounded bg-white/5" />
-            </div>
-          </div>
-          <aside className="space-y-4">
-            <div className="rounded-2xl border border-border bg-background-card p-5 space-y-3">
-              <div className="h-3 w-10 rounded bg-white/5" />
-              <div className="flex flex-wrap gap-1.5">
-                {[44, 60, 52, 36, 56].map((w) => (
-                  <div
-                    key={w}
-                    className="h-5 rounded-md bg-white/5"
-                    style={{ width: w }}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-background-card p-5 space-y-4">
-              <div className="h-3 w-14 rounded bg-white/5" />
-              {[1, 2].map((i) => (
-                <div key={i} className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 rounded-full bg-white/5 shrink-0" />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3 w-24 rounded bg-white/5" />
-                    <div className="h-2.5 w-14 rounded bg-white/5" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </aside>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-async function ProjectPageContent({
-  params,
-}: {
-  params: Promise<ProjectPageParams>;
-}) {
-  await connection();
-  const { id: routeParam, projectId } = await params;
-  const hackathon = getHackathon(routeParam);
-  if (!hackathon) notFound();
-  // Data lookups key off the canonical id; public links use the slug.
-  const id = hackathon.id;
-  const project = getProject(id, projectId);
-  if (!project) {
-    return <NostrProjectServer hackathonId={id} projectId={projectId} />;
-  }
-
   const report = project.report;
-  const award = prizeForProject(id, projectId);
+  // Prize/report joins key off the project's exact-case id.
+  const award =
+    hackathon && project.hackathon
+      ? prizeForProject(project.hackathon, project.id)
+      : null;
   const prize = award?.prize ?? null;
   const team = dedupeSoldierProfileMembers(project.team);
+  const canonicalPath = `/projects/${canonicalSlug}`;
+  const backHref = hackathon
+    ? `/hackathons/${hackathonSlug(hackathon)}`
+    : "/projects";
+  const backLabel = hackathon?.name ?? "Proyectos";
 
   return (
     <div className="relative pt-24 pb-16">
-      {jsonLdScript(creativeWorkLd(project, hackathon), "ld-project")}
+      {hackathon &&
+        jsonLdScript(creativeWorkLd(project, hackathon, canonicalPath), "ld-project")}
       {jsonLdScript(
         breadcrumbLd([
-          { name: "Inicio", url: "https://lacrypta.dev" },
-          { name: "Hackatones", url: "https://lacrypta.dev/hackathons" },
-          {
-            name: hackathon.name,
-            url: `https://lacrypta.dev/hackathons/${hackathonSlug(hackathon)}`,
-          },
-          {
-            name: project.name,
-            url: `https://lacrypta.dev/hackathons/${hackathonSlug(hackathon)}/${project.id}`,
-          },
+          { name: "Inicio", url: SITE_URL },
+          ...(hackathon
+            ? [
+                { name: "Hackatones", url: `${SITE_URL}/hackathons` },
+                {
+                  name: hackathon.name,
+                  url: `${SITE_URL}/hackathons/${hackathonSlug(hackathon)}`,
+                },
+              ]
+            : [{ name: "Proyectos", url: `${SITE_URL}/projects` }]),
+          { name: project.name, url: `${SITE_URL}${canonicalPath}` },
         ]),
         "ld-breadcrumbs",
       )}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <Link
-          href={`/hackathons/${hackathonSlug(hackathon)}`}
+          href={backHref}
           className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-foreground-muted hover:text-foreground transition-colors mb-6"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          {hackathon.name}
+          {backLabel}
         </Link>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="text-[10px] font-mono tracking-widest text-foreground-subtle">
-                {hackathon.icon} {hackathon.name} · {hackathon.monthShort}{" "}
-                {hackathon.year}
-              </span>
+              {hackathon && (
+                <span className="text-[10px] font-mono tracking-widest text-foreground-subtle">
+                  {hackathon.icon} {hackathon.name} · {hackathon.monthShort}{" "}
+                  {hackathon.year}
+                </span>
+              )}
               <span
                 className={cn(
                   "inline-flex items-center px-2 py-0.5 rounded-full border text-[9px] font-mono font-semibold tracking-widest uppercase",
@@ -619,12 +610,7 @@ function FeedbackList({
   accent: string;
 }) {
   return (
-    <div
-      className={cn(
-        "rounded-xl border bg-background-card p-5",
-        accent,
-      )}
-    >
+    <div className={cn("rounded-xl border bg-background-card p-5", accent)}>
       <div className="flex items-center gap-2 mb-3">
         {icon}
         <h3 className="text-xs font-mono uppercase tracking-widest font-bold">

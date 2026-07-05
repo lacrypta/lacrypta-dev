@@ -42,6 +42,8 @@ import {
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
 import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
+import { projectHref } from "@/lib/projectLinks";
+import { seedProjectEntities } from "@/lib/entityStore";
 
 type ProjectSource = "builtin" | "nostr";
 
@@ -60,6 +62,8 @@ type DisplayProject = {
   hackathon?: Project["hackathon"];
   submittedAt?: string;
   source: ProjectSource;
+  /** Canonical registry slug, when known (source=nostr) */
+  slug?: string;
   /** Nostr author pubkey (hex), only for source=nostr */
   author?: string;
   nostrCreatedAt?: number;
@@ -179,6 +183,7 @@ function nostrToDisplay(np: CommunityProject): DisplayProject {
         ? np.hackathon
         : undefined,
     source: "nostr",
+    slug: np.slug,
     author: np.author,
     nostrCreatedAt: np.eventCreatedAt,
   };
@@ -208,6 +213,37 @@ export default function ProjectsGrid({
     if (nostrProjects.length === 0) return;
     const pubkeys = [...new Set(nostrProjects.map((p) => p.author))];
     fetchAuthorPictures(pubkeys, TOP10_RELAYS).then(setAuthorPictures);
+  }, [nostrProjects]);
+
+  // Seed the entity store so project-detail navigations paint instantly.
+  useEffect(() => {
+    seedProjectEntities([
+      ...PROJECTS.map((p) => ({
+        id: p.id,
+        slug: p.id.toLowerCase(),
+        name: p.name,
+        description: p.description,
+        logo: p.logo,
+        cover: p.cover,
+        status: p.status,
+        hackathon: p.hackathon,
+        tech: p.tech,
+        updatedAt: 0,
+      })),
+      ...nostrProjects.map((p) => ({
+        id: p.id,
+        slug: p.slug,
+        name: p.name,
+        description: p.description,
+        logo: p.logo,
+        cover: p.cover,
+        status: p.status,
+        hackathon: p.hackathon,
+        author: p.author,
+        tech: p.tech,
+        updatedAt: p.eventCreatedAt,
+      })),
+    ]);
   }, [nostrProjects]);
 
   const allProjects = useMemo<DisplayProject[]>(() => {
@@ -698,7 +734,7 @@ function ProjectCard({
       ? project.id.slice(`nostr:${project.author}:`.length)
       : null;
   const internalHref = nostrProjectId
-    ? `/projects/${project.author}/${nostrProjectId}`
+    ? projectHref({ slug: project.slug, id: nostrProjectId })
     : null;
   const externalHref = project.demo || project.website || project.repo;
 
