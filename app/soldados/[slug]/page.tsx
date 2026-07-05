@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
 import { nip19 } from "nostr-tools";
 import {
@@ -52,6 +52,7 @@ export async function generateMetadata({
   return {
     title: `${s.name} — Soldados`,
     description: `Builder de La Crypta · ${s.projects.length} proyecto(s) · score ${s.score}.`,
+    alternates: { canonical: `/soldados/${encodeURIComponent(s.slug)}` },
   };
 }
 
@@ -103,6 +104,18 @@ export default async function SoldierProfilePage({
   const { slug } = await params;
   const soldier = await getSoldierBySlug(slug);
   if (!soldier) notFound();
+
+  // Legacy/alias URLs (pk-<hex>, gh-…, name-…) consolidate onto the
+  // canonical slug — npub for pubkey-linked soldiers.
+  let decodedSlug = slug;
+  try {
+    decodedSlug = decodeURIComponent(slug);
+  } catch {
+    /* keep raw */
+  }
+  if (decodedSlug !== soldier.slug) {
+    permanentRedirect(`/soldados/${encodeURIComponent(soldier.slug)}`);
+  }
 
   // Live Nostr profile (kind 0) for richer data when we know a pubkey.
   const profile = soldier.pubkey

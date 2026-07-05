@@ -1,9 +1,28 @@
+import { npubEncode } from "nostr-tools/nip19";
+
 export type SoldierProfileMember = {
   name?: string;
   github?: string;
   pubkey?: string;
   nip05?: string;
 };
+
+const PK_SLUG_RE = /^pk-([0-9a-f]{64})$/;
+
+/**
+ * Public form of a soldier slug: pubkey-backed slugs are bech32 npubs
+ * (`/soldados/npub1…`); the internal `pk-<hex>` form remains a resolvable
+ * legacy alias.
+ */
+export function publicSoldierSlug(slug: string): string {
+  const match = PK_SLUG_RE.exec(slug.toLowerCase());
+  if (!match) return slug;
+  try {
+    return npubEncode(match[1]);
+  } catch {
+    return slug;
+  }
+}
 
 function clean(value?: string): string | undefined {
   const trimmed = value?.trim();
@@ -101,16 +120,16 @@ export function slugifySoldierName(name: string): string {
 
 export function soldierProfileSlug(member: SoldierProfileMember): string | null {
   const github = cleanGithub(member.github);
-  if (github) return canonicalSlug(`gh-${github}`);
+  if (github) return publicSoldierSlug(canonicalSlug(`gh-${github}`));
 
   const pubkey = clean(member.pubkey)?.toLowerCase();
-  if (pubkey) return canonicalSlug(`pk-${pubkey}`);
+  if (pubkey) return publicSoldierSlug(canonicalSlug(`pk-${pubkey}`));
 
   const nip05 = clean(member.nip05)?.toLowerCase();
-  if (nip05) return canonicalSlug(`nip05-${nip05}`);
+  if (nip05) return publicSoldierSlug(canonicalSlug(`nip05-${nip05}`));
 
   const nameSlug = member.name ? slugifySoldierName(member.name) : "";
-  if (nameSlug) return canonicalSlug(`name-${nameSlug}`);
+  if (nameSlug) return publicSoldierSlug(canonicalSlug(`name-${nameSlug}`));
 
   return null;
 }
@@ -156,6 +175,9 @@ export function soldierProfileSlugAliases(
     if (!slug) return;
     push(slug);
     push(canonicalSlug(slug));
+    // Pubkey-backed slugs are publicly npub-encoded; keep both forms
+    // resolvable so legacy pk-<hex> URLs never break.
+    push(publicSoldierSlug(canonicalSlug(slug)));
   };
 
   push(soldierProfileSlug(member));
