@@ -5,6 +5,7 @@ import {
   getCanonicalProjectRefs,
   resolveProjectParam,
 } from "@/lib/projectResolver";
+import { projectSlugHref } from "@/lib/projectLinks";
 import UnifiedProjectView from "./UnifiedProjectView";
 import UserProjectsPage from "./UserProjectsPage";
 import NostrProjectPageClient from "./NostrProjectPageClient";
@@ -71,7 +72,7 @@ export async function generateMetadata({
   const name = project.name;
 
   const hackathon = resolved.hackathon;
-  const url = `/projects/${resolved.canonicalSlug}`;
+  const url = projectSlugHref(resolved.canonicalSlug);
   const title = hackathon ? `${name} · ${hackathon.name}` : `${name} · Proyecto`;
   const desc = truncate(
     project.description ||

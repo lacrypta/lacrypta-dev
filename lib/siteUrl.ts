@@ -5,9 +5,22 @@
  * structured data point at themselves instead of production.
  */
 
-const RAW = process.env.NEXT_PUBLIC_SITE_URL;
+const DEFAULT_SITE_URL = "https://lacrypta.dev";
 
-export const SITE_URL = (RAW && RAW.replace(/\/+$/, "")) || "https://lacrypta.dev";
+function normalizeSiteUrl(raw: string | undefined): string {
+  const trimmed = raw?.trim().replace(/\/+$/, "");
+  if (!trimmed) return DEFAULT_SITE_URL;
+  // Tolerate scheme-less values ("lacrypta.dev") — this constant feeds
+  // `new URL()` in metadataBase, which throws on invalid absolute URLs.
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    return new URL(withScheme).origin;
+  } catch {
+    return DEFAULT_SITE_URL;
+  }
+}
+
+export const SITE_URL = normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL);
 
 export function absoluteUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;

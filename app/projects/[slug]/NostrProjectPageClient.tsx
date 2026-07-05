@@ -638,7 +638,11 @@ export default function NostrProjectPage({
       cancelled = true;
       snapshotAbort.abort();
     };
-  }, [projectId, author, canonicalSlug, initialProject, router]);
+    // Depend on the initialProject's stable identity, not the object:
+    // router.refresh() streams a fresh reference and would otherwise re-run
+    // the whole cache/snapshot/relay scan after every refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, author, canonicalSlug, initialProject?.eventId, router]);
 
   async function handleArchive() {
     if (!auth || !project) return;

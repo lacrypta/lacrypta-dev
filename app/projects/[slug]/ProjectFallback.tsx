@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { useProjectEntity } from "@/lib/entityStore";
 import { getHackathon, hackathonSlugForId } from "@/lib/hackathons";
+import { safeDecodeURIComponent } from "@/lib/projectLinks";
 
 /**
  * Suspense fallback for the canonical project page. During client-side
@@ -19,7 +20,7 @@ import { getHackathon, hackathonSlugForId } from "@/lib/hackathons";
 export default function ProjectFallback() {
   const pathname = usePathname();
   const slug = pathname?.split("/").filter(Boolean).pop() ?? null;
-  const known = useProjectEntity(slug ? decodeURIComponent(slug) : null);
+  const known = useProjectEntity(slug ? safeDecodeURIComponent(slug) : null);
   const hackathon = known?.hackathon ? getHackathon(known.hackathon) : null;
 
   return (

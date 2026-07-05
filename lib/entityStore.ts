@@ -124,9 +124,17 @@ export function seedProjectEntities(
       updatedAt: 0,
       ...item,
     };
-    for (const key of projectKeys(entity)) {
+    const keys = projectKeys(entity);
+    // Freshness decided once across ALL keys — deciding per key could leave
+    // the id- and slug-keyed copies of one project pointing at different
+    // snapshots.
+    const freshest = keys.reduce(
+      (max, key) => Math.max(max, projects.get(key)?.updatedAt ?? -1),
+      -1,
+    );
+    if (freshest > entity.updatedAt) continue;
+    for (const key of keys) {
       const prev = projects.get(key);
-      if (prev && prev.updatedAt > entity.updatedAt) continue;
       // Keep a known slug when the incoming copy lacks one.
       projects.set(key, {
         ...prev,

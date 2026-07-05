@@ -6,7 +6,7 @@ import {
   getProjectRegistryState,
   registryEntryForProject,
 } from "@/lib/projectRegistry";
-import { safeDecodeURIComponent } from "@/lib/projectResolver";
+import { projectSlugHref, safeDecodeURIComponent } from "@/lib/projectLinks";
 
 /**
  * Legacy hackathon project URL: `/hackathons/<hackathonSlug>/<projectId>`.
@@ -25,7 +25,9 @@ export async function GET(
 ) {
   const { id: routeParam, projectId: rawProjectId } = await params;
   const projectId = safeDecodeURIComponent(rawProjectId);
-  let target = `/projects/${encodeURIComponent(projectId)}`;
+  // Lowercased id is the canonical form for curated ids and harmless for
+  // uuids/event ids; the resolver matches Nostr ids case-insensitively.
+  let target = projectSlugHref(projectId.toLowerCase());
 
   try {
     const hackathon = getHackathon(safeDecodeURIComponent(routeParam));
@@ -43,13 +45,12 @@ export async function GET(
       ? registryEntryForProject(registry, nostr)
       : (registry.byIdLc.get(projectId.toLowerCase()) ?? null);
     if (entry) {
-      target = `/projects/${encodeURIComponent(entry.slug)}`;
+      target = projectSlugHref(entry.slug);
     } else if (nostr) {
-      target = `/projects/${encodeURIComponent(nostr.id)}`;
-    } else {
-      // Curated ids are their own (lowercased) canonical slug.
-      target = `/projects/${encodeURIComponent(projectId.toLowerCase())}`;
+      target = projectSlugHref(nostr.id);
     }
+    // else: keep the lowercased-id target — curated ids are their own
+    // (lowercased) canonical slug.
   } catch {
     /* fall through to the id-based URL */
   }

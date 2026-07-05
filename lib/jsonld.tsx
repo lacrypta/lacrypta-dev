@@ -76,8 +76,16 @@ export function eventLd(h: Hackathon): JsonLdValue {
   };
 }
 
+/** Structural subset shared by HackathonProject and the homepage Project. */
+type CreativeWorkProject = Pick<
+  HackathonProject,
+  "id" | "slug" | "name" | "description" | "repo" | "tech"
+> & {
+  team: Array<{ name?: string; github?: string; nip05?: string; pubkey?: string }>;
+};
+
 export function creativeWorkLd(
-  project: HackathonProject,
+  project: CreativeWorkProject,
   hackathon: Hackathon | null,
   /** Canonical page path, e.g. `/projects/<slug>`. */
   canonicalPath?: string,

@@ -8,7 +8,7 @@ import {
   getProjectRegistryState,
   registryEntryForProject,
 } from "@/lib/projectRegistry";
-import { safeDecodeURIComponent } from "@/lib/projectResolver";
+import { projectSlugHref, safeDecodeURIComponent } from "@/lib/projectLinks";
 
 /**
  * Legacy standalone project URL: `/projects/<pubkey>/<id>`.
@@ -28,7 +28,9 @@ export async function GET(
   const { slug: rawAuthor, id } = await params;
   const projectId = safeDecodeURIComponent(id);
   const author = safeDecodeURIComponent(rawAuthor);
-  let target = `/projects/${encodeURIComponent(projectId)}`;
+  // Lowercased id is canonical for curated ids and harmless for uuids; the
+  // resolver matches Nostr ids case-insensitively.
+  let target = projectSlugHref(projectId.toLowerCase());
 
   try {
     const [registry, snapshot, byAuthor] = await Promise.all([
@@ -46,9 +48,9 @@ export async function GET(
       ? registryEntryForProject(registry, project)
       : (registry.byIdLc.get(projectId.toLowerCase()) ?? null);
     if (entry) {
-      target = `/projects/${encodeURIComponent(entry.slug)}`;
+      target = projectSlugHref(entry.slug);
     } else if (project) {
-      target = `/projects/${encodeURIComponent(project.id)}`;
+      target = projectSlugHref(project.id);
     }
   } catch {
     /* fall through to the id-based URL */

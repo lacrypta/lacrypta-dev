@@ -31,17 +31,11 @@ import {
   type ProjectRegistryState,
 } from "./projectRegistry";
 import type { ProjectRegistryEntry } from "./projectRegistryContract";
+import { safeDecodeURIComponent } from "./projectLinks";
+
+export { safeDecodeURIComponent };
 
 const HEX64_RE = /^[0-9a-f]{64}$/;
-
-/** Params/ids are user-controlled — a stray `%` must not throw URIError. */
-export function safeDecodeURIComponent(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
 
 export type ResolvedProject = {
   kind: "project";
@@ -117,12 +111,20 @@ function findNostrProject(
   identifier: string,
   author?: string,
 ): CachedNostrProject | null {
+  const idLc = identifier.trim().toLowerCase();
   return (
     projects.find(
       (p) =>
         (!author || p.author === author) &&
         projectMatchesIdentifier(p, identifier),
-    ) ?? null
+    ) ??
+    // The shared identifier contract is exact-case on ids; add a
+    // case-insensitive fallback so alternate-case URLs of mixed-case ids
+    // still resolve (and then 308 to the exact-case canonical).
+    projects.find(
+      (p) => (!author || p.author === author) && p.id.toLowerCase() === idLc,
+    ) ??
+    null
   );
 }
 

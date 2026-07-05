@@ -6,11 +6,25 @@
  * route resolves (and 308s to the slug once registered).
  */
 
+/** Href for an already-resolved canonical slug (or stable project id). */
+export function projectSlugHref(slug: string): string {
+  return `/projects/${encodeURIComponent(slug)}`;
+}
+
 export function projectHref(project: {
   slug?: string | null;
   id: string;
 }): string {
-  return `/projects/${encodeURIComponent(project.slug || project.id)}`;
+  return projectSlugHref(project.slug || project.id);
+}
+
+/** Params/ids are user-controlled — a stray `%` must not throw URIError. */
+export function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 /**

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { HACKATHONS, hackathonSlug, hackathonStatus } from "@/lib/hackathons";
 import { getCanonicalProjectRefs } from "@/lib/projectResolver";
+import { projectSlugHref } from "@/lib/projectLinks";
 import { SITE_URL } from "@/lib/siteUrl";
 
 const BASE_URL = SITE_URL;
@@ -77,7 +78,7 @@ async function staticSitemap(): Promise<MetadataRoute.Sitemap> {
     for (const ref of await getCanonicalProjectRefs()) {
       if (ref.source !== "curated") continue;
       entries.push({
-        url: `${BASE_URL}/projects/${encodeURIComponent(ref.slug)}`,
+        url: `${BASE_URL}${projectSlugHref(ref.slug)}`,
         lastModified: ref.lastModified,
         changeFrequency: "monthly",
         priority: 0.7,
@@ -96,7 +97,7 @@ async function nostrSitemap(): Promise<MetadataRoute.Sitemap> {
     return refs
       .filter((ref) => ref.source === "nostr")
       .map((ref) => ({
-        url: `${BASE_URL}/projects/${encodeURIComponent(ref.slug)}`,
+        url: `${BASE_URL}${projectSlugHref(ref.slug)}`,
         lastModified: ref.lastModified,
         changeFrequency: "daily" as const,
         priority: 0.6,

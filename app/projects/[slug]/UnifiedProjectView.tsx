@@ -20,6 +20,7 @@ import {
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
 import { breadcrumbLd, creativeWorkLd, jsonLdScript } from "@/lib/jsonld";
+import { projectSlugHref } from "@/lib/projectLinks";
 import { SITE_URL } from "@/lib/siteUrl";
 import {
   dedupeSoldierProfileMembers,
@@ -51,7 +52,24 @@ export default function UnifiedProjectView({
   // Homepage-curated wins over community events: names are attacker-choosable,
   // so a Nostr event must never displace a curated project's canonical page.
   if (resolved.home) {
-    return <CuratedProjectPage project={resolved.home} />;
+    const canonicalPath = projectSlugHref(resolved.canonicalSlug);
+    return (
+      <>
+        {jsonLdScript(
+          creativeWorkLd(resolved.home, resolved.hackathon, canonicalPath),
+          "ld-project",
+        )}
+        {jsonLdScript(
+          breadcrumbLd([
+            { name: "Inicio", url: SITE_URL },
+            { name: "Proyectos", url: `${SITE_URL}/projects` },
+            { name: resolved.home.name, url: `${SITE_URL}${canonicalPath}` },
+          ]),
+          "ld-breadcrumbs",
+        )}
+        <CuratedProjectPage project={resolved.home} />
+      </>
+    );
   }
   if (resolved.nostr) {
     return <NostrProject resolved={resolved} />;
@@ -72,7 +90,7 @@ export default function UnifiedProjectView({
 function NostrProject({ resolved }: { resolved: ResolvedProject }) {
   const project = resolved.nostr!;
   const hackathon = resolved.hackathon;
-  const url = `${SITE_URL}/projects/${resolved.canonicalSlug}`;
+  const url = `${SITE_URL}${projectSlugHref(resolved.canonicalSlug)}`;
   const team = dedupeSoldierProfileMembers(project.team);
 
   const projectLd = {
@@ -209,7 +227,7 @@ function CuratedHackathonProject({
       : null;
   const prize = award?.prize ?? null;
   const team = dedupeSoldierProfileMembers(project.team);
-  const canonicalPath = `/projects/${canonicalSlug}`;
+  const canonicalPath = projectSlugHref(canonicalSlug);
   const backHref = hackathon
     ? `/hackathons/${hackathonSlug(hackathon)}`
     : "/projects";
@@ -217,8 +235,7 @@ function CuratedHackathonProject({
 
   return (
     <div className="relative pt-24 pb-16">
-      {hackathon &&
-        jsonLdScript(creativeWorkLd(project, hackathon, canonicalPath), "ld-project")}
+      {jsonLdScript(creativeWorkLd(project, hackathon, canonicalPath), "ld-project")}
       {jsonLdScript(
         breadcrumbLd([
           { name: "Inicio", url: SITE_URL },
