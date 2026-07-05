@@ -11,7 +11,6 @@ import {
   Sparkles,
   UserRoundSearch,
 } from "lucide-react";
-import { queryProfile } from "nostr-tools/nip05";
 import { fetchNostrProfile, type NostrProfile } from "@/lib/nostrProfile";
 import { DEFAULT_RELAYS, mergeDataRelays } from "@/lib/nostrRelayConfig";
 import type { SignedEvent } from "@/lib/nostrSigner";
@@ -74,6 +73,9 @@ async function resolveInput(raw: string): Promise<ResolvedUser> {
   const inputType: ResolvedUser["inputType"] = "nip05";
   const normalized = value.toLowerCase();
 
+  // Loaded on demand — nip05 resolution only happens inside the submit flow,
+  // so keep nostr-tools out of the section's initial bundle.
+  const { queryProfile } = await import("nostr-tools/nip05");
   const pointer = await queryProfile(normalized);
   if (!pointer?.pubkey) {
     throw new Error("No pudimos resolver ese NIP-05.");

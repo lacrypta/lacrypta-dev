@@ -3,6 +3,8 @@ import ProjectsGrid from "./ProjectsGrid";
 import PageHero from "@/components/ui/PageHero";
 import { Code2 } from "lucide-react";
 import { getNostrSubmissionsSnapshot } from "@/lib/nostrCache";
+import { getProjectRegistryState } from "@/lib/projectRegistry";
+import { attachProjectSlugs } from "@/lib/projectResolver";
 
 export const metadata: Metadata = {
   title: "Proyectos",
@@ -11,7 +13,11 @@ export const metadata: Metadata = {
 };
 
 export default async function ProjectsPage() {
-  const initialNostrProjects = (await getNostrSubmissionsSnapshot()).projects;
+  const [snapshot, registry] = await Promise.all([
+    getNostrSubmissionsSnapshot(),
+    getProjectRegistryState(),
+  ]);
+  const initialNostrProjects = attachProjectSlugs(snapshot.projects, registry);
 
   return (
     <>

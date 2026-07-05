@@ -33,11 +33,13 @@ Project content comes from **both** curated JSON and community Nostr events, mer
 
 `lib/hackathons.ts:mergeWithSubmissions()` is the canonical merge: curated wins on id collisions, ordered by report rank; Nostr submissions follow, freshest first. When adding a new project field, update **both** the curated JSON shape (`HackathonProject`) and the Nostr serialization in `lib/userProjects.ts:buildProjectEvent` + `parseProjectContent` — they must round-trip.
 
+Every project has **one canonical URL**: `/projects/<slug>`. Slugs are pinned by a La Crypta-signed kind-30078 registry event (`d` tag `lacrypta.dev:projects:registry`; contract in `lib/projectRegistryContract.ts`, server-only reader/publisher in `lib/projectRegistry.ts`). Unregistered projects canonicalize to `/projects/<project id>`. Legacy `/hackathons/<slug>/<id>` and `/projects/<pubkey>/<id>` URLs 308-redirect via route handlers. The registry auto-syncs from `POST /api/nostr/refresh` via `after()`; the publish no-ops without `LACRYPTA_NSEC` or with `REGISTRY_PUBLISH_DISABLED=1`. Build project URLs **only** with `lib/projectLinks.ts:projectHref` (`curatedProjectHref` for curated ids) — never hand-roll them. `lib/entityStore.ts` is the client-side project/profile summary cache that list pages seed so detail navigation paints instantly.
+
 ## Server vs. client Nostr code
 
 `lib/nostrCache.ts` and `lib/userProjects.ts` look like duplicates but are not interchangeable:
 
-- `lib/nostrCache.ts` is **server-only** (no `"use client"`). It uses `"use cache"` + `cacheLife("hours")` + `cacheTag("nostr:hackathon-submissions")` so a single relay round-trip backs the sitemap, dynamic OG images, and SSR project pages. Revalidate via `POST /api/revalidate-nostr` with header `x-revalidate-secret: $REVALIDATE_SECRET` (defaults to the global submissions tag if no body).
+- `lib/nostrCache.ts` is **server-only** (no `"use client"`). It uses `"use cache"` + the custom `cacheLife("nostr")` profile (stale 300 / revalidate 300 / expire 7d, defined in `next.config.ts` — background revalidation on user load) + `cacheTag("nostr:hackathon-submissions")` so a single relay round-trip backs the sitemap, dynamic OG images, and SSR project pages. Revalidate via `POST /api/revalidate-nostr` with header `x-revalidate-secret: $REVALIDATE_SECRET` (defaults to the global submissions tag if no body).
 - `lib/userProjects.ts` is `"use client"`. It owns publish/sign, localStorage caching (`labs:user-projects-v2:<pubkey>`, `labs:community-projects:v1`), and the live community-scan progress UI.
 
 Don't import the client module from server code; don't add `"use cache"` to the client one. If a parser changes, update both.

@@ -1,4 +1,5 @@
 export const NOSTR_PROJECTS_TAG = "nostr:projects";
+export const NOSTR_PROJECT_REGISTRY_TAG = "nostr:project-registry";
 export const NOSTR_LEGACY_SUBMISSIONS_TAG = "nostr:hackathon-submissions";
 export const NOSTR_SOLDIERS_RANKING_TAG = "nostr:soldiers-ranking";
 

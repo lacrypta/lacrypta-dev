@@ -42,8 +42,9 @@ import {
   type TeamMember,
   type UserProject,
 } from "@/lib/userProjects";
-import { HACKATHONS, hackathonSlugForId } from "@/lib/hackathons";
+import { HACKATHONS } from "@/lib/hackathons";
 import { useNostrProfile } from "@/lib/nostrProfile";
+import { projectHref } from "@/lib/projectLinks";
 import { mergeDataRelays } from "@/lib/nostrRelayConfig";
 
 type RelayResult = { relay: string; ok: boolean; error?: string };
@@ -744,7 +745,6 @@ export default function UserProjectsClient() {
                 <ProjectCard
                   key={p.id}
                   project={p}
-                  pubkey={auth?.pubkey}
                   onEdit={() => openEdit(p)}
                   onDelete={() => setDeleteId(p.id)}
                   disabled={publishing}
@@ -843,22 +843,16 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 
 function ProjectCard({
   project,
-  pubkey,
   onEdit,
   onDelete,
   disabled,
 }: {
   project: UserProject;
-  pubkey?: string;
   onEdit: () => void;
   onDelete: () => void;
   disabled: boolean;
 }) {
-  const detailHref = project.hackathon
-    ? `/hackathons/${hackathonSlugForId(project.hackathon)}/${project.id}`
-    : pubkey
-      ? `/projects/${pubkey}/${project.id}`
-      : null;
+  const detailHref = projectHref(project);
 
   return (
     <motion.div
@@ -870,18 +864,12 @@ function ProjectCard({
       className="group relative rounded-2xl border border-border bg-background-card p-6 flex flex-col hover:border-border-strong transition-colors"
     >
       <div className="flex items-start justify-between gap-3">
-        {detailHref ? (
-          <Link
-            href={detailHref}
-            className="font-display text-lg font-bold tracking-tight flex-1 min-w-0 break-words hover:text-bitcoin transition-colors"
-          >
-            {project.name}
-          </Link>
-        ) : (
-          <span className="font-display text-lg font-bold tracking-tight flex-1 min-w-0 break-words">
-            {project.name}
-          </span>
-        )}
+        <Link
+          href={detailHref}
+          className="font-display text-lg font-bold tracking-tight flex-1 min-w-0 break-words hover:text-bitcoin transition-colors"
+        >
+          {project.name}
+        </Link>
         <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
           <button
             onClick={onEdit}

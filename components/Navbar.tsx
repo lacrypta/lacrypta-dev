@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -20,13 +21,17 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Logo from "./Logo";
-import LoginModal from "./LoginModal";
 import { cn } from "@/lib/cn";
 import { useAuth, clearAuth, readAndClearLogoutReason } from "@/lib/auth";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { useNostrProfile } from "@/lib/nostrProfile";
 import { isDevMode } from "@/lib/devMode";
 import { useToast } from "./Toast";
+
+// LoginModal is a heavy client component (NIP-07/NIP-46/QR flows). Loading it
+// on demand keeps it out of the shared shell bundle; it's only fetched the
+// first time the user actually opens the login flow.
+const LoginModal = dynamic(() => import("./LoginModal"), { ssr: false });
 
 type NavLink = {
   href: string;
@@ -57,6 +62,9 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  // The dynamic LoginModal only mounts after the first open, so the chunk is
+  // never requested for visitors that never touch the login flow.
+  const [hasOpenedLogin, setHasOpenedLogin] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [adminPubkey, setAdminPubkey] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -75,6 +83,11 @@ export default function Navbar() {
     if (pathname.startsWith("/dashboard")) router.push("/");
   }
 
+  function openLogin() {
+    setHasOpenedLogin(true);
+    setLoginOpen(true);
+  }
+
   useEffect(() => {
     if (auth) return;
     const reason = readAndClearLogoutReason();
@@ -87,6 +100,7 @@ export default function Navbar() {
           "Tu extensión Nostr (Alby, nos2x…) no está disponible. Reconectá para volver a firmar.",
         duration: 10000,
       });
+      setHasOpenedLogin(true);
       setLoginOpen(true);
     }
   }, [auth, pushToast]);
@@ -283,7 +297,7 @@ export default function Navbar() {
               </div>
             ) : (
               <button
-                onClick={() => setLoginOpen(true)}
+                onClick={openLogin}
                 className="relative inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-bitcoin to-bitcoin/80 text-black hover:from-bitcoin hover:to-yellow-500 transition-all shadow-lg shadow-bitcoin/20 hover:shadow-bitcoin/40 hover:scale-[1.02] active:scale-[0.98]"
               >
                 <LogIn className="h-4 w-4" strokeWidth={2.5} />
@@ -447,7 +461,7 @@ export default function Navbar() {
                   <button
                     onClick={() => {
                       setMobileOpen(false);
-                      setLoginOpen(true);
+                      openLogin();
                     }}
                     className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold bg-gradient-to-r from-bitcoin to-yellow-500 text-black"
                   >
@@ -470,7 +484,9 @@ export default function Navbar() {
         )}
       </AnimatePresence>
 
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      {hasOpenedLogin && (
+        <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      )}
     </>
   );
 }

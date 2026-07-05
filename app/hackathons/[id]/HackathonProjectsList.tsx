@@ -42,6 +42,8 @@ import {
   type CommunityProject,
 } from "@/lib/userProjects";
 import { formatSats, hackathonSlugForId } from "@/lib/hackathons";
+import { curatedProjectHref, projectHref } from "@/lib/projectLinks";
+import { seedProjectEntities } from "@/lib/entityStore";
 import { useHackathonResults, type WinnerEntry } from "@/lib/nostrReports";
 import { GithubIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/cn";
@@ -160,6 +162,26 @@ export default function HackathonProjectsList({
     () => mergeWithSubmissions(hackathon.id, nostrSubmissions),
     [hackathon.id, nostrSubmissions],
   );
+
+  // Seed the entity store so navigating into a project detail paints
+  // instantly with the summary data this list already has.
+  useEffect(() => {
+    seedProjectEntities(
+      merged.map((p) => ({
+        id: p.id,
+        slug: p.slug ?? (p.nostrAuthor ? undefined : p.id.toLowerCase()),
+        name: p.name,
+        description: p.description,
+        logo: p.logo,
+        cover: p.cover,
+        status: p.status,
+        hackathon: hackathon.id,
+        author: p.nostrAuthor,
+        tech: p.tech,
+        updatedAt: p.nostrCreatedAt ?? 0,
+      })),
+    );
+  }, [merged, hackathon.id]);
 
   function applyCommunityProjects(
     projects: CommunityProject[],
@@ -486,7 +508,9 @@ function ProjectRow({
   const score = project.report?.finalScore ?? null;
   const prize = award?.prize ?? nostrWinner?.sats ?? null;
   const isNostr = !!project.nostrEventId;
-  const href = `/hackathons/${hackathonSlugForId(hackathonId)}/${project.id}`;
+  const href = project.nostrAuthor
+    ? projectHref(project)
+    : curatedProjectHref(project.id);
   const authorDisplayName = isNostr
     ? displayNameForNostrProject(project)
     : null;

@@ -15,7 +15,10 @@ import {
   type CachedNostrProject,
   type CachedNostrTeamMember,
 } from "./nostrCache";
-import { soldierProfileSlugAliases } from "./soldierProfileLinks";
+import {
+  publicSoldierSlug,
+  soldierProfileSlugAliases,
+} from "./soldierProfileLinks";
 import {
   NOSTR_LEGACY_SUBMISSIONS_TAG,
   NOSTR_PROJECTS_TAG,
@@ -155,7 +158,9 @@ export type Soldier = {
 };
 
 function toSlug(id: string): string {
-  return id.replace(/:/g, "-").slice(0, 80);
+  // Pubkey-backed soldiers get bech32 npub slugs (`/soldados/npub1…`);
+  // publicSoldierSlug leaves every other id form untouched.
+  return publicSoldierSlug(id.replace(/:/g, "-").slice(0, 80));
 }
 
 function lookupPosition(
@@ -741,7 +746,14 @@ async function getSoldiersForDisplay(): Promise<Soldier[]> {
     (p) => p.eventCreatedAt > snapshot.nostrCutoff,
   );
   // No newer community activity → serve the authoritative published snapshot.
-  if (!hasNewer) return snapshot.soldiers;
+  // Normalize slugs on read: snapshots published before the npub migration
+  // carry legacy `pk-<hex>` slugs that would leak into rendered links.
+  if (!hasNewer) {
+    return snapshot.soldiers.map((s) => ({
+      ...s,
+      slug: publicSoldierSlug(s.slug),
+    }));
+  }
   // Newer submissions exist → recompute (curated is static + live Nostr ⊇ the
   // snapshot's set), so this is exactly "snapshot + newer merged".
   return computeRanking(liveNostr);
@@ -754,6 +766,24 @@ export async function getSoldiers(): Promise<Soldier[]> {
 export async function getSoldierBySlug(slug: string): Promise<Soldier | null> {
   const all = await getSoldiers();
   const lc = safeDecodeSlug(slug).toLowerCase();
+
+  // npub params resolve by decoded pubkey so any bech32 spelling works.
+  if (lc.startsWith("npub1")) {
+    try {
+      const { decode } = await import("nostr-tools/nip19");
+      const decoded = decode(lc);
+      if (decoded.type === "npub") {
+        const pubkey = decoded.data as string;
+        const byPubkey = all.find(
+          (s) => s.pubkey?.toLowerCase() === pubkey.toLowerCase(),
+        );
+        if (byPubkey) return byPubkey;
+      }
+    } catch {
+      /* not a valid npub — fall through to alias matching */
+    }
+  }
+
   return (
     all.find(
       (s) =>

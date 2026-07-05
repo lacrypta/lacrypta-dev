@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Trophy } from "lucide-react";
-import { hackathonSlugForId } from "@/lib/hackathons";
+import { votingProjectHref } from "@/lib/projectLinks";
 import {
   JUDGES_WEIGHT,
   POPULAR_WEIGHT,
@@ -18,13 +18,10 @@ const MEDAL = ["🥇", "🥈", "🥉"];
 export default function FinalResultsTable({
   judges,
   rows,
-  hackathonId,
 }: {
   judges: string[];
   rows: FinalRow[];
-  hackathonId: string;
 }) {
-  const slug = hackathonSlugForId(hackathonId);
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between gap-2 mb-2">
@@ -66,7 +63,7 @@ export default function FinalResultsTable({
                   </td>
                   <td className="px-2 py-2 max-w-[14rem]">
                     <Link
-                      href={`/hackathons/${slug}/${r.projectId}`}
+                      href={votingProjectHref(r.projectId)}
                       className="block truncate font-semibold hover:text-bitcoin transition-colors"
                     >
                       {r.name}

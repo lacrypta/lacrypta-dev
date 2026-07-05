@@ -1,8 +1,9 @@
 import type { Hackathon, HackathonProject } from "./hackathons";
 import { hackathonSlug } from "./hackathons";
 import { dedupeSoldierProfileMembers } from "./soldierProfileLinks";
+import { SITE_URL } from "./siteUrl";
 
-const BASE_URL = "https://lacrypta.dev";
+const BASE_URL = SITE_URL;
 const ORG_ID = `${BASE_URL}/#organization`;
 
 type JsonLdValue =
@@ -75,11 +76,23 @@ export function eventLd(h: Hackathon): JsonLdValue {
   };
 }
 
+/** Structural subset shared by HackathonProject and the homepage Project. */
+type CreativeWorkProject = Pick<
+  HackathonProject,
+  "id" | "slug" | "name" | "description" | "repo" | "tech"
+> & {
+  team: Array<{ name?: string; github?: string; nip05?: string; pubkey?: string }>;
+};
+
 export function creativeWorkLd(
-  project: HackathonProject,
-  hackathon: Hackathon,
+  project: CreativeWorkProject,
+  hackathon: Hackathon | null,
+  /** Canonical page path, e.g. `/projects/<slug>`. */
+  canonicalPath?: string,
 ): JsonLdValue {
-  const url = `${BASE_URL}/hackathons/${hackathonSlug(hackathon)}/${project.id}`;
+  const url = `${BASE_URL}${
+    canonicalPath ?? `/projects/${project.slug ?? project.id.toLowerCase()}`
+  }`;
   return {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -91,11 +104,13 @@ export function creativeWorkLd(
     operatingSystem: "Web",
     codeRepository: project.repo,
     inLanguage: "es",
-    isPartOf: {
-      "@type": "Event",
-      name: `${hackathon.name} — Hackatón #${hackathon.number}`,
-      url: `${BASE_URL}/hackathons/${hackathonSlug(hackathon)}`,
-    },
+    isPartOf: hackathon
+      ? {
+          "@type": "Event",
+          name: `${hackathon.name} — Hackatón #${hackathon.number}`,
+          url: `${BASE_URL}/hackathons/${hackathonSlug(hackathon)}`,
+        }
+      : undefined,
     author: dedupeSoldierProfileMembers(project.team).map((m) => ({
       "@type": "Person",
       name: m.name || m.nip05 || "Anonymous",

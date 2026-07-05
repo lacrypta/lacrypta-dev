@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import {
   ArrowRight,
@@ -459,7 +458,6 @@ function InfoChip({
 }
 
 function StageCard({ h }: { h: TimelineHackathon }) {
-  const router = useRouter();
   const isActive = h.status === "active";
   const isClosed = h.status === "closed";
 
@@ -498,14 +496,8 @@ function StageCard({ h }: { h: TimelineHackathon }) {
 
   return (
     <div
-      role="link"
-      tabIndex={0}
-      onClick={() => router.push(`/hackathons/${h.slug}`)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") router.push(`/hackathons/${h.slug}`);
-      }}
       className={cn(
-        "group relative cursor-pointer rounded-3xl border bg-background-card outline-none focus-visible:ring-2 focus-visible:ring-cyan/60",
+        "group relative rounded-3xl border bg-background-card",
         accent.ring,
         accent.glow,
       )}
@@ -521,7 +513,17 @@ function StageCard({ h }: { h: TimelineHackathon }) {
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
       </div>
 
-      <div className="relative grid items-start gap-6 p-6 sm:grid-cols-[1fr_auto] sm:p-9">
+      {/* Stretched link — a real <a> so the whole card navigates with Link
+       *  prefetching, cmd-click, middle-click and native keyboard support.
+       *  The content below disables pointer events so clicks fall through to
+       *  this link, except the chip/CTA clusters which re-enable them. */}
+      <Link
+        href={`/hackathons/${h.slug}`}
+        aria-label={`Ver detalle de ${h.name}`}
+        className="absolute inset-0 rounded-3xl outline-none focus-visible:ring-2 focus-visible:ring-cyan/60"
+      />
+
+      <div className="pointer-events-none relative grid items-start gap-6 p-6 sm:grid-cols-[1fr_auto] sm:p-9">
         <div className="flex min-w-0 flex-col gap-4">
           {/* Eyebrow + number */}
           <div className="flex items-center gap-2">
@@ -551,12 +553,10 @@ function StageCard({ h }: { h: TimelineHackathon }) {
             </p>
           </div>
 
-          {/* Compact icon meta — hover any chip to read the detail. Stop
-           *  propagation so tapping a chip doesn't trigger the card's nav. */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="flex flex-wrap items-center gap-2"
-          >
+          {/* Compact icon meta — hover any chip to read the detail. Pointer
+           *  events re-enabled so tapping a chip doesn't fall through to the
+           *  card's stretched link. */}
+          <div className="pointer-events-auto flex flex-wrap items-center gap-2">
             <span
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-mono font-semibold uppercase tracking-wider",
@@ -617,12 +617,10 @@ function StageCard({ h }: { h: TimelineHackathon }) {
             )}
           </div>
 
-          {/* CTA — the whole card already navigates on click; stop propagation
-           *  here so the inscription button doesn't also trigger that nav. */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="flex flex-col items-start gap-3 border-t border-border pt-4 sm:flex-row sm:items-center"
-          >
+          {/* CTA — the whole card already navigates via the stretched link;
+           *  pointer events re-enabled so the inscription button and detail
+           *  link receive their own clicks. */}
+          <div className="pointer-events-auto flex flex-col items-start gap-3 border-t border-border pt-4 sm:flex-row sm:items-center">
             {h.inscriptionOpen && (
               <HackathonInscripcionButton hackathonId={h.id} />
             )}

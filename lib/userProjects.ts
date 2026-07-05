@@ -146,7 +146,9 @@ export function mergeCommunityProjects(
     const key = communityProjectKey(project);
     const prev = byKey.get(key);
     if (!prev || project.eventCreatedAt >= prev.eventCreatedAt) {
-      byKey.set(key, project);
+      // Keep the registry slug when the incoming copy (a raw relay scan)
+      // doesn't carry one — links would otherwise regress to id URLs.
+      byKey.set(key, { ...project, slug: project.slug ?? prev?.slug });
     }
   }
   return sortCommunityProjects([...byKey.values()]);
@@ -174,7 +176,7 @@ export function upsertCachedCommunityProject(project: CommunityProject) {
     setCachedCommunityProjects([project, ...cached]);
     return;
   }
-  cached[idx] = project;
+  cached[idx] = { ...project, slug: project.slug ?? cached[idx].slug };
   setCachedCommunityProjects(cached);
 }
 

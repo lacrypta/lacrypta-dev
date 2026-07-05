@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Zap, Trophy } from "lucide-react";
 import { GithubIcon } from "@/components/BrandIcons";
 import { hackathonSlugForId } from "@/lib/hackathons";
+import { curatedProjectHref, projectHref } from "@/lib/projectLinks";
 import { HACKATHON_LABELS } from "@/lib/projects";
 import { getCachedProfile, type NostrProfile } from "@/lib/nostrProfile";
 import { cn } from "@/lib/cn";
@@ -407,11 +408,12 @@ function SoldierCard({
 
         <ul className="flex flex-col gap-1">
           {soldier.projects.slice(0, 4).map((p, i) => {
-            const href = p.hackathonId
-              ? `/hackathons/${hackathonSlugForId(p.hackathonId)}/${p.projectId}`
-              : p.source === "nostr" && p.authorPubkey
-                ? `/projects/${p.authorPubkey}/${p.projectId}`
-                : `/projects/${p.projectId}`;
+            // Curated ids are their own canonical slug; Nostr ids resolve
+            // (and 308 to the registry slug once registered).
+            const href =
+              p.source === "curated"
+                ? curatedProjectHref(p.projectId)
+                : projectHref({ id: p.projectId });
             return (
               <li key={`${p.projectId}-${i}`}>
                 <Link

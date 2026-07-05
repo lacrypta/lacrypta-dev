@@ -4,6 +4,7 @@ import { isDevMode } from "@/lib/devMode";
 import {
   NOSTR_PROJECTS_TAG,
   NOSTR_LEGACY_SUBMISSIONS_TAG,
+  NOSTR_PROJECT_REGISTRY_TAG,
   NOSTR_SOLDIERS_RANKING_TAG,
 } from "@/lib/nostrCacheTags";
 
@@ -20,5 +21,6 @@ export async function POST() {
   revalidateTag(NOSTR_PROJECTS_TAG, { expire: 0 });
   revalidateTag(NOSTR_LEGACY_SUBMISSIONS_TAG, { expire: 0 });
   revalidateTag(NOSTR_SOLDIERS_RANKING_TAG, { expire: 0 });
+  revalidateTag(NOSTR_PROJECT_REGISTRY_TAG, { expire: 0 });
   return NextResponse.json({ ok: true });
 }

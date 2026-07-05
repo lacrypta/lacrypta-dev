@@ -1,52 +1,26 @@
 import { ImageResponse } from "next/og";
+import { formatSats, prizeForProject } from "@/lib/hackathons";
 import {
-  HACKATHONS,
-  formatSats,
-  getHackathon,
-  getHackathonProjects,
-  getProject,
-  hackathonSlug,
-  hackathonSlugForId,
-  prizeForProject,
-} from "@/lib/hackathons";
-import {
-  getNostrProject,
-  getNostrSubmissionsSnapshot,
-} from "@/lib/nostrCache";
+  getCanonicalProjectRefs,
+  resolveProjectParam,
+} from "@/lib/projectResolver";
 
-export const alt = "Proyecto · Hackatón · La Crypta Dev";
+export const alt = "Proyecto · La Crypta Dev";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export async function generateStaticParams() {
-  const hackathonIds = new Set(HACKATHONS.map((h) => h.id));
-  // Dedup keys off the canonical id; the route segment is the public slug.
-  const seen = new Set<string>();
-  const out: { id: string; projectId: string }[] = [];
-
-  for (const h of HACKATHONS) {
-    for (const p of getHackathonProjects(h.id)) {
-      const key = `${h.id}/${p.id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ id: hackathonSlug(h), projectId: p.id });
-    }
+  try {
+    const refs = await getCanonicalProjectRefs();
+    return refs.map((r) => ({ slug: r.slug }));
+  } catch {
+    return [];
   }
-
-  const { projects } = await getNostrSubmissionsSnapshot();
-  for (const p of projects) {
-    if (!p.hackathon || !hackathonIds.has(p.hackathon)) continue;
-    const key = `${p.hackathon}/${p.id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ id: hackathonSlugForId(p.hackathon), projectId: p.id });
-  }
-
-  return out;
 }
 
 const STATUS_COLOR: Record<string, string> = {
   official: "#f7931a",
+  live: "#22c55e",
   winner: "#ffd700",
   finalist: "#22d3ee",
   submitted: "#a855f7",
@@ -64,40 +38,31 @@ function medal(position: number | null | undefined) {
 export default async function Image({
   params,
 }: {
-  params: Promise<{ id: string; projectId: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id: routeParam, projectId } = await params;
-  const h = getHackathon(routeParam);
-  if (!h) {
-    const { default: DefaultOG } = await import("../../../opengraph-image");
+  const { slug } = await params;
+  const resolved = await resolveProjectParam(slug);
+  if (resolved.kind !== "project") {
+    const { default: DefaultOG } = await import("../../opengraph-image");
     return DefaultOG();
   }
-  // Data lookups key off the canonical id, not the slug.
-  const id = h.id;
 
-  const curated = getProject(id, projectId);
-  let name: string;
-  let description: string;
-  let status: string;
-  let position: number | null = null;
-  let prize: number | null = null;
-
-  if (curated) {
-    name = curated.name;
-    description = curated.description;
-    status = curated.status;
-    position = curated.report?.position ?? null;
-    prize = prizeForProject(id, projectId)?.prize ?? null;
-  } else {
-    const fromNostr = await getNostrProject(id, projectId);
-    if (!fromNostr) {
-      const { default: HackathonOG } = await import("../opengraph-image");
-      return HackathonOG({ params });
-    }
-    name = fromNostr.name;
-    description = fromNostr.description;
-    status = fromNostr.status;
+  const project = resolved.curated ?? resolved.home ?? resolved.nostr;
+  if (!project) {
+    const { default: DefaultOG } = await import("../../opengraph-image");
+    return DefaultOG();
   }
+
+  const h = resolved.hackathon;
+  const name = project.name;
+  const description = project.description;
+  const status = project.status;
+  const position = resolved.curated?.report?.position ?? null;
+  const prize =
+    resolved.curated && resolved.curated.hackathon
+      ? (prizeForProject(resolved.curated.hackathon, resolved.curated.id)?.prize ??
+        null)
+      : null;
 
   const statusColor = STATUS_COLOR[status] ?? "#a1a1aa";
   const positionMedal = medal(position);
@@ -130,8 +95,14 @@ export default async function Image({
             fontWeight: 600,
           }}
         >
-          <div style={{ display: "flex", fontSize: 28 }}>{h.icon}</div>
-          {h.name} · Hackatón #{String(h.number).padStart(2, "0")}
+          {h ? (
+            <>
+              <div style={{ display: "flex", fontSize: 28 }}>{h.icon}</div>
+              {h.name} · Hackatón #{String(h.number).padStart(2, "0")}
+            </>
+          ) : (
+            <>Proyectos · La Crypta Dev</>
+          )}
         </div>
 
         <div style={{ display: "flex", alignItems: "flex-start", gap: 32 }}>
