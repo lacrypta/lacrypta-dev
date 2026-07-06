@@ -156,7 +156,7 @@
       "tags": ["AI", "Automation", "Bitcoin"],
       "topics": ["Agentes Autónomos", "LLM + Lightning", "Workflows", "NWC"],
       "dates": [
-        { "date": "2026-07-06", "day": 6, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
+        { "date": "2026-07-07", "day": 7, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
         { "date": "2026-07-14", "day": 14, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
         { "date": "2026-07-21", "day": 21, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
         { "date": "2026-07-28", "day": 28, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
