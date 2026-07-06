@@ -77,6 +77,7 @@ import {
   type UploadProgress,
 } from "@/lib/blossom";
 import ImageCropModal, { type CropResult } from "@/components/ImageCropModal";
+import AdminPendingAwardsPanel from "./AdminPendingAwardsPanel";
 
 type CatalogState =
   | { status: "loading"; catalog: null; error: null }
@@ -516,6 +517,14 @@ export default function BadgesClient({
             )}
           </div>
         </section>
+
+        {isAdmin && (
+          <AdminPendingAwardsPanel
+            auth={auth}
+            signerReady={signerReady}
+            publisherPubkey={publisherPubkey}
+          />
+        )}
 
         {state.status === "loading" && (
           <div className="mt-12 rounded-2xl border border-border bg-background-card/70 p-8 text-foreground-muted">
