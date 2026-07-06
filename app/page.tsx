@@ -3,6 +3,7 @@ import HomeScroll from "@/components/sections/HomeScroll";
 import HomeBenefits from "@/components/sections/HomeBenefits";
 import NewsletterCTA from "@/components/sections/NewsletterCTA";
 import GamingHackathonBanner from "@/components/sections/GamingHackathonBanner";
+import HomeGate from "@/components/home/HomeGate";
 import VotingHero from "@/components/voting/VotingHero";
 import { getHackathon } from "@/lib/hackathons";
 import { getCachedVotingPeriod } from "@/lib/votingCache";
@@ -30,8 +31,11 @@ async function HomeVotingHero() {
 }
 
 export default function Home() {
+  // Logged-out visitors and crawlers get the marketing home (SSR, indexable).
+  // Logged-in users see a personalized dashboard, swapped in client-side by
+  // HomeGate once auth is known — see components/home/HomeGate.tsx.
   return (
-    <>
+    <HomeGate>
       <h1 className="sr-only">
         La Crypta Dev — Bitcoin, Lightning y Nostr en Argentina
       </h1>
@@ -42,6 +46,6 @@ export default function Home() {
       <HomeBenefits />
       <HomeScroll />
       <NewsletterCTA />
-    </>
+    </HomeGate>
   );
 }
