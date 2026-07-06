@@ -1,75 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Trophy, FolderGit2, Loader2, Award } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { isDevMode } from "@/lib/devMode";
-import {
-  fetchUserProjects,
-  getCachedUserProjects,
-  type UserProject,
-} from "@/lib/userProjects";
-import { HACKATHONS, hackathonSlugForId } from "@/lib/hackathons";
+import { hackathonSlugForId } from "@/lib/hackathons";
+import { useUserHackathons, hackathonName } from "@/lib/useUserHackathons";
 import { projectHref } from "@/lib/projectLinks";
 import { cn } from "@/lib/cn";
-
-const HACKATHON_NAME = new Map(HACKATHONS.map((h) => [h.id, h.name]));
-function hackathonName(id: string): string {
-  return HACKATHON_NAME.get(id) ?? id;
-}
-
-type Group = { hackathonId: string; projects: UserProject[] };
 
 export default function MisHackatonesClient() {
   const { auth, ready } = useAuth();
   const router = useRouter();
-  const [projects, setProjects] = useState<UserProject[]>([]);
-  const [loading, setLoading] = useState(true);
 
   // In dev, an impersonated session reads the impersonated user's projects.
   const readPubkey =
     isDevMode() && auth?.impersonating ? auth.impersonating : auth?.pubkey;
 
+  const { groups, loading } = useUserHackathons(readPubkey);
+
   useEffect(() => {
     if (!ready) return;
     if (!auth) router.replace("/");
   }, [ready, auth, router]);
-
-  useEffect(() => {
-    if (!readPubkey) return;
-    const cached = getCachedUserProjects(readPubkey);
-    if (cached) {
-      setProjects(cached.projects);
-      setLoading(false);
-    }
-    let cancelled = false;
-    fetchUserProjects(readPubkey)
-      .then((doc) => {
-        if (!cancelled) setProjects(doc.projects);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [readPubkey]);
-
-  const groups = useMemo<Group[]>(() => {
-    const byHackathon = new Map<string, UserProject[]>();
-    for (const p of projects) {
-      if (!p.hackathon) continue;
-      const list = byHackathon.get(p.hackathon) ?? [];
-      list.push(p);
-      byHackathon.set(p.hackathon, list);
-    }
-    return [...byHackathon.entries()]
-      .map(([hackathonId, ps]) => ({ hackathonId, projects: ps }))
-      .sort((a, b) => hackathonName(a.hackathonId).localeCompare(hackathonName(b.hackathonId)));
-  }, [projects]);
 
   const projectsInHackathons = groups.reduce((n, g) => n + g.projects.length, 0);
 
