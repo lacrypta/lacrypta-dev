@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   LogIn,
+  Bell,
   LayoutDashboard,
   FolderKanban,
   LogOut,
@@ -21,6 +22,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Logo from "./Logo";
+import NotificationBell from "./notifications/NotificationBell";
 import { cn } from "@/lib/cn";
 import { useAuth, clearAuth, readAndClearLogoutReason } from "@/lib/auth";
 import { useScrollLock } from "@/lib/useScrollLock";
@@ -226,6 +228,8 @@ export default function Navbar() {
               </svg>
               <span>GitHub</span>
             </a>
+
+            {auth && <NotificationBell />}
 
             {auth ? (
               <div ref={userMenuRef} className="relative hidden lg:block">
@@ -455,6 +459,14 @@ export default function Navbar() {
                     >
                       <FolderKanban className="h-4 w-4" />
                       Mis Proyectos
+                    </Link>
+                    <Link
+                      href="/notifications"
+                      onClick={() => setMobileOpen(false)}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold border border-border hover:bg-foreground/5 transition-colors"
+                    >
+                      <Bell className="h-4 w-4" />
+                      Notificaciones
                     </Link>
                   </>
                 ) : (

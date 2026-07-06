@@ -35,6 +35,7 @@ import {
 import { getHackathon, hackathonSlugForId, type ProjectReport } from "@/lib/hackathons";
 import { useProjectReport } from "@/lib/nostrReports";
 import { useAuth } from "@/lib/auth";
+import RequestPitchButton from "@/components/notifications/RequestPitchButton";
 import { getSigner } from "@/lib/nostrSigner";
 import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/cn";
@@ -738,6 +739,15 @@ export default function NostrProjectPage({
         onCancelArchive={() => setArchiveStep("idle")}
         reportSlot={reportSlot}
       />
+      {!isAuthor && project.author && (
+        <div className="mx-auto max-w-5xl px-4 pb-10 sm:px-6 lg:px-8">
+          <RequestPitchButton
+            recipientPubkey={project.author}
+            projectId={project.id}
+            projectName={project.name}
+          />
+        </div>
+      )}
       {isAuthor && (
         <NewProjectModal
           open={editOpen}
