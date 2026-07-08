@@ -920,6 +920,10 @@ export async function refetchCommunityProjectById(
   authorHint?: string,
   opts?: {
     onProgress?: (p: CommunityScanProgress) => void;
+    /** Fires the moment a newer matching event lands, before the full scan
+     *  finishes — lets the caller paint on the first hit and keep updating as
+     *  fresher replaceable events arrive. */
+    onFound?: (project: CommunityProject) => void;
     signal?: AbortSignal;
   },
 ): Promise<CommunityProject | null> {
@@ -995,6 +999,8 @@ export async function refetchCommunityProjectById(
             if (!found || ev.created_at > found.eventCreatedAt) {
               found = candidate;
               logger.push(`${name}: encontrado "${base.name}" ✓`);
+              // Paint immediately, then keep updating if a fresher event lands.
+              opts?.onFound?.(candidate);
             } else {
               logger.push(`${name}: versión más antigua ignorada`);
             }

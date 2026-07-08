@@ -229,30 +229,27 @@ async function rawFetchAllProjects(
  * answer it near-instantly — this makes resolving a known project id
  * deterministic instead of dependent on the broad scan landing every event.
  *
- * Returns the newest non-archived matching event, or null.
+ * Resolves on the FIRST valid (parseable, non-archived) event so SSR paints
+ * as soon as any relay answers — displaying something beats waiting for a
+ * possibly-newer replica, and the browser reconciles to the newest event
+ * after paint. The hard timeout only bounds the not-found case.
  */
 async function rawFetchProjectByDTag(
   projectId: string,
   timeoutMs = 4500,
-  // Grace window after the first hit to let a newer replica land on a slower
-  // relay before resolving — keeps the found path fast (~1s) while the full
-  // timeout only bounds the not-found case.
-  settleMs = 900,
 ): Promise<CachedNostrProject | null> {
   const { SimplePool } = await import("nostr-tools/pool");
   const pool = new SimplePool();
   const dTag = `${PROJECT_D_PREFIX}${projectId}`;
-  let best: IncomingEvent | null = null;
+  let best: CachedNostrProject | null = null;
 
   await new Promise<void>((resolve) => {
     let settled = false;
-    let settleTimer: ReturnType<typeof setTimeout> | null = null;
     let closer: { close: () => void } | null = null;
     const finish = () => {
       if (settled) return;
       settled = true;
       clearTimeout(hardTimer);
-      if (settleTimer) clearTimeout(settleTimer);
       try {
         closer?.close();
       } catch {
@@ -267,8 +264,15 @@ async function rawFetchProjectByDTag(
       { kinds: [PROJECT_KIND], "#d": [dTag], "#t": [PROJECT_TAG] },
       {
         onevent(ev: IncomingEvent) {
-          if (!best || ev.created_at > best.created_at) best = ev;
-          if (!settleTimer) settleTimer = setTimeout(finish, settleMs);
+          const parsed = parseEvent(ev);
+          // Ignore unparseable/archived events (never let a malformed first
+          // responder mask a valid one) — keep listening until a valid event
+          // or the timeout.
+          if (!parsed || parsed.status === "archived") return;
+          if (!best || parsed.eventCreatedAt > best.eventCreatedAt) {
+            best = parsed;
+          }
+          finish();
         },
         oneose() {
           /* timeout-driven; keep collecting until the deadline */
@@ -283,9 +287,7 @@ async function rawFetchProjectByDTag(
     /* noop */
   }
 
-  if (!best) return null;
-  const parsed = parseEvent(best);
-  return parsed && parsed.status !== "archived" ? parsed : null;
+  return best;
 }
 
 /**

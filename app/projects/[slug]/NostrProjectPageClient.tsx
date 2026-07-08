@@ -616,6 +616,10 @@ export default function NostrProjectPage({
         }
 
         if (!cancelled) setSearchPhase("relays");
+        // Timestamp of what the cache/snapshot already knew, captured before
+        // the relay scan mutates `latest` via onFound — so we still refresh the
+        // server only when relays surface something newer.
+        const knownCreatedAt = latest?.eventCreatedAt ?? 0;
         const fresh = await refetchCommunityProjectById(
           latest?.id ?? projectId,
           TOP10_RELAYS,
@@ -626,18 +630,27 @@ export default function NostrProjectPage({
             onProgress: (progress) => {
               if (!cancelled) setSearchProgress(progress);
             },
+            // Paint the moment the first matching event lands instead of
+            // waiting for every relay; keep updating as fresher events arrive.
+            onFound: (candidate) => {
+              if (cancelled || !matches(candidate)) return;
+              if (!latest || candidate.eventCreatedAt >= latest.eventCreatedAt) {
+                latest = candidate;
+                showProject(candidate);
+              }
+            },
           },
         );
 
         if (cancelled) return;
 
-        if (
-          fresh &&
-          matches(fresh) &&
-          (!latest || fresh.eventCreatedAt > latest.eventCreatedAt)
-        ) {
-          showProject(fresh);
-          await refreshServerForProject(fresh);
+        if (fresh && matches(fresh)) {
+          // onFound already painted the newest event as it arrived; reconcile
+          // the server snapshot only if relays turned up something fresher
+          // than the cache/snapshot already had.
+          if (fresh.eventCreatedAt > knownCreatedAt) {
+            await refreshServerForProject(fresh);
+          }
         } else if (!latest) {
           const broad = await fetchCommunityProjects(TOP10_RELAYS, {
             perRelayTimeoutMs: 5000,
