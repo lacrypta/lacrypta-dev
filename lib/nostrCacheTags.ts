@@ -3,6 +3,10 @@ export const NOSTR_PROJECT_REGISTRY_TAG = "nostr:project-registry";
 export const NOSTR_LEGACY_SUBMISSIONS_TAG = "nostr:hackathon-submissions";
 export const NOSTR_SOLDIERS_RANKING_TAG = "nostr:soldiers-ranking";
 
+export function nostrProjectByIdTag(projectId: string) {
+  return `nostr:project:${projectId}`;
+}
+
 export function nostrProfileTag(pubkey: string) {
   return `nostr:profile:${pubkey}`;
 }

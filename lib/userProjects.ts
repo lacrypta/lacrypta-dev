@@ -66,7 +66,34 @@ export type CommunityScanProgress = {
   completedRelays: number;
   relays: RelayScanStatus[];
   projectsSoFar: number;
+  /** Total events observed across every relay (raw, pre-parse). */
+  eventsSeen?: number;
+  /** True once the target project event has been located. */
+  matched?: boolean;
+  /** Human-readable activity log, oldest first, capped to the last entries. */
+  log?: string[];
 };
+
+/** Bounded activity log for the relay scan UI. */
+const SCAN_LOG_MAX = 40;
+function makeScanLogger(prefix: string) {
+  const log: string[] = [];
+  return {
+    log,
+    push(message: string) {
+      log.push(message);
+      if (log.length > SCAN_LOG_MAX) log.shift();
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info(`[labs] ${prefix} ${message}`);
+      }
+    },
+  };
+}
+
+function shortRelay(relay: string): string {
+  return relay.replace(/^wss?:\/\//, "").replace(/\/$/, "");
+}
 
 const USER_CACHE_PREFIX = "labs:user-projects-v2:";
 const COMMUNITY_CACHE_KEY = "labs:community-projects:v1";
@@ -737,6 +764,10 @@ export async function fetchCommunityProjects(
   // dedupe map across all relays
   const events = new Map<string, IncomingEvent>();
 
+  const logger = makeScanLogger("broad-scan");
+  logger.push(`Escaneando ${relays.length} relays por proyectos de la comunidad…`);
+  let eventsSeen = 0;
+
   const emit = () => {
     const completed = relayStates.filter(
       (r) => r.state === "done" || r.state === "error",
@@ -746,6 +777,8 @@ export async function fetchCommunityProjects(
       completedRelays: completed,
       relays: [...relayStates],
       projectsSoFar: events.size,
+      eventsSeen,
+      log: [...logger.log],
     });
   };
 
@@ -755,7 +788,9 @@ export async function fetchCommunityProjects(
     relays.map(async (relay, i) => {
       if (signal?.aborted) return;
       const state = relayStates[i];
+      const name = shortRelay(relay);
       state.state = "connecting";
+      logger.push(`Conectando a ${name}…`);
       emit();
       const pool = new SimplePool();
       try {
@@ -768,6 +803,7 @@ export async function fetchCommunityProjects(
                 state.state = "receiving";
               }
               state.events += 1;
+              eventsSeen += 1;
               const d = eventDTag(ev);
               if (!d) return;
               const key = `${ev.pubkey}|${d}`;
@@ -793,9 +829,11 @@ export async function fetchCommunityProjects(
         });
         closer.close();
         state.state = "done";
+        logger.push(`${name}: ${state.events} evento(s)`);
       } catch (e) {
         state.state = "error";
         state.error = e instanceof Error ? e.message : String(e);
+        logger.push(`${name}: error de conexión`);
       } finally {
         try {
           pool.close([relay]);
@@ -806,6 +844,9 @@ export async function fetchCommunityProjects(
       }
     }),
   );
+
+  logger.push(`Analizando ${events.size} proyecto(s) únicos…`);
+  emit();
 
   const all = [...events.values()];
   const projects: CommunityProject[] = all
@@ -896,6 +937,12 @@ export async function refetchCommunityProjectById(
   };
   if (authorHint) filter.authors = [authorHint];
 
+  const logger = makeScanLogger(`d-tag ${projectId.slice(0, 8)}`);
+  logger.push(
+    `Consultando ${relays.length} relays por el evento ${projectId.slice(0, 8)}…`,
+  );
+  let eventsSeen = 0;
+
   const emit = () => {
     const completed = relayStates.filter(
       (r) => r.state === "done" || r.state === "error",
@@ -905,6 +952,9 @@ export async function refetchCommunityProjectById(
       completedRelays: completed,
       relays: [...relayStates],
       projectsSoFar: found ? 1 : 0,
+      eventsSeen,
+      matched: !!found,
+      log: [...logger.log],
     });
   };
 
@@ -914,7 +964,9 @@ export async function refetchCommunityProjectById(
     relays.map(async (relay, i) => {
       if (opts?.signal?.aborted) return;
       const state = relayStates[i];
+      const name = shortRelay(relay);
       state.state = "connecting";
+      logger.push(`Conectando a ${name}…`);
       emit();
       const pool = new SimplePool();
       let closer: { close: () => void } | null = null;
@@ -925,8 +977,12 @@ export async function refetchCommunityProjectById(
               state.state = "receiving";
             }
             state.events += 1;
+            eventsSeen += 1;
             const base = parseProjectContent(ev);
             if (!base || base.status === "archived") {
+              logger.push(
+                `${name}: evento ${base ? "archivado" : "ilegible"} descartado`,
+              );
               emit();
               return;
             }
@@ -938,6 +994,9 @@ export async function refetchCommunityProjectById(
             };
             if (!found || ev.created_at > found.eventCreatedAt) {
               found = candidate;
+              logger.push(`${name}: encontrado "${base.name}" ✓`);
+            } else {
+              logger.push(`${name}: versión más antigua ignorada`);
             }
             emit();
           },
@@ -957,9 +1016,11 @@ export async function refetchCommunityProjectById(
           );
         });
         state.state = "done";
+        if (state.events === 0) logger.push(`${name}: sin resultados`);
       } catch (e) {
         state.state = "error";
         state.error = e instanceof Error ? e.message : String(e);
+        logger.push(`${name}: error de conexión`);
       } finally {
         try {
           closer?.close();
@@ -975,6 +1036,13 @@ export async function refetchCommunityProjectById(
       }
     }),
   );
+
+  logger.push(
+    found
+      ? `Listo: proyecto encontrado tras revisar ${eventsSeen} evento(s).`
+      : `Sin coincidencias por d-tag tras ${eventsSeen} evento(s) en ${relays.length} relays.`,
+  );
+  emit();
 
   return found;
 }

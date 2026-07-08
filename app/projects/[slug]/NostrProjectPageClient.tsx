@@ -83,6 +83,8 @@ function ProjectRelaySearchLoading({
         : progress?.projectsSoFar
           ? "Evento encontrado"
           : "Buscando evento en relays";
+  const eventsSeen = progress?.eventsSeen ?? 0;
+  const logLines = progress?.log ?? [];
 
   return (
     <div className="relative min-h-[calc(100vh-5rem)] overflow-hidden pt-24 pb-16">
@@ -166,6 +168,14 @@ function ProjectRelaySearchLoading({
                 <span className="font-mono text-foreground">
                   {projectId.slice(0, 8)}…
                 </span>
+                {phase === "relays" && (
+                  <>
+                    {" "}
+                    · <span className="text-nostr">{eventsSeen}</span> evento
+                    {eventsSeen === 1 ? "" : "s"} analizado
+                    {eventsSeen === 1 ? "" : "s"}
+                  </>
+                )}
               </p>
 
               <div className="mt-6">
@@ -212,6 +222,25 @@ function ProjectRelaySearchLoading({
                   <RelaySearchRow key={relay.relay} relay={relay} />
                 ))}
               </div>
+
+              {logLines.length > 0 && (
+                <div className="mt-5">
+                  <div className="mb-2 text-[10px] font-mono uppercase tracking-widest text-foreground-subtle">
+                    Actividad
+                  </div>
+                  <div className="max-h-40 overflow-y-auto rounded-xl border border-border bg-black/30 p-3 font-mono text-[11px] leading-relaxed text-foreground-muted">
+                    {logLines.slice(-12).map((line, i) => (
+                      <div
+                        key={`${i}-${line}`}
+                        className="flex gap-2 whitespace-pre-wrap break-words"
+                      >
+                        <span className="shrink-0 text-nostr/60">›</span>
+                        <span className="flex-1">{line}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>

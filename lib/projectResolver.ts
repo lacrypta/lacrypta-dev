@@ -22,6 +22,7 @@ import {
 import { PROJECTS as HOME_PROJECTS, type Project as HomeProject } from "./projects";
 import { projectMatchesIdentifier } from "./projectIdentity";
 import {
+  getNostrProjectByIdDirect,
   getNostrSubmissionsSnapshot,
   type CachedNostrProject,
 } from "./nostrCache";
@@ -36,6 +37,8 @@ import { safeDecodeURIComponent } from "./projectLinks";
 export { safeDecodeURIComponent };
 
 const HEX64_RE = /^[0-9a-f]{64}$/;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export type ResolvedProject = {
   kind: "project";
@@ -218,9 +221,16 @@ export async function resolveProjectParam(
   if (entry) {
     const curated = curatedForEntry(entry);
     const home = homeForEntry(entry);
-    const nostr = entry.author
+    let nostr = entry.author
       ? findNostrProject(snapshot.projects, entry.id, entry.author)
       : findNostrProject(snapshot.projects, entry.id);
+    // A registered community project whose event slipped through the broad
+    // snapshot (thin relay propagation) would otherwise render an empty
+    // client-scan shell. Resolve it directly by its `#d` id so the canonical
+    // page renders server-side. Curated-backed entries never need this.
+    if (!nostr && !curated && !home && UUID_RE.test(entry.id.toLowerCase())) {
+      nostr = await getNostrProjectByIdDirect(entry.id.toLowerCase());
+    }
     return resolvedProject(param, registry, entry, curated, home, nostr);
   }
 
@@ -233,6 +243,19 @@ export async function resolveProjectParam(
   const nostr = findNostrProject(snapshot.projects, param);
   if (byId || curated || home || nostr) {
     return resolvedProject(param, registry, byId, curated, home, nostr);
+  }
+
+  // 4. Targeted relay fallback. The shared snapshot is a single broad scan
+  // that can miss a thinly-propagated community event, which would otherwise
+  // strand the project on the (browser-dependent) client-side scan and show
+  // "Proyecto no encontrado". A community project id is a uuid, so a direct
+  // `#d` lookup by that id resolves it server-side, deterministically. Skipped
+  // for name-slug / event-id params (a `#d` query would never match them).
+  if (UUID_RE.test(paramLc)) {
+    const direct = await getNostrProjectByIdDirect(paramLc);
+    if (direct) {
+      return resolvedProject(param, registry, null, null, null, direct);
+    }
   }
 
   return { kind: "unknown", param };
