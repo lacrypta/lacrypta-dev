@@ -14,6 +14,15 @@ const nextConfig: NextConfig = {
       revalidate: 300,
       expire: 60 * 60 * 24 * 7,
     },
+    // Short SWR profile for targeted single-project relay lookups
+    // (getNostrProjectByIdDirect). A hit is stable, but a transient not-found
+    // must heal fast — pinning null for the 5-minute `nostr` window would
+    // re-strand the thinly-propagated project the lookup exists to rescue.
+    nostrLookup: {
+      stale: 30,
+      revalidate: 30,
+      expire: 300,
+    },
   },
 };
 

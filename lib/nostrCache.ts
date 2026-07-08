@@ -15,6 +15,7 @@ import { projectMatchesIdentifier } from "./projectIdentity";
 import {
   NOSTR_LEGACY_SUBMISSIONS_TAG,
   NOSTR_PROJECTS_TAG,
+  nostrProjectByIdTag,
 } from "./nostrCacheTags";
 
 const PROJECT_KIND = 30078;
@@ -217,6 +218,101 @@ async function rawFetchAllProjects(
       (p): p is CachedNostrProject => p !== null && p.status !== "archived",
     )
     .sort((a, b) => b.eventCreatedAt - a.eventCreatedAt);
+}
+
+/**
+ * Targeted lookup of a single project by its NIP-78 `d` tag, straight from the
+ * relays. The broad snapshot ({@link rawFetchAllProjects}) is one 6s scan for
+ * *every* `lacrypta-dev-project` event across all relays; a thinly-propagated
+ * event (published to only a couple of relays) can miss that window and leave
+ * the shared snapshot without it. A `#d` filter is tiny and indexed, so relays
+ * answer it near-instantly — this makes resolving a known project id
+ * deterministic instead of dependent on the broad scan landing every event.
+ *
+ * Returns the newest non-archived matching event, or null.
+ */
+async function rawFetchProjectByDTag(
+  projectId: string,
+  timeoutMs = 4500,
+  // Grace window after the first hit to let a newer replica land on a slower
+  // relay before resolving — keeps the found path fast (~1s) while the full
+  // timeout only bounds the not-found case.
+  settleMs = 900,
+): Promise<CachedNostrProject | null> {
+  const { SimplePool } = await import("nostr-tools/pool");
+  const pool = new SimplePool();
+  const dTag = `${PROJECT_D_PREFIX}${projectId}`;
+  let best: IncomingEvent | null = null;
+
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    let closer: { close: () => void } | null = null;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hardTimer);
+      if (settleTimer) clearTimeout(settleTimer);
+      try {
+        closer?.close();
+      } catch {
+        /* noop */
+      }
+      resolve();
+    };
+    const hardTimer = setTimeout(finish, timeoutMs);
+
+    closer = pool.subscribe(
+      TOP10_RELAYS,
+      { kinds: [PROJECT_KIND], "#d": [dTag], "#t": [PROJECT_TAG] },
+      {
+        onevent(ev: IncomingEvent) {
+          if (!best || ev.created_at > best.created_at) best = ev;
+          if (!settleTimer) settleTimer = setTimeout(finish, settleMs);
+        },
+        oneose() {
+          /* timeout-driven; keep collecting until the deadline */
+        },
+      },
+    );
+  });
+
+  try {
+    pool.close(TOP10_RELAYS);
+  } catch {
+    /* noop */
+  }
+
+  if (!best) return null;
+  const parsed = parseEvent(best);
+  return parsed && parsed.status !== "archived" ? parsed : null;
+}
+
+/**
+ * Cached direct lookup for `resolveProjectParam`'s miss path. Keyed per id (its
+ * own `cacheTag`). Uses the short `nostrLookup` profile, not `nostr`: a hit is
+ * stable, but a transient not-found must NOT be pinned for the 5-minute `nostr`
+ * window — that would re-strand exactly the thinly-propagated project this path
+ * exists to rescue. The short revalidate lets the next visit retry, and it also
+ * bounds repeated relay fan-out for a hammered bogus id.
+ *
+ * The queried `#d` tag is the authoritative project id, so the result's `id` is
+ * pinned to it: a malformed or poisoned `content.id` must never redirect the
+ * canonical URL to a slug that then resolves to nothing.
+ */
+export async function getNostrProjectByIdDirect(
+  projectId: string,
+): Promise<CachedNostrProject | null> {
+  "use cache";
+  cacheLife("nostrLookup");
+  cacheTag(NOSTR_PROJECTS_TAG);
+  cacheTag(nostrProjectByIdTag(projectId));
+  try {
+    const project = await rawFetchProjectByDTag(projectId);
+    return project ? { ...project, id: projectId } : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
