@@ -21,6 +21,7 @@
     ],
     "rules": [
       "Hasta {maxTeamSize} personas por equipo.",
+      "Podés sumar varios proyectos, pero solo uno por persona puede ganar premio.",
       "Inscripción abierta al primer sábado, cierre al tercero.",
       "Open source recomendado — sumá puntos por licencia.",
       "Evaluación por jurado AI: {judges}."
