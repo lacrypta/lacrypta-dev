@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,8 +43,13 @@ import { cn } from "@/lib/cn";
 import { projectMatchesIdentifier } from "@/lib/projectIdentity";
 import { mergeDataRelays } from "@/lib/nostrRelayConfig";
 import { seedProjectEntities, seedProfileEntities, useProjectEntity } from "@/lib/entityStore";
-import NewProjectModal from "@/components/NewProjectModal";
 import { ProjectDetailView } from "@/components/ProjectDetailView";
+
+// The edit modal is the largest client component in the tree and only opens for
+// the project's own author — keep it out of the page's first load.
+const NewProjectModal = dynamic(() => import("@/components/NewProjectModal"), {
+  ssr: false,
+});
 
 type SearchPhase = "cache" | "snapshot" | "relays";
 

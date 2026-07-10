@@ -126,6 +126,52 @@ export function creativeWorkLd(
   };
 }
 
+/** Structural subset of `Soldier` — keeps this module free of lib/soldiers. */
+type PersonSubject = {
+  slug: string;
+  name: string;
+  github?: string;
+  nip05?: string;
+  picture?: string;
+  roles: string[];
+};
+
+export function personLd(
+  soldier: PersonSubject,
+  /** Absolute URLs of the projects this person authored. */
+  projectUrls: string[] = [],
+): JsonLdValue {
+  const url = `${BASE_URL}/soldados/${encodeURIComponent(soldier.slug)}`;
+  const sameAs = [
+    soldier.github ? `https://github.com/${soldier.github}` : undefined,
+  ].filter((v): v is string => Boolean(v));
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    url,
+    mainEntity: {
+      "@type": "Person",
+      "@id": `${url}#person`,
+      name: soldier.name,
+      identifier: soldier.nip05,
+      image: soldier.picture,
+      url,
+      jobTitle: soldier.roles.length ? soldier.roles.join(", ") : undefined,
+      sameAs: sameAs.length ? sameAs : undefined,
+      memberOf: { "@id": ORG_ID },
+    },
+    ...(projectUrls.length
+      ? {
+          hasPart: projectUrls.map((projectUrl) => ({
+            "@type": "SoftwareApplication",
+            url: projectUrl,
+          })),
+        }
+      : {}),
+  };
+}
+
 export type Crumb = { name: string; url: string };
 
 export function breadcrumbLd(crumbs: Crumb[]): JsonLdValue {

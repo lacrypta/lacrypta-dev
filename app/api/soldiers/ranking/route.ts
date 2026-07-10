@@ -8,6 +8,7 @@ import {
   NOSTR_PROJECTS_TAG,
   NOSTR_SOLDIERS_RANKING_TAG,
 } from "@/lib/nostrCacheTags";
+import { expireNostrTag } from "@/lib/nostrRevalidate";
 import {
   RANKING_D_TAG,
   RANKING_KIND,
@@ -168,7 +169,11 @@ export async function POST(req: Request) {
     }
 
     // Bust the server cache so /soldados reads the freshly-published snapshot.
-    revalidateTag(NOSTR_SOLDIERS_RANKING_TAG, { expire: 0 });
+    // The ranking must drop out of Upstash too — its day-long TTL would
+    // otherwise pin the ranking this request just superseded. The projects tag
+    // only needs the Next tier expired: `getFreshNostrSubmissionsSnapshot()`
+    // above already wrote the current snapshot through to Upstash.
+    await expireNostrTag(NOSTR_SOLDIERS_RANKING_TAG);
     revalidateTag(NOSTR_PROJECTS_TAG, { expire: 0 });
 
     return NextResponse.json({

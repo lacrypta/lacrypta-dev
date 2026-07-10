@@ -6,10 +6,26 @@ import { getNostrSubmissionsSnapshot } from "@/lib/nostrCache";
 import { getProjectRegistryState } from "@/lib/projectRegistry";
 import { attachProjectSlugs } from "@/lib/projectResolver";
 
+const DESCRIPTION =
+  "Proyectos open source construidos por y con la comunidad de La Crypta — Bitcoin, Lightning, Nostr y más.";
+
 export const metadata: Metadata = {
   title: "Proyectos",
-  description:
-    "Proyectos open source construidos por y con la comunidad de La Crypta — Bitcoin, Lightning, Nostr y más.",
+  description: DESCRIPTION,
+  alternates: { canonical: "/projects" },
+  openGraph: {
+    title: "Proyectos · La Crypta Dev",
+    description: DESCRIPTION,
+    url: "/projects",
+    type: "website",
+  },
+  twitter: {
+    // Page-level `twitter` replaces the layout's object wholesale, so `card`
+    // has to be restated or it silently degrades to the small "summary" card.
+    card: "summary_large_image",
+    title: "Proyectos · La Crypta Dev",
+    description: DESCRIPTION,
+  },
 };
 
 export default async function ProjectsPage() {

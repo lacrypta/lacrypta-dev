@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { UserPlus } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { hackathonSlugForId } from "@/lib/hackathons";
-import LoginModal from "./LoginModal";
-import NewProjectModal from "./NewProjectModal";
+
+// Both modals are heavy client components, and this button renders on the
+// prerendered hackathon page — statically importing them would ship the login
+// and project-submission flows to every crawler and first-time visitor. Fetch
+// them on first open instead (same pattern as Navbar).
+const LoginModal = dynamic(() => import("./LoginModal"), { ssr: false });
+const NewProjectModal = dynamic(() => import("./NewProjectModal"), {
+  ssr: false,
+});
 
 export default function HackathonInscripcionButton({
   hackathonId,

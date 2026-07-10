@@ -97,6 +97,9 @@ export async function generateMetadata({
       type: "website",
     },
     twitter: {
+      // Page-level `twitter` replaces the layout's object wholesale, so `card`
+      // has to be restated or it silently degrades to the small "summary" card.
+      card: "summary_large_image",
       title: `${h.name} — Hackatón #${h.number}`,
       description,
     },
@@ -377,6 +380,8 @@ function SponsorHero({ sponsor }: { sponsor: Sponsor }) {
               src={sponsor.logo}
               alt={sponsor.name}
               className="h-16 sm:h-20 w-auto object-contain"
+              loading="lazy"
+              decoding="async"
             />
           </div>
           <span

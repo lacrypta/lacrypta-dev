@@ -14,6 +14,7 @@ import {
   parseRankingSnapshot,
   type SoldiersRankingSnapshot,
 } from "./soldiersRanking";
+import { UPSTASH_KEYS, UPSTASH_TTL, upstashReadThrough } from "./upstashCache";
 
 type IncomingEvent = {
   id: string;
@@ -85,9 +86,15 @@ export async function getCachedSoldiersRankingSnapshot(): Promise<SoldiersRankin
   "use cache";
   cacheLife("days");
   cacheTag(NOSTR_SOLDIERS_RANKING_TAG);
-  try {
-    return await rawFetchRankingSnapshot();
-  } catch {
-    return null;
-  }
+  return upstashReadThrough(
+    UPSTASH_KEYS.soldiersRanking,
+    UPSTASH_TTL.ranking,
+    async () => {
+      try {
+        return await rawFetchRankingSnapshot();
+      } catch {
+        return null;
+      }
+    },
+  );
 }
