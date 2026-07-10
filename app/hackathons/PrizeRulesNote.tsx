@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Info, X } from "lucide-react";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { PROGRAM, formatSats } from "@/lib/hackathons";
+
+const TITLE_ID = "prize-rules-modal-title";
 
 /**
  * Fine print under the prize-structure grid: explains the partial-podium
@@ -14,15 +16,24 @@ import { PROGRAM, formatSats } from "@/lib/hackathons";
  */
 export default function PrizeRulesNote() {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   useScrollLock(open);
 
   useEffect(() => {
     if (!open) return;
+    // Move focus into the dialog on open, and restore it to the trigger on
+    // close so keyboard users don't lose their place behind the overlay.
+    const trigger = triggerRef.current;
+    dialogRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      trigger?.focus();
+    };
   }, [open]);
 
   const slots = [...PROGRAM.prizeDistribution].sort(
@@ -36,8 +47,11 @@ export default function PrizeRulesNote() {
         * Si hay menos proyectos participantes que premios, se entregan los
         premios más chicos primero.{" "}
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
           className="underline underline-offset-2 hover:text-foreground-muted transition-colors"
         >
           Ver cómo funciona
@@ -61,11 +75,16 @@ export default function PrizeRulesNote() {
             />
 
             <motion.div
+              ref={dialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={TITLE_ID}
+              tabIndex={-1}
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative w-full max-w-md glass-strong rounded-2xl border border-border-strong overflow-hidden"
+              className="relative w-full max-w-md glass-strong rounded-2xl border border-border-strong overflow-hidden outline-none"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-bitcoin/10 via-transparent to-nostr/10 pointer-events-none" />
               <div className="absolute -top-px left-1/2 -translate-x-1/2 w-[40%] h-px bg-gradient-to-r from-transparent via-bitcoin to-transparent" />
@@ -83,7 +102,7 @@ export default function PrizeRulesNote() {
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-bitcoin/10 text-bitcoin">
                     <Info className="h-5 w-5" />
                   </div>
-                  <h2 className="font-display font-bold text-lg">
+                  <h2 id={TITLE_ID} className="font-display font-bold text-lg">
                     Cómo se reparten los premios
                   </h2>
                 </div>
