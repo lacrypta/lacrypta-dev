@@ -44,6 +44,19 @@ Every project has **one canonical URL**: `/projects/<slug>`. Slugs are pinned by
 
 Don't import the client module from server code; don't add `"use cache"` to the client one. If a parser changes, update both.
 
+## The Upstash tier under `"use cache"`
+
+`lib/upstashCache.ts` is a read-through Redis cache that sits **beneath** `"use cache"`, not beside it. The relay scans it fronts are expensive (`rawFetchAllProjects` ≈ 6s, `rawFetchProjectByDTag` ≈ 4.5s), and `"use cache"` only hides that while its entry is warm — every cold start, deploy and tag expiry otherwise re-runs the scan inside a user (often crawler) request. With Upstash, only a true miss reaches the relays.
+
+It is **not** a Next `cacheHandlers` implementation on purpose: custom cache handlers are not invoked on Vercel (its managed Data Cache backs `"use cache"` there). Plain HTTPS to Upstash REST behaves identically on Vercel, Docker and `next start`. Without `UPSTASH_REDIS_REST_URL`/`_TOKEN` the whole layer no-ops — an unconfigured environment just pays the scan.
+
+Two rules keep the tiers consistent:
+
+- **Hard expiry must clear both tiers.** `revalidateTag(tag, { expire: 0 })` alone leaves the Upstash key intact and the next render resurrects exactly what you invalidated. Use `lib/nostrRevalidate.ts:expireNostrTag` (it maps tag → key and does both). This does *not* apply to stale-marking (`revalidateTag(tag, "max")`), which wants the cached value served while it regenerates.
+- **If you already hold fresh data, scan first, expire second.** `getFreshNostrSubmissionsSnapshot()` bypasses the read and writes through to Upstash, so callers doing read-your-writes (`/api/nostr/refresh`, registry sync, ranking publish) should call it and *then* expire the Next tag only — dropping the key they just warmed buys a redundant 6s rescan.
+
+Keys are namespaced `lacrypta:<dev|preview|prod>:…` off `VERCEL_ENV`, with `NEXT_PUBLIC_DEV_MODE` or a localhost relay forcing `dev:` regardless. Production and preview deployments share one Upstash database, so this split is what stops a preview branch that changes the `CachedNostrProject` shape from writing it into the keys production reads back — and what stops `pnpm dev` (dummy data, local relay) from ever serving fake projects to the public site. Empty snapshots and `null` lookups are never persisted (a relay timeout must not pin "no projects" fleet-wide). `app/api/cache/warm/route.ts` + `vercel.json` keep the snapshot hot on a cron so the scan lands there, never in a page request.
+
 ## Signing & auth
 
 Three signer methods, all wired through `lib/nostrSigner.ts:getSigner(auth)`:
@@ -61,6 +74,8 @@ Auth state lives in `localStorage` under `labs:auth`. Mutations dispatch a `labs
 - `LACRYPTA_NSEC` — **server-only** signing key for La Crypta's official events (reports, results). Never prefix with `NEXT_PUBLIC_`.
 - `NEXT_PUBLIC_LACRYPTA_NPUB` — public key, used for Nostr filter `authors`, admin guard, and signature verification. Decoded to hex on demand and cached on `window.__lcpk__` (see `lib/nostrReports.ts:resolveLacryptaPubkey`).
 - `REVALIDATE_SECRET` — gates `/api/revalidate-nostr`.
+- `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` — **server-only**. Enable the read-through cache; unset means it no-ops. On Vercel the Upstash marketplace integration injects the same credentials as `KV_REST_API_URL` / `KV_REST_API_TOKEN`, and `lib/upstashCache.ts` accepts either pair. `UPSTASH_CACHE_DISABLED=1` forces it off with the credentials still present.
+- `CRON_SECRET` — gates `GET /api/cache/warm` (`Authorization: Bearer …`, which Vercel Cron sends automatically).
 
 ## Conventions worth knowing
 

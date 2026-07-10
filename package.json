@@ -16,6 +16,7 @@
     "relay:logs": "docker compose -f dev/relay/docker-compose.yml logs -f"
   },
   "dependencies": {
+    "@upstash/redis": "^1.38.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "lottie-react": "^2.4.1",

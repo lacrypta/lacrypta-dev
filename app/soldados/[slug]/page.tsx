@@ -27,6 +27,8 @@ import {
   type SoldierProjectRef,
 } from "@/lib/soldiers";
 import { getCachedNostrProfile } from "@/lib/nostrProfileCache";
+import { breadcrumbLd, jsonLdScript, personLd } from "@/lib/jsonld";
+import { SITE_URL } from "@/lib/siteUrl";
 import { cn } from "@/lib/cn";
 import { isDevMode } from "@/lib/devMode";
 import SoldierZapButton from "./SoldierZapButton";
@@ -49,10 +51,16 @@ export async function generateMetadata({
   const { slug } = await params;
   const s = await getSoldierBySlug(slug);
   if (!s) return { title: "Soldado", robots: { index: false } };
+  const title = `${s.name} — Soldados`;
+  const description = `Builder de La Crypta · ${s.projects.length} proyecto(s) · score ${s.score}.`;
+  const url = `/soldados/${encodeURIComponent(s.slug)}`;
   return {
-    title: `${s.name} — Soldados`,
-    description: `Builder de La Crypta · ${s.projects.length} proyecto(s) · score ${s.score}.`,
-    alternates: { canonical: `/soldados/${encodeURIComponent(s.slug)}` },
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url, type: "profile" },
+    // `card` must be restated: page-level `twitter` replaces the layout's object.
+    twitter: { card: "summary_large_image", title, description },
   };
 }
 
@@ -148,6 +156,26 @@ export default async function SoldierProfilePage({
 
   return (
     <div className="relative min-h-screen pb-24">
+      {jsonLdScript(
+        personLd(
+          { ...soldier, name: displayName, picture: avatar ?? undefined, nip05 },
+          sortedProjects.map(
+            (p) => `${SITE_URL}${soldierProjectHref(p, registry)}`,
+          ),
+        ),
+        "ld-person",
+      )}
+      {jsonLdScript(
+        breadcrumbLd([
+          { name: "Inicio", url: SITE_URL },
+          { name: "Soldados", url: `${SITE_URL}/soldados` },
+          {
+            name: displayName,
+            url: `${SITE_URL}/soldados/${encodeURIComponent(soldier.slug)}`,
+          },
+        ]),
+        "ld-breadcrumbs",
+      )}
       <ProfileBanner banner={banner} />
 
       <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-24 sm:-mt-32">

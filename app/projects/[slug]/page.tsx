@@ -92,6 +92,9 @@ export async function generateMetadata({
       type: "article",
     },
     twitter: {
+      // Page-level `twitter` replaces the layout's object wholesale, so `card`
+      // has to be restated or it silently degrades to the small "summary" card.
+      card: "summary_large_image",
       title,
       description: desc,
     },
@@ -127,5 +130,8 @@ async function PageContent({
   if (resolved.redirectTo) {
     permanentRedirect(resolved.redirectTo);
   }
+  // SoftwareApplication + BreadcrumbList JSON-LD are emitted by
+  // UnifiedProjectView, which knows the hackathon context — don't duplicate
+  // them here (two BreadcrumbLists with different trails is worse than one).
   return <UnifiedProjectView resolved={resolved} />;
 }

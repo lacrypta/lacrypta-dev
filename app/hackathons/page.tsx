@@ -21,10 +21,26 @@ import HackathonTimeline, {
 } from "@/app/hackathons/HackathonTimeline";
 import PilaresDisclosure from "@/app/hackathons/PilaresDisclosure";
 
+const DESCRIPTION =
+  "Lightning Hackathons 2026 — 8 hackatones mensuales, 8M sats en premios. Bitcoin, Lightning, Nostr.";
+
 export const metadata: Metadata = {
   title: "Hackatones",
-  description:
-    "Lightning Hackathons 2026 — 8 hackatones mensuales, 8M sats en premios. Bitcoin, Lightning, Nostr.",
+  description: DESCRIPTION,
+  alternates: { canonical: "/hackathons" },
+  openGraph: {
+    title: "Hackatones · La Crypta Dev",
+    description: DESCRIPTION,
+    url: "/hackathons",
+    type: "website",
+  },
+  twitter: {
+    // Page-level `twitter` replaces the layout's object wholesale, so `card`
+    // has to be restated or it silently degrades to the small "summary" card.
+    card: "summary_large_image",
+    title: "Hackatones · La Crypta Dev",
+    description: DESCRIPTION,
+  },
 };
 
 function daysBetween(a: Date, b: Date): number {

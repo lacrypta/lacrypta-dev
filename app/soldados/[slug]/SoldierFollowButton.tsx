@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { Loader2, UserCheck, UserMinus, UserPlus, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/components/Toast";
@@ -13,8 +14,13 @@ import {
 } from "@/lib/follows";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { cn } from "@/lib/cn";
-import LoginModal from "@/components/LoginModal";
 import ConfirmUnfollow from "../ConfirmUnfollow";
+
+// Heavy client component (NIP-07/NIP-46/QR flows) on a prerendered profile
+// page — fetch it the first time the user actually opens the login flow.
+const LoginModal = dynamic(() => import("@/components/LoginModal"), {
+  ssr: false,
+});
 
 export default function SoldierFollowButton({
   recipientPubkey,

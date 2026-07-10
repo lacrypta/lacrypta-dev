@@ -17,6 +17,12 @@ import {
   NOSTR_PROJECTS_TAG,
   nostrProjectByIdTag,
 } from "./nostrCacheTags";
+import {
+  UPSTASH_KEYS,
+  UPSTASH_TTL,
+  upstashReadThrough,
+  upstashSet,
+} from "./upstashCache";
 
 const PROJECT_KIND = 30078;
 const PROJECT_TAG = "lacrypta-dev-project";
@@ -301,6 +307,10 @@ async function rawFetchProjectByDTag(
  * The queried `#d` tag is the authoritative project id, so the result's `id` is
  * pinned to it: a malformed or poisoned `content.id` must never redirect the
  * canonical URL to a slug that then resolves to nothing.
+ *
+ * Upstash absorbs the miss path across instances. A not-found is never written
+ * (see `upstashReadThrough`), so a project that propagates to the relays a
+ * moment later is picked up on the next lookup rather than pinned absent.
  */
 export async function getNostrProjectByIdDirect(
   projectId: string,
@@ -309,17 +319,56 @@ export async function getNostrProjectByIdDirect(
   cacheLife("nostrLookup");
   cacheTag(NOSTR_PROJECTS_TAG);
   cacheTag(nostrProjectByIdTag(projectId));
+  return upstashReadThrough(
+    UPSTASH_KEYS.projectById(projectId),
+    UPSTASH_TTL.lookup,
+    async () => {
+      try {
+        const project = await rawFetchProjectByDTag(projectId);
+        return project ? { ...project, id: projectId } : null;
+      } catch {
+        return null;
+      }
+    },
+  );
+}
+
+async function buildSubmissionsSnapshot(): Promise<
+  CachedNostrSubmissionsSnapshot
+> {
   try {
-    const project = await rawFetchProjectByDTag(projectId);
-    return project ? { ...project, id: projectId } : null;
+    return {
+      projects: await rawFetchAllProjects(),
+      generatedAt: new Date().toISOString(),
+      relays: TOP10_RELAYS,
+    };
   } catch {
-    return null;
+    return {
+      projects: [],
+      generatedAt: new Date().toISOString(),
+      relays: TOP10_RELAYS,
+    };
   }
+}
+
+/**
+ * An empty snapshot is indistinguishable from "every relay timed out", so it is
+ * never persisted: pinning "no projects" into the shared cache would blank the
+ * project pages of every instance for the whole TTL.
+ */
+function snapshotIsCacheable(
+  snapshot: CachedNostrSubmissionsSnapshot,
+): boolean {
+  return snapshot.projects.length > 0;
 }
 
 /**
  * Single source of truth — every consumer below filters this list.
  * Caching once here means N consumers share a single relay round-trip.
+ *
+ * Two tiers: `"use cache"` serves warm renders from the process/Data Cache,
+ * and Upstash catches the cold ones (deploys, new instances, tag expiry) so the
+ * 6s relay scan runs at most once per TTL across the whole fleet.
  */
 async function getSubmissionsSnapshotCached(): Promise<
   CachedNostrSubmissionsSnapshot
@@ -328,19 +377,12 @@ async function getSubmissionsSnapshotCached(): Promise<
   cacheLife("nostr");
   cacheTag(NOSTR_PROJECTS_TAG);
   cacheTag(NOSTR_SUBMISSIONS_TAG);
-  try {
-    return {
-      projects: await rawFetchAllProjects(),
-      generatedAt: new Date().toISOString(),
-      relays: TOP10_RELAYS,
-    };
-  } catch {
-    return {
-      projects: [],
-      generatedAt: new Date().toISOString(),
-      relays: TOP10_RELAYS,
-    };
-  }
+  return upstashReadThrough(
+    UPSTASH_KEYS.submissionsSnapshot,
+    UPSTASH_TTL.snapshot,
+    buildSubmissionsSnapshot,
+    { shouldCache: snapshotIsCacheable },
+  );
 }
 
 export async function getNostrSubmissionsSnapshot(): Promise<
@@ -349,22 +391,27 @@ export async function getNostrSubmissionsSnapshot(): Promise<
   return getSubmissionsSnapshotCached();
 }
 
+/**
+ * Bypasses both cache tiers and scans the relays, then writes the result back
+ * to Upstash. Callers are the read-your-writes paths (`/api/nostr/refresh`,
+ * registry sync, ranking publish) — refreshing the shared cache here means the
+ * `"use cache"` re-render they trigger lands on a warm key instead of paying
+ * the scan a second time.
+ *
+ * Only ever called from route handlers / `after()`, never inside `"use cache"`.
+ */
 export async function getFreshNostrSubmissionsSnapshot(): Promise<
   CachedNostrSubmissionsSnapshot
 > {
-  try {
-    return {
-      projects: await rawFetchAllProjects(),
-      generatedAt: new Date().toISOString(),
-      relays: TOP10_RELAYS,
-    };
-  } catch {
-    return {
-      projects: [],
-      generatedAt: new Date().toISOString(),
-      relays: TOP10_RELAYS,
-    };
+  const snapshot = await buildSubmissionsSnapshot();
+  if (snapshotIsCacheable(snapshot)) {
+    await upstashSet(
+      UPSTASH_KEYS.submissionsSnapshot,
+      snapshot,
+      UPSTASH_TTL.snapshot,
+    );
   }
+  return snapshot;
 }
 
 async function getAllSubmissionsCached(): Promise<CachedNostrProject[]> {

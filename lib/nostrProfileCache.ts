@@ -10,6 +10,7 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { DEFAULT_RELAYS } from "./nostrRelayConfig";
 import { nostrProfileTag } from "./nostrCacheTags";
+import { UPSTASH_KEYS, UPSTASH_TTL, upstashReadThrough } from "./upstashCache";
 
 export type CachedNostrProfile = {
   pubkey: string;
@@ -92,9 +93,15 @@ export async function getCachedNostrProfile(
   "use cache";
   cacheLife("days");
   cacheTag(nostrProfileTag(pubkey));
-  try {
-    return await rawFetchProfile(pubkey);
-  } catch {
-    return null;
-  }
+  return upstashReadThrough(
+    UPSTASH_KEYS.profile(pubkey),
+    UPSTASH_TTL.profile,
+    async () => {
+      try {
+        return await rawFetchProfile(pubkey);
+      } catch {
+        return null;
+      }
+    },
+  );
 }

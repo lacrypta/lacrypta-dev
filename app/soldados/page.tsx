@@ -4,10 +4,26 @@ import PageHero from "@/components/ui/PageHero";
 import { getSoldiers } from "@/lib/soldiers";
 import SoldiersClient from "./SoldiersClient";
 
+const DESCRIPTION =
+  "La gente detrás de los proyectos de La Crypta Dev — builders que armaron, presentaron y ganaron en cada hackatón.";
+
 export const metadata: Metadata = {
   title: "Soldados",
-  description:
-    "La gente detrás de los proyectos de La Crypta Dev — builders que armaron, presentaron y ganaron en cada hackatón.",
+  description: DESCRIPTION,
+  alternates: { canonical: "/soldados" },
+  openGraph: {
+    title: "Soldados · La Crypta Dev",
+    description: DESCRIPTION,
+    url: "/soldados",
+    type: "website",
+  },
+  twitter: {
+    // Page-level `twitter` replaces the layout's object wholesale, so `card`
+    // has to be restated or it silently degrades to the small "summary" card.
+    card: "summary_large_image",
+    title: "Soldados · La Crypta Dev",
+    description: DESCRIPTION,
+  },
 };
 
 export default async function SoldiersPage() {

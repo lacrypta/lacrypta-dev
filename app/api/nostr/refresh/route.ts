@@ -7,6 +7,7 @@ import {
 } from "@/lib/nostrCache";
 import { getProjectRegistryState, syncProjectRegistry } from "@/lib/projectRegistry";
 import { attachProjectSlugs } from "@/lib/projectResolver";
+import { expireNostrTag } from "@/lib/nostrRevalidate";
 import {
   NOSTR_LEGACY_SUBMISSIONS_TAG,
   NOSTR_PROJECTS_TAG,
@@ -50,10 +51,6 @@ type RefreshBody = {
 };
 
 const MAX_REFRESH_ATAGS = 50;
-
-function expireTag(tag: string) {
-  revalidateTag(tag, { expire: 0 });
-}
 
 // Throttles: this endpoint is unauthenticated and its expensive paths run a
 // ~6s multi-relay scan. Best-effort per-instance guards (serverless instances
@@ -104,8 +101,22 @@ export async function POST(req: NextRequest) {
   const refreshed: Record<string, unknown> = {};
   const expiredTags: string[] = [];
 
+  // Two flavours of hard expiry, and the difference matters now that an Upstash
+  // read-through tier sits under `"use cache"`:
+  //
+  //  - `expire` drops the Upstash key as well. The default: with no fresh value
+  //    in hand, the next reader must re-scan rather than resurrect the entry we
+  //    just invalidated.
+  //  - `expireNextOnly` leaves Upstash untouched. Only for the caller that just
+  //    wrote a fresh snapshot through to Upstash — deleting it there would buy
+  //    nothing but a redundant ~6s rescan of data we already hold.
+  const pendingExpiries: Promise<void>[] = [];
   const expire = (tag: string) => {
-    expireTag(tag);
+    pendingExpiries.push(expireNostrTag(tag));
+    expiredTags.push(tag);
+  };
+  const expireNextOnly = (tag: string) => {
+    revalidateTag(tag, { expire: 0 });
     expiredTags.push(tag);
   };
 
@@ -127,19 +138,26 @@ export async function POST(req: NextRequest) {
       !candidateAlreadyServed(body.candidateEventId, now)
     ) {
       // Read-your-writes: the caller just published an event and needs the
-      // snapshot to contain it — expire and re-fetch synchronously. One
-      // blocking refetch per candidate event; repeats serve the cache (the
-      // client shows "sincronizando" and retries via router.refresh).
+      // snapshot to contain it. Scan the relays FIRST — that call writes the
+      // fresh snapshot through to Upstash — and only then drop the Next cache
+      // entry. The reverse order would let the regeneration read the *stale*
+      // Upstash entry back and silently undo the refresh. Note we expire the
+      // tag rather than `expireNostrTag`: the Upstash key is already fresh, so
+      // dropping it would only buy a redundant ~6s rescan. One blocking refetch
+      // per candidate event; repeats serve the cache (the client shows
+      // "sincronizando" and retries via router.refresh).
       lastFreshScan = now;
-      expire(NOSTR_PROJECTS_TAG);
-      expire(NOSTR_LEGACY_SUBMISSIONS_TAG);
-      snapshot = await getNostrSubmissionsSnapshot();
+      snapshot = await getFreshNostrSubmissionsSnapshot();
+      expireNextOnly(NOSTR_PROJECTS_TAG);
+      expireNextOnly(NOSTR_LEGACY_SUBMISSIONS_TAG);
     } else {
       // Stale-while-revalidate: serve the cached snapshot NOW, then mark the
       // tags stale so the next visit regenerates in the background. Reading
       // BEFORE revalidateTag is what keeps this request non-blocking — the
       // pending tag would otherwise discard the entry and re-run the ~6s
-      // relay scan inline.
+      // relay scan inline. The background regeneration reads Upstash rather
+      // than the relays, so relay freshness on this path is bounded by the
+      // Upstash TTL (and by the warming cron that refreshes it).
       snapshot = await getNostrSubmissionsSnapshot();
       if (now - lastProjectsInvalidation > PROJECTS_INVALIDATION_WINDOW_MS) {
         lastProjectsInvalidation = now;
@@ -220,6 +238,11 @@ export async function POST(req: NextRequest) {
       }
     }
   }
+
+  // Upstash deletions are fire-and-forget per call; settle them before
+  // responding so a caller that immediately re-reads cannot race a key we
+  // reported as expired.
+  await Promise.all(pendingExpiries);
 
   return NextResponse.json({
     ok: true,

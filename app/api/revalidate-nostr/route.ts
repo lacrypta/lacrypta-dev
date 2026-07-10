@@ -1,9 +1,11 @@
-import { revalidateTag } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import {
   NOSTR_LEGACY_SUBMISSIONS_TAG,
   NOSTR_PROJECTS_TAG,
 } from "@/lib/nostrCacheTags";
+import { expireNostrTag } from "@/lib/nostrRevalidate";
+import { getFreshNostrSubmissionsSnapshot } from "@/lib/nostrCache";
 
 /**
  * Secret-gated revalidation hook for Nostr-sourced cached data.
@@ -14,6 +16,10 @@ import {
  *     -d '{"tag":"nostr:hackathon-submissions"}'
  *
  * Defaults to the global projects tag when no body is provided.
+ *
+ * `expireNostrTag` clears both cache tiers — the Next tag and the Upstash key
+ * shadowing it — so the endpoint cannot report a flush while the read-through
+ * layer keeps serving the old value.
  */
 export async function POST(req: NextRequest) {
   const secret = req.headers.get("x-revalidate-secret");
@@ -32,9 +38,13 @@ export async function POST(req: NextRequest) {
     /* no body, use default */
   }
 
-  revalidateTag(tag, { expire: 0 });
+  await expireNostrTag(tag);
   if (tag === NOSTR_PROJECTS_TAG) {
-    revalidateTag(NOSTR_LEGACY_SUBMISSIONS_TAG, { expire: 0 });
+    await expireNostrTag(NOSTR_LEGACY_SUBMISSIONS_TAG);
+    // Both tiers are now cold, so the next visitor would eat the ~6s relay
+    // scan. Rebuild the shared snapshot off the response path instead; `after`
+    // (not a detached promise) is what keeps the work alive on serverless.
+    after(() => getFreshNostrSubmissionsSnapshot());
   }
   return NextResponse.json({ ok: true, tag });
 }
