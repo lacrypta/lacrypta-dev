@@ -20,6 +20,7 @@ import HackathonTimeline, {
   type TimelineHackathon,
 } from "@/app/hackathons/HackathonTimeline";
 import PilaresDisclosure from "@/app/hackathons/PilaresDisclosure";
+import PrizeRulesNote from "@/app/hackathons/PrizeRulesNote";
 
 const DESCRIPTION =
   "Lightning Hackathons 2026 — 8 hackatones mensuales, 8M sats en premios. Bitcoin, Lightning, Nostr.";
@@ -119,8 +120,13 @@ function buildTimeline(now: Date): {
   const initialIndex =
     activeIdx >= 0 ? activeIdx : firstUpcomingIdx >= 0 ? firstUpcomingIdx : n - 1;
 
-  // Elapsed fraction: closed nodes count as fully done; the active one is
-  // interpolated across its own date span. Each node owns a 1/n slice.
+  // Elapsed fraction: node dots sit at the CENTER of each 1/n slice
+  // (`(i + 0.5)/n`), so the marker must too. While a hackathon is active the
+  // marker travels from its own dot toward the next one as its date span
+  // elapses (f: 0→1 maps activeIdx's center → the next node's center), keeping
+  // the "today" pip on the live hackathon instead of lagging a half-slice
+  // behind it. Between hackathons it rests at the midpoint of the two dots,
+  // which `closedCount/n` already yields (a cell boundary == a dot midpoint).
   let todayPct: number;
   if (activeIdx >= 0) {
     const h = ordered[activeIdx];
@@ -130,7 +136,7 @@ function buildTimeline(now: Date): {
     const span = new Date(last).getTime() - new Date(first).getTime();
     const into = new Date(today).getTime() - new Date(first).getTime();
     const f = span > 0 ? Math.min(1, Math.max(0, into / span)) : 0.5;
-    todayPct = ((activeIdx + f) / n) * 100;
+    todayPct = ((activeIdx + 0.5 + f) / n) * 100;
   } else {
     const closedCount = items.filter((x) => x.status === "closed").length;
     todayPct = (closedCount / n) * 100;
@@ -253,6 +259,8 @@ export default async function HackathonsPage() {
                 Mirá las Community Calls en {PROGRAM.organization} YouTube
               </a>
             )}
+
+            <PrizeRulesNote />
           </div>
         </div>
       </section>

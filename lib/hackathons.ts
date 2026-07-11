@@ -427,6 +427,11 @@ export type PrizedProject = {
  * Walks the ranking and distributes the program's prize slots in order.
  * Ties share the combined value of the consecutive slots they occupy
  * (e.g. a tie at 1st consumes slots 1 and 2 and splits 400k+250k = 325k each).
+ *
+ * When fewer projects participate than there are prize slots, the smallest
+ * prizes go out first: with only 3 ranked projects out of 6 slots, 1st takes
+ * slot 4, 2nd takes slot 5, 3rd takes slot 6 (100k/60k/40k) rather than
+ * claiming the top slots and leaving the rest of the pool unawarded.
  */
 export function prizedProjects(hackathonId: string): PrizedProject[] {
   const ranked = rankedProjects(hackathonId).filter(
@@ -444,7 +449,7 @@ export function prizedProjects(hackathonId: string): PrizedProject[] {
   const positions = [...byPosition.keys()].sort((a, b) => a - b);
   const slots = PROGRAM.prizeDistribution;
   const result: PrizedProject[] = [];
-  let slotIdx = 0;
+  let slotIdx = Math.max(0, slots.length - ranked.length);
 
   for (const pos of positions) {
     const group = byPosition.get(pos)!;
