@@ -30,7 +30,6 @@ import {
   getHackathon,
   hackathonSlug,
   hackathonStatus,
-  isHackathonInscriptionOpen,
   primaryProjectPubkey,
   prizedProjects,
   programRules,
@@ -61,10 +60,10 @@ import HackathonTabs from "./HackathonTabs";
 import { VotingProvider, HackathonVotingActions } from "./VotingSection";
 import VotingHero from "@/components/voting/VotingHero";
 import HackathonResultsClient from "./HackathonResultsClient";
+import PrizeRulesNote from "@/app/hackathons/PrizeRulesNote";
 import AdminBadgesLink from "./AdminBadgesLink";
 import PrizeBadgeButton, { type PrizeBadgeTask } from "./PrizeBadgeButton";
 import PrizeZapButton from "@/components/voting/PrizeZapButton";
-import HackathonInscripcionButton from "@/components/HackathonInscripcionButton";
 
 export function generateStaticParams() {
   // The dynamic segment is the public slug (falls back to id).
@@ -589,11 +588,6 @@ export default async function HackathonPage({
                   </span>
                 ))}
               </div>
-              {isHackathonInscriptionOpen(hackathon) && (
-                <div className="mt-6">
-                  <HackathonInscripcionButton hackathonId={hackathon.id} />
-                </div>
-              )}
               <AdminBadgesLink />
             </div>
           </div>
@@ -761,6 +755,9 @@ export default async function HackathonPage({
                           />
                         </div>
                       )}
+                      <div className="max-w-2xl mx-auto">
+                        <PrizeRulesNote />
+                      </div>
                     </Card>
                   </div>
                 )}

@@ -9,10 +9,12 @@ import { PROGRAM, formatSats } from "@/lib/hackathons";
 const TITLE_ID = "prize-rules-modal-title";
 
 /**
- * Fine print under the prize-structure grid: explains the partial-podium
- * rule (fewer participating projects than prize slots → the smallest prizes
- * go out first) and opens a modal with a worked example. Kept as its own
- * client component so the surrounding page.tsx stays a server component.
+ * Fine print + modal covering the two prize conditions: one prize per person
+ * (a participant with several projects only wins with their best-ranked one)
+ * and the scarcity rule (fewer participating projects than prize slots → the
+ * smallest prizes go out first, with a worked example). Reused under the
+ * `/hackathons` prize grid and each hackathon's "Premios" results card. Kept
+ * as its own client component so the server pages stay server components.
  */
 export default function PrizeRulesNote() {
   const [open, setOpen] = useState(false);
@@ -44,8 +46,8 @@ export default function PrizeRulesNote() {
   return (
     <>
       <p className="mt-4 text-xs text-foreground-subtle leading-relaxed">
-        * Si hay menos proyectos participantes que premios, se entregan los
-        premios más chicos primero.{" "}
+        * Un premio por persona · si participan menos de {slots.length}{" "}
+        proyectos, se entregan los premios más chicos primero.{" "}
         <button
           ref={triggerRef}
           type="button"
@@ -54,7 +56,7 @@ export default function PrizeRulesNote() {
           aria-expanded={open}
           className="underline underline-offset-2 hover:text-foreground-muted transition-colors"
         >
-          Ver cómo funciona
+          Ver condiciones
         </button>
       </p>
 
@@ -103,42 +105,58 @@ export default function PrizeRulesNote() {
                     <Info className="h-5 w-5" />
                   </div>
                   <h2 id={TITLE_ID} className="font-display font-bold text-lg">
-                    Cómo se reparten los premios
+                    Condiciones de los premios
                   </h2>
                 </div>
 
-                <div className="space-y-3 text-sm text-foreground-muted leading-relaxed">
+                <div className="space-y-4 text-sm text-foreground-muted leading-relaxed">
                   <p>
                     Cada hackatón reparte{" "}
                     {formatSats(PROGRAM.prizePerHackathon)} sats entre los
                     mejores {slots.length} proyectos, del 1° al {slots.length}
                     °.
                   </p>
-                  <p>
-                    Si participan menos de {slots.length} proyectos, los
-                    premios más chicos se entregan primero — así nadie se
-                    lleva de más y no queda parte del pozo sin asignar.
-                  </p>
 
-                  <div className="rounded-xl border border-border bg-white/[0.02] p-3">
-                    <p className="mb-2 text-[10px] font-mono uppercase tracking-widest text-foreground-subtle">
-                      Ejemplo con 3 proyectos participando
+                  <div className="space-y-1.5">
+                    <h3 className="text-xs font-mono font-semibold uppercase tracking-widest text-bitcoin">
+                      Un premio por persona
+                    </h3>
+                    <p>
+                      Cada persona puede ganar un solo premio. Si participás con
+                      varios proyectos, solo se premia el mejor ranqueado; los
+                      demás quedan fuera del reparto.
                     </p>
-                    <ul className="space-y-1 text-xs font-mono">
-                      {example.map((slot, i) => (
-                        <li
-                          key={slot.position}
-                          className="flex items-center justify-between"
-                        >
-                          <span className="text-foreground-muted">
-                            {i + 1}° lugar
-                          </span>
-                          <span className="font-bold tabular-nums">
-                            {formatSats(slot.sats)} sats
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <h3 className="text-xs font-mono font-semibold uppercase tracking-widest text-bitcoin">
+                      Menos proyectos que premios
+                    </h3>
+                    <p>
+                      Si participan menos de {slots.length} proyectos, los
+                      premios más chicos se entregan primero — así nadie se
+                      lleva de más y no queda parte del pozo sin asignar.
+                    </p>
+                    <div className="mt-2 rounded-xl border border-border bg-white/[0.02] p-3">
+                      <p className="mb-2 text-[10px] font-mono uppercase tracking-widest text-foreground-subtle">
+                        Ejemplo con 3 proyectos participando
+                      </p>
+                      <ul className="space-y-1 text-xs font-mono">
+                        {example.map((slot, i) => (
+                          <li
+                            key={slot.position}
+                            className="flex items-center justify-between"
+                          >
+                            <span className="text-foreground-muted">
+                              {i + 1}° lugar
+                            </span>
+                            <span className="font-bold tabular-nums">
+                              {formatSats(slot.sats)} sats
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
