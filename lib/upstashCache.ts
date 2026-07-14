@@ -33,6 +33,15 @@ export const UPSTASH_KEYS = {
   submissionsSnapshot: "nostr:snapshot:v1",
   soldiersRanking: "nostr:ranking:v1",
   projectById: (projectId: string) => `nostr:project:${projectId}:v1`,
+  /**
+   * Durable per-project copy for *registered* projects. Unlike `projectById`
+   * (a short-lived lookup cache that heals not-found fast), this is written
+   * only when we hold a real project in hand (slug registration, targeted
+   * refetch, cache warm) and kept for a very long TTL so a thinly-propagated
+   * registered project (the `/projects/<slug>` "not found" class of bug) always
+   * has a backend copy to render — the relay scan only ever supplies newer data.
+   */
+  projectDurable: (projectId: string) => `nostr:project-durable:${projectId}:v1`,
   profile: (pubkey: string) => `nostr:profile:${pubkey}:v1`,
 } as const;
 
@@ -49,6 +58,14 @@ export const UPSTASH_TTL = {
   /** `days` profiles. */
   profile: 60 * 60 * 24,
   ranking: 60 * 60 * 24,
+  /**
+   * Durable per-project copy: a year. Registrations are rare and each entry is
+   * ~1 KB, so this is effectively permanent — refreshed on every update
+   * (targeted refetch) and by the warm cron, and only ever overwritten with
+   * newer data. The long TTL is what guarantees a registered project never
+   * silently falls back to "not found".
+   */
+  durable: 60 * 60 * 24 * 365,
 } as const;
 
 function usingLocalRelays(): boolean {
@@ -173,6 +190,23 @@ export async function upstashReadThrough<T>(
 }
 
 /**
+ * Plain read (no producer fallback). Returns the cached value or `null` — a
+ * miss and a genuinely-absent key are indistinguishable, which is exactly what
+ * the durable-fallback path wants: "serve the last copy we ever saw, else null".
+ * Best-effort: any error (or unconfigured cache) reads as a miss.
+ */
+export async function upstashGet<T>(key: string): Promise<T | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    const hit = await redis.get<T>(namespacedKey(key));
+    return hit ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Overwrite a key outright. Backs the write-through paths: a route that just
  * scanned the relays for read-your-writes should refresh the shared cache so
  * the next render finds it warm instead of re-scanning.
@@ -189,6 +223,39 @@ export async function upstashSet<T>(
   } catch {
     /* best-effort */
   }
+}
+
+/**
+ * Best-effort distributed lock (SET NX EX). Serializes the registry
+ * read-modify-write across serverless instances so two near-simultaneous slug
+ * claims can't each read the registry, append, and clobber the other's entry.
+ *
+ * Returns `true` when the lock was taken OR the cache is unconfigured — without
+ * Upstash there is no cross-instance contention to guard (single-process dev /
+ * self-host), and a cache hiccup must never block a legitimate write. So this
+ * narrows the race window; the fresh-read-before-sign remains the correctness
+ * backstop.
+ */
+export async function upstashAcquireLock(
+  key: string,
+  ttlSeconds: number,
+): Promise<boolean> {
+  const redis = getRedis();
+  if (!redis) return true;
+  try {
+    const res = await redis.set(namespacedKey(key), "1", {
+      nx: true,
+      ex: ttlSeconds,
+    });
+    return res === "OK";
+  } catch {
+    return true;
+  }
+}
+
+/** Release a lock taken with {@link upstashAcquireLock}. */
+export async function upstashReleaseLock(key: string): Promise<void> {
+  await upstashDelete(key);
 }
 
 /** Drop keys so the next read re-produces them. No-op when unconfigured. */

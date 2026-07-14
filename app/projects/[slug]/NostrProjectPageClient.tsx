@@ -43,11 +43,17 @@ import { cn } from "@/lib/cn";
 import { projectMatchesIdentifier } from "@/lib/projectIdentity";
 import { mergeDataRelays } from "@/lib/nostrRelayConfig";
 import { seedProjectEntities, seedProfileEntities, useProjectEntity } from "@/lib/entityStore";
+import { projectSlugHref } from "@/lib/projectLinks";
 import { ProjectDetailView } from "@/components/ProjectDetailView";
 
 // The edit modal is the largest client component in the tree and only opens for
 // the project's own author — keep it out of the page's first load.
 const NewProjectModal = dynamic(() => import("@/components/NewProjectModal"), {
+  ssr: false,
+});
+
+// Owner-only URL registration card — kept out of the first load like the modal.
+const ProjectSlugCard = dynamic(() => import("@/components/ProjectSlugCard"), {
   ssr: false,
 });
 
@@ -762,6 +768,44 @@ export default function NostrProjectPage({
     project.hackathon && report ? <HackathonReport report={report} /> : undefined;
   const isAuthor = auth?.pubkey === project.author;
 
+  // `canonicalSlug` equals the project id when unregistered; a different value
+  // means the project already has a registered slug.
+  const registeredSlug =
+    canonicalSlug && canonicalSlug.toLowerCase() !== project.id.toLowerCase()
+      ? canonicalSlug
+      : project.slug && project.slug.toLowerCase() !== project.id.toLowerCase()
+        ? project.slug
+        : undefined;
+
+  const slugSlot = isAuthor ? (
+    <ProjectSlugCard
+      auth={auth}
+      projectId={project.id}
+      projectName={project.name}
+      currentSlug={registeredSlug}
+      relays={relays}
+      onRegistered={(slug) => {
+        seedProjectEntities([
+          {
+            id: project.id,
+            slug,
+            name: project.name,
+            description: project.description,
+            logo: project.logo,
+            cover: project.cover,
+            status: project.status,
+            hackathon: project.hackathon,
+            author: project.author,
+            tech: project.tech,
+            updatedAt: project.eventCreatedAt,
+          },
+        ]);
+        // Navigate to the new canonical URL; the resolver now has the slug.
+        router.replace(projectSlugHref(slug));
+      }}
+    />
+  ) : undefined;
+
   return (
     <>
       <ProjectDetailView
@@ -773,6 +817,7 @@ export default function NostrProjectPage({
         contextLabel={contextLabel}
         isAuthor={isAuthor}
         revalidating={revalidating || cachePending}
+        slugSlot={slugSlot}
         onEdit={isAuthor ? () => setEditOpen(true) : undefined}
         archiveState={archiveStep}
         onArchive={
