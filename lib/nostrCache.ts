@@ -20,6 +20,7 @@ import {
 import {
   UPSTASH_KEYS,
   UPSTASH_TTL,
+  upstashGet,
   upstashReadThrough,
   upstashSet,
 } from "./upstashCache";
@@ -240,13 +241,28 @@ async function rawFetchAllProjects(
  * possibly-newer replica, and the browser reconciles to the newest event
  * after paint. The hard timeout only bounds the not-found case.
  */
-async function rawFetchProjectByDTag(
+export async function rawFetchProjectByDTag(
   projectId: string,
   timeoutMs = 4500,
+  /**
+   * When set, restrict the query to events signed by this pubkey. Ownership
+   * checks pass it so a stranger who republishes a colliding `#d` under their
+   * own key can't masquerade as the project (a `#d` is NOT owner-exclusive for
+   * a NIP-33 replaceable event — one exists per (pubkey, d-tag)).
+   */
+  author?: string,
 ): Promise<CachedNostrProject | null> {
   const { SimplePool } = await import("nostr-tools/pool");
   const pool = new SimplePool();
   const dTag = `${PROJECT_D_PREFIX}${projectId}`;
+  const filter = author
+    ? {
+        kinds: [PROJECT_KIND],
+        "#d": [dTag],
+        "#t": [PROJECT_TAG],
+        authors: [author],
+      }
+    : { kinds: [PROJECT_KIND], "#d": [dTag], "#t": [PROJECT_TAG] };
   let best: CachedNostrProject | null = null;
 
   await new Promise<void>((resolve) => {
@@ -267,14 +283,16 @@ async function rawFetchProjectByDTag(
 
     closer = pool.subscribe(
       TOP10_RELAYS,
-      { kinds: [PROJECT_KIND], "#d": [dTag], "#t": [PROJECT_TAG] },
+      filter,
       {
         onevent(ev: IncomingEvent) {
           const parsed = parseEvent(ev);
           // Ignore unparseable/archived events (never let a malformed first
           // responder mask a valid one) — keep listening until a valid event
-          // or the timeout.
+          // or the timeout. Defense in depth: also drop an event whose pubkey
+          // doesn't match a requested author (relays should honor the filter).
           if (!parsed || parsed.status === "archived") return;
+          if (author && parsed.author !== author) return;
           if (!best || parsed.eventCreatedAt > best.eventCreatedAt) {
             best = parsed;
           }
@@ -331,6 +349,45 @@ export async function getNostrProjectByIdDirect(
       }
     },
   );
+}
+
+/**
+ * Resolve a project by id and NEVER return `null` for one we've cached durably.
+ *
+ * The guarantee the `/projects/<slug>` page needs: a registered project must
+ * always render, even when the broad snapshot missed it and a live `#d` scan
+ * times out (thin relay propagation — the original "Proyecto no encontrado"
+ * class of bug). Order:
+ *   1. `getNostrProjectByIdDirect` — cached read-through → live `#d` relay scan
+ *      on a miss. This is the freshness path; relays only ever bring newer data.
+ *   2. On a miss, fall back to the durable Upstash copy written at registration
+ *      / targeted refetch / cache warm.
+ *
+ * The read path deliberately does NOT write the durable copy — that would add a
+ * Redis write to every resolve. Durable copies are (re)written only where we
+ * KNOW we hold an authoritative project (see the registry route, the targeted
+ * refresh branch, and the warm cron), and the year-long TTL bridges the gaps.
+ */
+export async function getProjectWithDurableFallback(
+  projectId: string,
+  /**
+   * When the caller knows who the project SHOULD belong to (a registered
+   * project's registry-recorded author), pass it: any cached copy whose author
+   * doesn't match is discarded. This stops a poisoned copy — e.g. a stranger's
+   * colliding `#d` event that slipped into the short-lived lookup key or a
+   * durable key — from being served at the victim's canonical URL.
+   */
+  expectedAuthor?: string,
+): Promise<CachedNostrProject | null> {
+  const authorOk = (p: CachedNostrProject | null): p is CachedNostrProject =>
+    !!p && (!expectedAuthor || p.author === expectedAuthor);
+
+  const direct = await getNostrProjectByIdDirect(projectId);
+  if (authorOk(direct)) return direct;
+  const durable = await upstashGet<CachedNostrProject>(
+    UPSTASH_KEYS.projectDurable(projectId),
+  );
+  return authorOk(durable) ? durable : null;
 }
 
 async function buildSubmissionsSnapshot(): Promise<

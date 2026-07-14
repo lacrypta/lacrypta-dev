@@ -23,6 +23,72 @@ export const PROJECT_REGISTRY_SCHEMA_VERSION = 1;
  *  size caps (~128 KB on nostr-rs-relay) and silently stop publishing. */
 export const PROJECT_REGISTRY_MAX_ENTRIES = 1500;
 export const PROJECT_REGISTRY_MAX_CONTENT_BYTES = 100_000;
+export const PROJECT_REGISTRY_MAX_SLUG_CHARS = 80;
+export const PROJECT_REGISTRY_MIN_SLUG_CHARS = 2;
+
+/**
+ * Slugs that would collide with a top-level route segment or a reserved word.
+ * A user-chosen slug is rejected against this set; auto-minted slugs come from
+ * project names and effectively never hit these, but the guard is cheap.
+ */
+export const RESERVED_SLUGS = new Set<string>([
+  "dashboard",
+  "api",
+  "projects",
+  "project",
+  "hackathons",
+  "hackathon",
+  "hackathones",
+  "soldados",
+  "soldado",
+  "badges",
+  "badge",
+  "skills",
+  "infra",
+  "dev",
+  "sitemap",
+  "robots",
+  "login",
+  "logout",
+  "admin",
+  "settings",
+  "new",
+  "edit",
+  "proyecto",
+  "proyectos",
+]);
+
+/** Kebab-case: lowercase alphanumeric segments joined by single hyphens. */
+const SLUG_SHAPE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * Validate + normalize a user-requested slug. Returns `{ slug }` on success or
+ * `{ error }` (a Spanish, user-facing reason). Both the availability GET and the
+ * claim POST go through this so their answers can never diverge.
+ */
+export function normalizeRequestedSlug(
+  raw: string,
+): { slug: string } | { error: string } {
+  const slug = (raw ?? "").trim().toLowerCase();
+  if (slug.length < PROJECT_REGISTRY_MIN_SLUG_CHARS) {
+    return { error: "La URL debe tener al menos 2 caracteres." };
+  }
+  if (slug.length > PROJECT_REGISTRY_MAX_SLUG_CHARS) {
+    return { error: `La URL no puede superar ${PROJECT_REGISTRY_MAX_SLUG_CHARS} caracteres.` };
+  }
+  if (!SLUG_SHAPE_RE.test(slug)) {
+    return {
+      error: "Solo minúsculas, números y guiones (sin empezar/terminar en guión).",
+    };
+  }
+  if (isReservedSlugShape(slug)) {
+    return { error: "Esa URL tiene una forma reservada." };
+  }
+  if (RESERVED_SLUGS.has(slug)) {
+    return { error: "Esa URL está reservada." };
+  }
+  return { slug };
+}
 
 export type ProjectRegistryEntry = {
   /** Permanent URL slug (lowercase). Never reassigned to another project. */

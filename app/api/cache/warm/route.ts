@@ -1,6 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getFreshNostrSubmissionsSnapshot } from "@/lib/nostrCache";
-import { isUpstashEnabled } from "@/lib/upstashCache";
+import {
+  isUpstashEnabled,
+  UPSTASH_KEYS,
+  UPSTASH_TTL,
+  upstashSet,
+} from "@/lib/upstashCache";
+import {
+  getProjectRegistryState,
+  registryEntryForProject,
+} from "@/lib/projectRegistry";
 
 /**
  * Cache warming endpoint. Rescans the relays and writes the snapshot through to
@@ -44,10 +53,31 @@ export async function GET(req: NextRequest) {
 
   const startedAt = Date.now();
   const snapshot = await getFreshNostrSubmissionsSnapshot();
+
+  // Refresh the durable per-project copies for REGISTERED projects straight from
+  // the snapshot we just scanned (no extra relay calls) so a registered project
+  // keeps a warm backend copy — the copy the resolver falls back to when a
+  // thinly-propagated event misses the broad scan. Only registered projects get
+  // one; unregistered ids resolve fine from the snapshot itself.
+  const registry = await getProjectRegistryState();
+  let durableWrites = 0;
+  for (const project of snapshot.projects) {
+    if (registryEntryForProject(registry, project)) {
+      // Key on the lowercased id — the resolver reads durable copies lowercased.
+      await upstashSet(
+        UPSTASH_KEYS.projectDurable(project.id.toLowerCase()),
+        project,
+        UPSTASH_TTL.durable,
+      );
+      durableWrites++;
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     warmed: snapshot.projects.length > 0,
     projects: snapshot.projects.length,
+    durableWrites,
     generatedAt: snapshot.generatedAt,
     elapsedMs: Date.now() - startedAt,
   });

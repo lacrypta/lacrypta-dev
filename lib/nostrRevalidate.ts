@@ -33,7 +33,14 @@ function upstashKeysForTag(tag: string): string[] {
     return [UPSTASH_KEYS.soldiersRanking];
   }
   if (tag.startsWith(PROJECT_TAG_PREFIX)) {
-    return [UPSTASH_KEYS.projectById(tag.slice(PROJECT_TAG_PREFIX.length))];
+    const id = tag.slice(PROJECT_TAG_PREFIX.length);
+    // A hard-expire is an intentional invalidation (project genuinely changed),
+    // so drop the durable copy too — the next read re-fetches. This is distinct
+    // from the read-path fallback, which never overwrites the durable copy with
+    // a transient relay miss. Callers that hold fresh data must NOT hard-expire
+    // right after a write-through (that would delete what they just cached);
+    // they expire the Next tier only (see the refresh/registry routes).
+    return [UPSTASH_KEYS.projectById(id), UPSTASH_KEYS.projectDurable(id)];
   }
   if (tag.startsWith(PROFILE_TAG_PREFIX)) {
     return [UPSTASH_KEYS.profile(tag.slice(PROFILE_TAG_PREFIX.length))];

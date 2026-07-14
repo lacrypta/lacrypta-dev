@@ -20,6 +20,9 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { DEFAULT_RELAYS } from "./nostrRelayConfig";
 import { NOSTR_PROJECT_REGISTRY_TAG } from "./nostrCacheTags";
+import { expireNostrTag } from "./nostrRevalidate";
+import { upstashAcquireLock, upstashReleaseLock } from "./upstashCache";
+import type { SignedEvent } from "./nostrSigner";
 import {
   PROJECT_REGISTRY_D_TAG,
   PROJECT_REGISTRY_KIND,
@@ -68,12 +71,21 @@ export function buildRegistryState(
   const bySlug = new Map<string, ProjectRegistryEntry>();
   const byIdLc = new Map<string, ProjectRegistryEntry>();
   const byName = new Map<string, ProjectRegistryEntry>();
-  for (const entry of entries) {
-    if (!bySlug.has(entry.slug)) bySlug.set(entry.slug, entry);
-    const idLc = entry.id.toLowerCase();
-    if (!byIdLc.has(idLc)) byIdLc.set(idLc, entry);
+  // Slugs are permanent (append-only), but a project MAY change which slug is
+  // canonical by publishing a newer entry for the same id. So resolve id/name
+  // to the LATEST entry (canonical) while `bySlug` keeps every slug — including
+  // a project's earlier slugs, which stay resolvable as owner-locked redirect
+  // aliases. Process oldest-first so the newest write wins the id/name maps.
+  const ordered = [...entries].sort(
+    (a, b) => (a.registeredAt || 0) - (b.registeredAt || 0),
+  );
+  for (const entry of ordered) {
+    // Each slug maps to exactly one project (uniqueness is enforced at write
+    // time); a re-registration of the same slug just refreshes the entry.
+    bySlug.set(entry.slug, entry);
+    byIdLc.set(entry.id.toLowerCase(), entry);
     const nameKey = comparableProjectName(entry.name);
-    if (nameKey && !byName.has(nameKey)) byName.set(nameKey, entry);
+    if (nameKey) byName.set(nameKey, entry);
   }
   return { entries, bySlug, byIdLc, byName };
 }
@@ -407,8 +419,83 @@ async function publishToRelays(
   return results.some(Boolean);
 }
 
+/* ─────────────────────────── sign helpers ──────────────────────────────── */
+
+async function getBackendSecretBytes(): Promise<Uint8Array | null> {
+  const nsec = process.env.LACRYPTA_NSEC;
+  if (!nsec) return null;
+  try {
+    const { decode } = await import("nostr-tools/nip19");
+    const decoded = decode(nsec);
+    if (decoded.type !== "nsec") return null;
+    return decoded.data as Uint8Array;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build + sign the single replaceable registry event from a full entry list.
+ * Shared by the automatic sync and the user-initiated claim so both apply the
+ * same tags and the same monotonic `created_at` floor (a lost race can never
+ * shadow a newer registry someone else published).
+ */
+async function buildAndSignRegistryEvent(
+  entries: ProjectRegistryEntry[],
+  prevCreatedAt: number,
+  nowMs: number,
+  secret: Uint8Array,
+): Promise<SignedEvent> {
+  const { finalizeEvent } = await import("nostr-tools/pure");
+  const nowUnix = Math.floor(nowMs / 1000);
+  const snapshot: ProjectRegistrySnapshot = {
+    version: PROJECT_REGISTRY_SCHEMA_VERSION,
+    updatedAt: new Date(nowMs).toISOString(),
+    entries,
+  };
+  return finalizeEvent(
+    {
+      kind: PROJECT_REGISTRY_KIND,
+      created_at: Math.max(nowUnix, prevCreatedAt + 1),
+      content: serializeProjectRegistry(snapshot),
+      tags: [
+        ["d", PROJECT_REGISTRY_D_TAG],
+        ["t", PROJECT_REGISTRY_T_TAG],
+        ["client", "La Crypta Dev"],
+        ["projects", String(entries.length)],
+      ],
+    },
+    secret,
+  ) as unknown as SignedEvent;
+}
+
 let lastSyncAttempt = 0;
 const SYNC_THROTTLE_MS = 5 * 60 * 1000;
+
+/** Serializes ALL registry writers (auto-sync + user claims) so concurrent
+ *  read-modify-writes can't lost-update the single replaceable event. */
+const REGISTRY_WRITE_LOCK = "lock:project-registry";
+const REGISTRY_WRITE_LOCK_TTL = 15;
+
+/** Max distinct projects one author may register (cheap sybil/DoS brake). */
+const MAX_SLUGS_PER_AUTHOR = 30;
+
+let curatedIdSet: Set<string> | null = null;
+/** True when `id` is a curated (in-tree) project id — these are La Crypta-owned
+ *  and auto-registered by sync; users must never claim them (their canonical URL
+ *  is already the id). */
+export function isCuratedProjectId(id: string): boolean {
+  if (!curatedIdSet) {
+    curatedIdSet = new Set<string>();
+    for (const h of HACKATHONS) {
+      for (const p of getHackathonProjects(h.id)) {
+        curatedIdSet.add(p.id.toLowerCase());
+      }
+    }
+    for (const p of HOME_PROJECTS) curatedIdSet.add(p.id.toLowerCase());
+  }
+  return curatedIdSet.has(id.toLowerCase());
+}
 
 /**
  * Register any not-yet-registered projects by publishing an updated registry
@@ -426,6 +513,15 @@ export async function syncProjectRegistry(): Promise<void> {
     if (now - lastSyncAttempt < SYNC_THROTTLE_MS) return;
     lastSyncAttempt = now;
 
+    // Take the shared registry write lock so a concurrent user slug claim (or a
+    // sync on another instance) can't lost-update the single replaceable event.
+    // If someone else holds it, skip — the next throttle window retries.
+    const locked = await upstashAcquireLock(
+      REGISTRY_WRITE_LOCK,
+      REGISTRY_WRITE_LOCK_TTL,
+    );
+    if (!locked) return;
+    try {
     // Read-modify-write against the FRESH relay state, never the cached copy:
     // the cache is stale by design (SWR) and merging over it would drop
     // entries a concurrent instance just published.
@@ -497,30 +593,14 @@ export async function syncProjectRegistry(): Promise<void> {
     const snapshot = makeSnapshot(additions);
     const entries = snapshot.entries;
 
-    const { decode } = await import("nostr-tools/nip19");
-    const { finalizeEvent } = await import("nostr-tools/pure");
-    const decoded = decode(nsec);
-    if (decoded.type !== "nsec") return;
-
-    const signed = finalizeEvent(
-      {
-        kind: PROJECT_REGISTRY_KIND,
-        // Monotonic floor: a replay of this publish can never shadow a newer
-        // registry someone else published while we were computing.
-        created_at: Math.max(
-          nowUnix,
-          (currentRead.status === "ok" ? currentRead.createdAt : 0) + 1,
-        ),
-        content,
-        tags: [
-          ["d", PROJECT_REGISTRY_D_TAG],
-          ["t", PROJECT_REGISTRY_T_TAG],
-          ["client", "La Crypta Dev"],
-          ["projects", String(entries.length)],
-        ],
-      },
-      decoded.data as Uint8Array,
-    ) as IncomingEvent;
+    const secret = await getBackendSecretBytes();
+    if (!secret) return;
+    const signed = await buildAndSignRegistryEvent(
+      entries,
+      currentRead.status === "ok" ? currentRead.createdAt : 0,
+      now,
+      secret,
+    );
 
     const ok = await publishToRelays(signed, DEFAULT_RELAYS);
     if (!ok) {
@@ -535,7 +615,199 @@ export async function syncProjectRegistry(): Promise<void> {
         .map((a) => a.slug)
         .join(", ")}`,
     );
+    } finally {
+      await upstashReleaseLock(REGISTRY_WRITE_LOCK);
+    }
   } catch (error) {
     console.warn("[projectRegistry] sync failed", error);
+  }
+}
+
+/* ──────────────────── user-initiated slug registration ─────────────────── */
+
+export type RegisterSlugResult =
+  | { status: "ok"; event: SignedEvent; slug: string; changed: boolean }
+  | { status: "error"; code: number; message: string };
+
+/**
+ * User-initiated slug registration / change. The API route has already
+ * authenticated the requester and verified they OWN the project; this function
+ * owns the registry read-modify-write:
+ *  - serialize concurrent writers with a best-effort Upstash lock,
+ *  - fresh-read the registry from relays (never the cached copy),
+ *  - reject a slug already owned by a DIFFERENT project (append-only, no hijack),
+ *  - append the new entry — which is also how a slug CHANGES: the newer entry
+ *    becomes canonical (`buildRegistryState` is latest-wins per id) and the old
+ *    slug stays a redirect alias,
+ *  - sign with LACRYPTA_NSEC, publish server-side, and return the event for the
+ *    client to also republish.
+ *
+ * Never throws — returns a typed error the route maps to an HTTP status.
+ */
+export async function registerUserProjectSlug(input: {
+  projectId: string;
+  /** Pre-normalized/validated by the route (see `normalizeRequestedSlug`). */
+  slug: string;
+  requesterPubkey: string;
+  project: { name: string; hackathon: string | null };
+}): Promise<RegisterSlugResult> {
+  const secret = await getBackendSecretBytes();
+  if (!secret) {
+    return { status: "error", code: 503, message: "Registro de URLs no disponible." };
+  }
+
+  const locked = await upstashAcquireLock(
+    REGISTRY_WRITE_LOCK,
+    REGISTRY_WRITE_LOCK_TTL,
+  );
+  if (!locked) {
+    return {
+      status: "error",
+      code: 409,
+      message: "Hay otro registro en curso. Probá de nuevo en unos segundos.",
+    };
+  }
+
+  try {
+    // Fresh relay read + the cached high-water copy. Both are needed to enforce
+    // the append-only invariant: a stale/partial/empty relay read must NEVER be
+    // used as the base, or we'd sign a NEWER (monotonic created_at) but SHORTER
+    // registry that replaces the real one and drops everyone else's entries.
+    const [currentRead, cachedRegistry] = await Promise.all([
+      rawFetchRegistry(),
+      getProjectRegistryCached(),
+    ]);
+    if (currentRead.status === "no-response") {
+      return {
+        status: "error",
+        code: 503,
+        message: "No se pudo leer el registro (relays sin respuesta).",
+      };
+    }
+    const currentEntries =
+      currentRead.status === "ok" ? currentRead.snapshot.entries : [];
+    if (currentEntries.length < cachedRegistry.entries.length) {
+      // Fresh base smaller than the high-water copy ⇒ a bad/partial read (or an
+      // `empty-confirmed` from relays that just don't hold the newest event).
+      // Bail rather than publish a shrunken registry over the real one.
+      return {
+        status: "error",
+        code: 503,
+        message: "El registro no está sincronizado. Probá de nuevo en unos segundos.",
+      };
+    }
+    const prevCreatedAt =
+      currentRead.status === "ok" ? currentRead.createdAt : 0;
+    const state = buildRegistryState(currentEntries);
+
+    const idLc = input.projectId.toLowerCase();
+    const owner = state.bySlug.get(input.slug);
+    if (owner && owner.id.toLowerCase() !== idLc) {
+      return { status: "error", code: 409, message: "Esa URL ya está en uso." };
+    }
+
+    const canonical = state.byIdLc.get(idLc);
+    // Ownership binding: once a project is registered, only its recorded author
+    // may re-point it. Prevents a stranger who forged a colliding project event
+    // from re-registering someone else's already-registered slug.
+    if (
+      canonical?.author &&
+      canonical.author !== input.requesterPubkey
+    ) {
+      return {
+        status: "error",
+        code: 403,
+        message: "Solo el autor registrado puede cambiar la URL de este proyecto.",
+      };
+    }
+
+    // Cheap per-author brake: cap the number of DISTINCT projects one key may
+    // register (slug changes to an already-registered project don't count).
+    const myIds = new Set(
+      currentEntries
+        .filter((e) => e.author === input.requesterPubkey)
+        .map((e) => e.id.toLowerCase()),
+    );
+    if (!myIds.has(idLc) && myIds.size >= MAX_SLUGS_PER_AUTHOR) {
+      return {
+        status: "error",
+        code: 429,
+        message: "Alcanzaste el máximo de URLs registradas.",
+      };
+    }
+
+    const alreadyCanonical = canonical?.slug === input.slug;
+
+    let entries = currentEntries;
+    let changed = false;
+    if (!alreadyCanonical) {
+      const entry: ProjectRegistryEntry = {
+        slug: input.slug,
+        id: input.projectId,
+        author: input.requesterPubkey,
+        name: input.project.name.slice(0, MAX_ENTRY_NAME_CHARS),
+        hackathon: input.project.hackathon ?? null,
+        registeredAt: Math.floor(Date.now() / 1000),
+      };
+      const candidate = [...currentEntries, entry];
+      if (candidate.length > PROJECT_REGISTRY_MAX_ENTRIES) {
+        return { status: "error", code: 507, message: "El registro está lleno." };
+      }
+      const content = serializeProjectRegistry({
+        version: PROJECT_REGISTRY_SCHEMA_VERSION,
+        updatedAt: new Date().toISOString(),
+        entries: candidate,
+      });
+      if (
+        new TextEncoder().encode(content).length >
+        PROJECT_REGISTRY_MAX_CONTENT_BYTES
+      ) {
+        return {
+          status: "error",
+          code: 507,
+          message: "El registro alcanzó su límite de tamaño.",
+        };
+      }
+      entries = candidate;
+      changed = true;
+    }
+    // else: the project already has this exact slug as canonical — we still
+    // re-sign the current entries and republish, which re-propagates the
+    // registry (useful when the prior event thinly propagated).
+
+    const signed = await buildAndSignRegistryEvent(
+      entries,
+      prevCreatedAt,
+      Date.now(),
+      secret,
+    );
+
+    // Belt-and-suspenders: publish server-side too (the client also
+    // republishes). Respect the kill switch; a publish failure is non-fatal
+    // because the client broadcasts the returned event.
+    if (process.env.REGISTRY_PUBLISH_DISABLED !== "1") {
+      const ok = await publishToRelays(signed, DEFAULT_RELAYS);
+      if (!ok) {
+        console.warn(
+          "[projectRegistry] user slug claim: no relay accepted the event",
+        );
+      }
+    }
+
+    // Drop the registry cache so the resolver re-reads the new slug at once.
+    // The registry is not Upstash-backed, so this is a Next-tier expiry only.
+    await expireNostrTag(NOSTR_PROJECT_REGISTRY_TAG);
+
+    return { status: "ok", event: signed, slug: input.slug, changed };
+  } catch (error) {
+    console.warn("[projectRegistry] user slug claim failed", error);
+    return {
+      status: "error",
+      code: 500,
+      message:
+        error instanceof Error ? error.message : "No se pudo registrar la URL.",
+    };
+  } finally {
+    await upstashReleaseLock(REGISTRY_WRITE_LOCK);
   }
 }

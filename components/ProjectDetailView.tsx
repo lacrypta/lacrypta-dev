@@ -75,6 +75,7 @@ export function ProjectDetailView({
   onArchive,
   onCancelArchive,
   reportSlot,
+  slugSlot,
 }: {
   project: ProjectLike;
   authorPubkey: string;
@@ -89,6 +90,8 @@ export function ProjectDetailView({
   onArchive?: () => void;
   onCancelArchive?: () => void;
   reportSlot?: ReactNode;
+  /** Owner-only URL/slug registration card, rendered in the actions column. */
+  slugSlot?: ReactNode;
 }) {
   const galleryImages = project.images ?? [];
   const galleryThumbs = project.thumbs ?? [];
@@ -332,6 +335,8 @@ export function ProjectDetailView({
                 onEdit={() => edit("all")}
               />
             )}
+
+            {slugSlot}
 
             {(project.repo || project.demo || isAuthor) && (
               <div className="hidden rounded-2xl border border-border bg-background-card p-5 lg:block">

@@ -4,6 +4,9 @@ import { after } from "next/server";
 import {
   getFreshNostrSubmissionsSnapshot,
   getNostrSubmissionsSnapshot,
+  getProjectWithDurableFallback,
+  rawFetchProjectByDTag,
+  type CachedNostrProject,
 } from "@/lib/nostrCache";
 import { getProjectRegistryState, syncProjectRegistry } from "@/lib/projectRegistry";
 import { attachProjectSlugs } from "@/lib/projectResolver";
@@ -16,15 +19,20 @@ import {
   nostrHackathonBadgesTag,
   nostrBadgesTag,
   nostrProfileTag,
+  nostrProjectByIdTag,
   nostrRelayListTag,
   nostrReportsTag,
 } from "@/lib/nostrCacheTags";
+import {
+  UPSTASH_KEYS,
+  UPSTASH_TTL,
+  upstashSet,
+} from "@/lib/upstashCache";
 import {
   getCachedHackathonBadgeCatalogSnapshot,
   getCachedHackathonBadgeDefinitionsSnapshot,
   getCachedHackathonBadgeOwnersSnapshot,
 } from "@/lib/hackathonBadgeCache";
-import { projectMatchesIdentifier } from "@/lib/projectIdentity";
 
 type RefreshScope =
   | "projects"
@@ -122,71 +130,148 @@ export async function POST(req: NextRequest) {
 
   if (scopes.includes("projects")) {
     const now = Date.now();
-    const scanAllowed = now - lastFreshScan > FRESH_SCAN_MIN_INTERVAL_MS;
-    let snapshot;
-    if (body.blocking === false && scanAllowed) {
-      // Explicit bypass: fetch straight from relays, mark the cache stale.
-      lastFreshScan = now;
-      snapshot = await getFreshNostrSubmissionsSnapshot();
-      revalidateTag(NOSTR_PROJECTS_TAG, "max");
-      revalidateTag(NOSTR_LEGACY_SUBMISSIONS_TAG, "max");
-      expiredTags.push(NOSTR_PROJECTS_TAG, NOSTR_LEGACY_SUBMISSIONS_TAG);
-    } else if (
-      body.blocking !== false &&
-      body.candidateEventId &&
-      scanAllowed &&
-      !candidateAlreadyServed(body.candidateEventId, now)
-    ) {
-      // Read-your-writes: the caller just published an event and needs the
-      // snapshot to contain it. Scan the relays FIRST — that call writes the
-      // fresh snapshot through to Upstash — and only then drop the Next cache
-      // entry. The reverse order would let the regeneration read the *stale*
-      // Upstash entry back and silently undo the refresh. Note we expire the
-      // tag rather than `expireNostrTag`: the Upstash key is already fresh, so
-      // dropping it would only buy a redundant ~6s rescan. One blocking refetch
-      // per candidate event; repeats serve the cache (the client shows
-      // "sincronizando" and retries via router.refresh).
-      lastFreshScan = now;
-      snapshot = await getFreshNostrSubmissionsSnapshot();
-      expireNextOnly(NOSTR_PROJECTS_TAG);
-      expireNextOnly(NOSTR_LEGACY_SUBMISSIONS_TAG);
+    const registry = await getProjectRegistryState();
+
+    if (body.projectId) {
+      // Targeted per-project refetch+recache. The frontend detected a newer
+      // event (or just wants this project warm): fetch ONLY this project by its
+      // `#d` (~4.5s) instead of the ~6s broad snapshot scan, write its durable +
+      // short KV copies so it always resolves, and return the cached snapshot
+      // with the fresh project merged in (never shrink the client's community
+      // cache to a single item).
+      // Lowercase so the KV keys we write match the lowercased ids the resolver
+      // reads back (getProjectWithDurableFallback / getNostrProjectByIdDirect).
+      const pid = body.projectId.toLowerCase();
+      // This endpoint is UNAUTHENTICATED, so it must never persist an
+      // attacker-chosen event as a project's authoritative copy. The durable
+      // key is only for REGISTERED projects, and only their registry-recorded
+      // author's event: filter the fetch by that author, and write the durable
+      // key only when the project is registered. Unregistered ids get at most a
+      // short-lived lookup copy (30s), never the 1-year durable one.
+      const registeredAuthor = registry.byIdLc.get(pid)?.author;
+      const scanAllowed = now - lastFreshScan > FRESH_SCAN_MIN_INTERVAL_MS;
+      const wantsFresh =
+        body.blocking !== false &&
+        !!body.candidateEventId &&
+        scanAllowed &&
+        !candidateAlreadyServed(body.candidateEventId, now);
+
+      let project: CachedNostrProject | null = null;
+      if (wantsFresh) {
+        lastFreshScan = now;
+        const fetched = await rawFetchProjectByDTag(
+          pid,
+          4500,
+          registeredAuthor,
+        );
+        if (fetched) {
+          project = { ...fetched, id: pid };
+          if (registeredAuthor) {
+            await upstashSet(
+              UPSTASH_KEYS.projectDurable(pid),
+              project,
+              UPSTASH_TTL.durable,
+            );
+          }
+          await upstashSet(
+            UPSTASH_KEYS.projectById(pid),
+            project,
+            UPSTASH_TTL.lookup,
+          );
+          // Refresh the per-id Next entry ONLY — the Upstash keys we just wrote
+          // must survive (expireNostrTag would delete them).
+          expireNextOnly(nostrProjectByIdTag(pid));
+        }
+      }
+      if (!project) {
+        // Throttled, no candidate, or a relay miss → serve the durable/cached
+        // copy so a registered project never regresses to "not found". Guard by
+        // the registered author so a poisoned copy is never served.
+        project = await getProjectWithDurableFallback(pid, registeredAuthor);
+      }
+
+      const cached = await getNostrSubmissionsSnapshot();
+      let list: CachedNostrProject[];
+      if (project) {
+        const fresh = project;
+        list = [
+          fresh,
+          ...cached.projects.filter(
+            (p) =>
+              !(
+                p.author === fresh.author &&
+                p.id.toLowerCase() === fresh.id.toLowerCase()
+              ),
+          ),
+        ];
+      } else {
+        list = cached.projects;
+      }
+      refreshed.projects = {
+        projects: attachProjectSlugs(list, registry),
+        generatedAt: new Date().toISOString(),
+        relays: cached.relays,
+      };
     } else {
-      // Stale-while-revalidate: serve the cached snapshot NOW, then mark the
-      // tags stale so the next visit regenerates in the background. Reading
-      // BEFORE revalidateTag is what keeps this request non-blocking — the
-      // pending tag would otherwise discard the entry and re-run the ~6s
-      // relay scan inline. The background regeneration reads Upstash rather
-      // than the relays, so relay freshness on this path is bounded by the
-      // Upstash TTL (and by the warming cron that refreshes it).
-      snapshot = await getNostrSubmissionsSnapshot();
-      if (now - lastProjectsInvalidation > PROJECTS_INVALIDATION_WINDOW_MS) {
-        lastProjectsInvalidation = now;
+      const scanAllowed = now - lastFreshScan > FRESH_SCAN_MIN_INTERVAL_MS;
+      let snapshot;
+      if (body.blocking === false && scanAllowed) {
+        // Explicit bypass: fetch straight from relays, mark the cache stale.
+        lastFreshScan = now;
+        snapshot = await getFreshNostrSubmissionsSnapshot();
         revalidateTag(NOSTR_PROJECTS_TAG, "max");
         revalidateTag(NOSTR_LEGACY_SUBMISSIONS_TAG, "max");
         expiredTags.push(NOSTR_PROJECTS_TAG, NOSTR_LEGACY_SUBMISSIONS_TAG);
+      } else if (
+        body.blocking !== false &&
+        body.candidateEventId &&
+        scanAllowed &&
+        !candidateAlreadyServed(body.candidateEventId, now)
+      ) {
+        // Read-your-writes: the caller just published an event and needs the
+        // snapshot to contain it. Scan the relays FIRST — that call writes the
+        // fresh snapshot through to Upstash — and only then drop the Next cache
+        // entry. The reverse order would let the regeneration read the *stale*
+        // Upstash entry back and silently undo the refresh. Note we expire the
+        // tag rather than `expireNostrTag`: the Upstash key is already fresh, so
+        // dropping it would only buy a redundant ~6s rescan. One blocking
+        // refetch per candidate event; repeats serve the cache (the client
+        // shows "sincronizando" and retries via router.refresh).
+        lastFreshScan = now;
+        snapshot = await getFreshNostrSubmissionsSnapshot();
+        expireNextOnly(NOSTR_PROJECTS_TAG);
+        expireNextOnly(NOSTR_LEGACY_SUBMISSIONS_TAG);
+      } else {
+        // Stale-while-revalidate: serve the cached snapshot NOW, then mark the
+        // tags stale so the next visit regenerates in the background. Reading
+        // BEFORE revalidateTag is what keeps this request non-blocking — the
+        // pending tag would otherwise discard the entry and re-run the ~6s
+        // relay scan inline. The background regeneration reads Upstash rather
+        // than the relays, so relay freshness on this path is bounded by the
+        // Upstash TTL (and by the warming cron that refreshes it).
+        snapshot = await getNostrSubmissionsSnapshot();
+        if (now - lastProjectsInvalidation > PROJECTS_INVALIDATION_WINDOW_MS) {
+          lastProjectsInvalidation = now;
+          revalidateTag(NOSTR_PROJECTS_TAG, "max");
+          revalidateTag(NOSTR_LEGACY_SUBMISSIONS_TAG, "max");
+          expiredTags.push(NOSTR_PROJECTS_TAG, NOSTR_LEGACY_SUBMISSIONS_TAG);
+        }
       }
-    }
 
-    const registry = await getProjectRegistryState();
-    refreshed.projects = {
-      ...snapshot,
-      projects: attachProjectSlugs(
-        snapshot.projects.filter((project) => {
-          if (body.hackathonId && project.hackathon !== body.hackathonId) {
-            return false;
-          }
-          if (body.author && project.author !== body.author) return false;
-          if (
-            body.projectId &&
-            !projectMatchesIdentifier(project, body.projectId)
-          ) {
-            return false;
-          }
-          return true;
-        }),
-        registry,
-      ),
-    };
+      refreshed.projects = {
+        ...snapshot,
+        projects: attachProjectSlugs(
+          snapshot.projects.filter((project) => {
+            if (body.hackathonId && project.hackathon !== body.hackathonId) {
+              return false;
+            }
+            if (body.author && project.author !== body.author) return false;
+            return true;
+          }),
+          registry,
+        ),
+      };
+    }
 
     // Register any new projects in the La Crypta-signed slug registry.
     // after() keeps the work (and its revalidateTag) alive past the response.

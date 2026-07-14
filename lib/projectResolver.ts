@@ -22,8 +22,8 @@ import {
 import { PROJECTS as HOME_PROJECTS, type Project as HomeProject } from "./projects";
 import { projectMatchesIdentifier } from "./projectIdentity";
 import {
-  getNostrProjectByIdDirect,
   getNostrSubmissionsSnapshot,
+  getProjectWithDurableFallback,
   type CachedNostrProject,
 } from "./nostrCache";
 import {
@@ -216,9 +216,14 @@ export async function resolveProjectParam(
     getNostrSubmissionsSnapshot(),
   ]);
 
-  // 1. Registry slug (the canonical namespace).
-  const entry = registry.bySlug.get(paramLc) ?? null;
-  if (entry) {
+  // 1. Registry slug (the canonical namespace). The matched slug may be an
+  // alias (a project's earlier slug, kept as a redirect after the owner changed
+  // it) — canonicalize to the CURRENT entry for that id so old-slug URLs 308 to
+  // the new slug (`byIdLc` is latest-wins per id; see `buildRegistryState`).
+  const aliasEntry = registry.bySlug.get(paramLc) ?? null;
+  if (aliasEntry) {
+    const entry =
+      registry.byIdLc.get(aliasEntry.id.toLowerCase()) ?? aliasEntry;
     const curated = curatedForEntry(entry);
     const home = homeForEntry(entry);
     let nostr = entry.author
@@ -226,10 +231,16 @@ export async function resolveProjectParam(
       : findNostrProject(snapshot.projects, entry.id);
     // A registered community project whose event slipped through the broad
     // snapshot (thin relay propagation) would otherwise render an empty
-    // client-scan shell. Resolve it directly by its `#d` id so the canonical
-    // page renders server-side. Curated-backed entries never need this.
+    // client-scan shell. Resolve it by its `#d` id — with a durable backend
+    // fallback so a registered project ALWAYS renders server-side even when the
+    // live relay scan also misses it. Curated-backed entries never need this.
     if (!nostr && !curated && !home && UUID_RE.test(entry.id.toLowerCase())) {
-      nostr = await getNostrProjectByIdDirect(entry.id.toLowerCase());
+      // Pass the registry-recorded author so a poisoned cache copy (a stranger's
+      // colliding event) can never be served at this project's canonical URL.
+      nostr = await getProjectWithDurableFallback(
+        entry.id.toLowerCase(),
+        entry.author,
+      );
     }
     return resolvedProject(param, registry, entry, curated, home, nostr);
   }
@@ -252,7 +263,7 @@ export async function resolveProjectParam(
   // `#d` lookup by that id resolves it server-side, deterministically. Skipped
   // for name-slug / event-id params (a `#d` query would never match them).
   if (UUID_RE.test(paramLc)) {
-    const direct = await getNostrProjectByIdDirect(paramLc);
+    const direct = await getProjectWithDurableFallback(paramLc);
     if (direct) {
       return resolvedProject(param, registry, null, null, null, direct);
     }
