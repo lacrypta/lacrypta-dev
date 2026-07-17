@@ -8,6 +8,7 @@ import {
 } from "@/lib/upstashCache";
 import {
   getProjectRegistryState,
+  refreshProjectRedirectMap,
   registryEntryForProject,
 } from "@/lib/projectRegistry";
 
@@ -72,6 +73,10 @@ export async function GET(req: NextRequest) {
       durableWrites++;
     }
   }
+
+  // Keep the edge redirect map (id/old-slug → canonical slug) fresh so
+  // middleware 308s legacy `/projects/<id>` URLs even without a registration.
+  await refreshProjectRedirectMap();
 
   return NextResponse.json({
     ok: true,
