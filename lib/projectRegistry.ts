@@ -21,7 +21,16 @@ import { cacheLife, cacheTag } from "next/cache";
 import { DEFAULT_RELAYS } from "./nostrRelayConfig";
 import { NOSTR_PROJECT_REGISTRY_TAG } from "./nostrCacheTags";
 import { expireNostrTag } from "./nostrRevalidate";
-import { upstashAcquireLock, upstashReleaseLock } from "./upstashCache";
+import {
+  upstashAcquireLock,
+  upstashReleaseLock,
+  upstashSet,
+} from "./upstashCache";
+import {
+  PROJECT_REDIRECT_MAP_KEY,
+  PROJECT_REDIRECT_MAP_TTL,
+  buildRedirectMap,
+} from "./projectRedirectMap";
 import type { SignedEvent } from "./nostrSigner";
 import {
   PROJECT_REGISTRY_D_TAG,
@@ -469,6 +478,30 @@ async function buildAndSignRegistryEvent(
   ) as unknown as SignedEvent;
 }
 
+/**
+ * Write the edge redirect map (`id/old-slug → canonical-slug`) to Upstash so
+ * `proxy.ts` can 308 legacy `/projects/<id>` URLs. Best-effort — a failure
+ * only means the proxy falls back to the page's redirect for a bit.
+ */
+async function writeRedirectMap(entries: ProjectRegistryEntry[]): Promise<void> {
+  try {
+    await upstashSet(
+      PROJECT_REDIRECT_MAP_KEY,
+      buildRedirectMap(entries),
+      PROJECT_REDIRECT_MAP_TTL,
+    );
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Rebuild + persist the redirect map from the current registry. Called by the
+ *  warm cron so the map stays fresh even without new registrations. */
+export async function refreshProjectRedirectMap(): Promise<void> {
+  const state = await getProjectRegistryState();
+  await writeRedirectMap(state.entries);
+}
+
 let lastSyncAttempt = 0;
 const SYNC_THROTTLE_MS = 5 * 60 * 1000;
 
@@ -610,6 +643,7 @@ export async function syncProjectRegistry(): Promise<void> {
 
     const { revalidateTag } = await import("next/cache");
     revalidateTag(NOSTR_PROJECT_REGISTRY_TAG, "max");
+    await writeRedirectMap(entries);
     console.log(
       `[projectRegistry] registered ${additions.length} project(s): ${additions
         .map((a) => a.slug)
@@ -797,6 +831,8 @@ export async function registerUserProjectSlug(input: {
     // Drop the registry cache so the resolver re-reads the new slug at once.
     // The registry is not Upstash-backed, so this is a Next-tier expiry only.
     await expireNostrTag(NOSTR_PROJECT_REGISTRY_TAG);
+    // Refresh the edge redirect map so `/projects/<id>` 308s to the new slug.
+    await writeRedirectMap(entries);
 
     return { status: "ok", event: signed, slug: input.slug, changed };
   } catch (error) {
