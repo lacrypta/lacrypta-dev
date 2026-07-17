@@ -1,20 +1,11 @@
 import { connection, NextResponse } from "next/server";
+import { resolvePublisherPubkey } from "@/lib/lacryptaKeys";
 
 async function decodeNpub(npub: string): Promise<string> {
   const { decode } = await import("nostr-tools/nip19");
   const decoded = decode(npub);
   if (decoded.type !== "npub") throw new Error("npub invalido.");
   return decoded.data as string;
-}
-
-async function publisherPubkeyFromNsec(): Promise<string> {
-  const nsec = process.env.LACRYPTA_NSEC;
-  if (!nsec) throw new Error("Falta LACRYPTA_NSEC.");
-  const { decode } = await import("nostr-tools/nip19");
-  const { getPublicKey } = await import("nostr-tools/pure");
-  const decoded = decode(nsec);
-  if (decoded.type !== "nsec") throw new Error("LACRYPTA_NSEC invalido.");
-  return getPublicKey(decoded.data as Uint8Array);
 }
 
 function getAdminNpub(): string {
@@ -27,24 +18,35 @@ function getAdminNpub(): string {
   return adminNpub;
 }
 
+/**
+ * Config-INFO endpoint: report La Crypta's admin + publisher pubkeys.
+ *
+ * ALWAYS returns 200 — a missing/invalid key yields a null field + a reason,
+ * never a 500. Callers (`Navbar`, `resolveLacryptaPubkey`, voting/badge helpers)
+ * already treat an absent pubkey as "no admin features / can't verify". A hard
+ * 500 here is a failure signal that cascades badly when the (Vercel-Sensitive)
+ * npub env vars are absent — e.g. blanking every page in a dev reload loop.
+ */
 export async function GET() {
+  let adminPubkey: string | null = null;
+  let adminError: string | undefined;
   try {
     await connection();
-    const adminPubkey = await decodeNpub(getAdminNpub());
-    try {
-      const publisherPubkey = await publisherPubkeyFromNsec();
-      return NextResponse.json({ adminPubkey, publisherPubkey });
-    } catch (error) {
-      return NextResponse.json({
-        adminPubkey,
-        publisherError:
-          error instanceof Error ? error.message : "No se pudo resolver publisher.",
-      });
-    }
+    adminPubkey = await decodeNpub(getAdminNpub());
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Config invalida." },
-      { status: 500 },
-    );
+    adminError = error instanceof Error ? error.message : "Config invalida.";
   }
+
+  // Prefers LACRYPTA_NSEC, falls back to the public NEXT_PUBLIC_LACRYPTA_NPUB —
+  // same resolver the registry uses (lib/lacryptaKeys.ts), so a configured npub
+  // still yields a publisher key when the (Sensitive) nsec is absent.
+  const publisherPubkey = await resolvePublisherPubkey();
+
+  return NextResponse.json({
+    adminPubkey,
+    ...(publisherPubkey
+      ? { publisherPubkey }
+      : { publisherError: "Falta LACRYPTA_NSEC / NEXT_PUBLIC_LACRYPTA_NPUB." }),
+    ...(adminError ? { adminError } : {}),
+  });
 }
