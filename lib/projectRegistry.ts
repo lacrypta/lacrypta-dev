@@ -56,6 +56,7 @@ import {
 import { PROJECTS as HOME_PROJECTS } from "./projects";
 import type { CachedNostrProject } from "./nostrCache";
 import { getFreshNostrSubmissionsSnapshot } from "./nostrCache";
+import { resolvePublisherPubkey } from "./lacryptaKeys";
 
 type IncomingEvent = {
   id: string;
@@ -129,36 +130,7 @@ export function registryEntryForProject(
   return null;
 }
 
-/* ───────────────────────────── publisher key ───────────────────────────── */
-
-async function publisherPubkey(): Promise<string> {
-  const nsec = process.env.LACRYPTA_NSEC;
-  if (nsec) {
-    try {
-      const { decode } = await import("nostr-tools/nip19");
-      const { getPublicKey } = await import("nostr-tools/pure");
-      const decoded = decode(nsec);
-      if (decoded.type === "nsec") {
-        return getPublicKey(decoded.data as Uint8Array);
-      }
-    } catch {
-      /* fall through to npub */
-    }
-  }
-  const npub = process.env.NEXT_PUBLIC_LACRYPTA_NPUB;
-  if (npub) {
-    try {
-      const { decode } = await import("nostr-tools/nip19");
-      const decoded = decode(npub);
-      if (decoded.type === "npub") return decoded.data as string;
-    } catch {
-      /* no publisher key available */
-    }
-  }
-  return "";
-}
-
-/* ─────────────────────────────── reads ─────────────────────────────────── */
+/* ───────────────────────────── reads ─────────────────────────────────── */
 
 type RegistryEventRead =
   | { status: "ok"; snapshot: ProjectRegistrySnapshot; createdAt: number }
@@ -168,7 +140,7 @@ type RegistryEventRead =
   | { status: "no-response" };
 
 async function rawFetchRegistry(timeoutMs = 4500): Promise<RegistryEventRead> {
-  const pubkey = await publisherPubkey();
+  const pubkey = await resolvePublisherPubkey();
   if (!pubkey) return { status: "no-response" };
 
   const relays = DEFAULT_RELAYS;
