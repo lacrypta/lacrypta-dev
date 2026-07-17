@@ -27,24 +27,38 @@ function getAdminNpub(): string {
   return adminNpub;
 }
 
+/**
+ * Config-INFO endpoint: report La Crypta's admin + publisher pubkeys.
+ *
+ * ALWAYS returns 200 — a missing/invalid key yields a null field + a reason,
+ * never a 500. Callers (`Navbar`, `resolveLacryptaPubkey`, voting/badge helpers)
+ * already treat an absent pubkey as "no admin features / can't verify". A hard
+ * 500 here is a failure signal that cascades badly when the (Vercel-Sensitive)
+ * npub env vars are absent — e.g. blanking every page in a dev reload loop.
+ */
 export async function GET() {
+  let adminPubkey: string | null = null;
+  let adminError: string | undefined;
   try {
     await connection();
-    const adminPubkey = await decodeNpub(getAdminNpub());
-    try {
-      const publisherPubkey = await publisherPubkeyFromNsec();
-      return NextResponse.json({ adminPubkey, publisherPubkey });
-    } catch (error) {
-      return NextResponse.json({
-        adminPubkey,
-        publisherError:
-          error instanceof Error ? error.message : "No se pudo resolver publisher.",
-      });
-    }
+    adminPubkey = await decodeNpub(getAdminNpub());
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Config invalida." },
-      { status: 500 },
-    );
+    adminError = error instanceof Error ? error.message : "Config invalida.";
   }
+
+  let publisherPubkey: string | undefined;
+  let publisherError: string | undefined;
+  try {
+    publisherPubkey = await publisherPubkeyFromNsec();
+  } catch (error) {
+    publisherError =
+      error instanceof Error ? error.message : "No se pudo resolver publisher.";
+  }
+
+  return NextResponse.json({
+    adminPubkey,
+    ...(publisherPubkey ? { publisherPubkey } : {}),
+    ...(publisherError ? { publisherError } : {}),
+    ...(adminError ? { adminError } : {}),
+  });
 }
