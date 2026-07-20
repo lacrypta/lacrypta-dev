@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { permanentRedirect } from "next/navigation";
 import {
   getCanonicalProjectRefs,
@@ -119,6 +120,15 @@ async function PageContent({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  if (slug === "[slug]") {
+    // Fallback-shell prerender: the build renders this route once with the
+    // literal template placeholder as the param. Left alone it would bake a
+    // fully-resolved "unknown project" client scan into the static shell —
+    // which is then served (and can get pinned) for params that have no cached
+    // render yet. Postpone instead, so the shell suspends at <ProjectFallback>
+    // and real params always resolve at request time.
+    await connection();
+  }
   const resolved = await resolveProjectParam(slug);
 
   if (resolved.kind === "pubkey") {

@@ -130,9 +130,42 @@ function buildClient(): Redis | null {
   if (!url || !token) return null;
   if (process.env.UPSTASH_CACHE_DISABLED === "1") return null;
   try {
-    return new Redis({ url, token });
+    // The default client retries 5× with backoff and has no request timeout;
+    // paired with the per-call deadline below, a struggling endpoint must
+    // degrade to a cache miss, never stall a render.
+    return new Redis({
+      url,
+      token,
+      retry: {
+        retries: 2,
+        backoff: (retryCount) => Math.min(1000, 100 * 2 ** retryCount),
+      },
+    });
   } catch {
     return null;
+  }
+}
+
+/**
+ * Hard per-call deadline. Every render on the site funnels through this module
+ * (snapshot, registry, redirect map, durable copies), so an unbounded Upstash
+ * call would hang page streams and ISR revalidations fleet-wide — the timeout
+ * makes a slow endpoint indistinguishable from an unconfigured one.
+ */
+const READ_TIMEOUT_MS = 2000;
+const WRITE_TIMEOUT_MS = 3000;
+
+async function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("upstash deadline")), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -170,7 +203,7 @@ export async function upstashReadThrough<T>(
   const fullKey = namespacedKey(key);
 
   try {
-    const hit = await redis.get<T>(fullKey);
+    const hit = await withDeadline(redis.get<T>(fullKey), READ_TIMEOUT_MS);
     if (hit !== null && hit !== undefined) return hit;
   } catch {
     return producer();
@@ -181,7 +214,10 @@ export async function upstashReadThrough<T>(
     options?.shouldCache ?? ((v: T) => v !== null && v !== undefined);
   if (shouldCache(value)) {
     try {
-      await redis.set(fullKey, value, { ex: ttlSeconds });
+      await withDeadline(
+        redis.set(fullKey, value, { ex: ttlSeconds }),
+        WRITE_TIMEOUT_MS,
+      );
     } catch {
       /* best-effort write; the value is already on its way to the caller */
     }
@@ -199,7 +235,10 @@ export async function upstashGet<T>(key: string): Promise<T | null> {
   const redis = getRedis();
   if (!redis) return null;
   try {
-    const hit = await redis.get<T>(namespacedKey(key));
+    const hit = await withDeadline(
+      redis.get<T>(namespacedKey(key)),
+      READ_TIMEOUT_MS,
+    );
     return hit ?? null;
   } catch {
     return null;
@@ -219,7 +258,10 @@ export async function upstashSet<T>(
   const redis = getRedis();
   if (!redis) return;
   try {
-    await redis.set(namespacedKey(key), value, { ex: ttlSeconds });
+    await withDeadline(
+      redis.set(namespacedKey(key), value, { ex: ttlSeconds }),
+      WRITE_TIMEOUT_MS,
+    );
   } catch {
     /* best-effort */
   }
@@ -243,10 +285,10 @@ export async function upstashAcquireLock(
   const redis = getRedis();
   if (!redis) return true;
   try {
-    const res = await redis.set(namespacedKey(key), "1", {
-      nx: true,
-      ex: ttlSeconds,
-    });
+    const res = await withDeadline(
+      redis.set(namespacedKey(key), "1", { nx: true, ex: ttlSeconds }),
+      WRITE_TIMEOUT_MS,
+    );
     return res === "OK";
   } catch {
     return true;
@@ -263,7 +305,7 @@ export async function upstashDelete(...keys: string[]): Promise<void> {
   const redis = getRedis();
   if (!redis || keys.length === 0) return;
   try {
-    await redis.del(...keys.map(namespacedKey));
+    await withDeadline(redis.del(...keys.map(namespacedKey)), WRITE_TIMEOUT_MS);
   } catch {
     /* best-effort */
   }

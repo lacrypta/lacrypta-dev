@@ -36,6 +36,7 @@ import {
   fetchUserProjects,
   getCachedUserProjects,
   publishUserProject,
+  refreshNostrServerCache,
   removeCachedCommunityProject,
   upsertCachedCommunityProject,
   type ProjectsDoc,
@@ -441,6 +442,21 @@ export default function UserProjectsClient() {
       upsertCachedCommunityProject(
         communityProjectFromSignedEvent(project, result.signed),
       );
+      // Read-your-writes: warm the server snapshot / per-id caches with the
+      // event we just published (its `after()` hook also triggers the registry
+      // sync), so the public `/projects/<id>` URL resolves immediately instead
+      // of waiting for the next cron scan. Fire-and-forget — the relays
+      // already accepted the event, so a refresh hiccup must not fail the save.
+      refreshNostrServerCache({
+        scopes: ["projects"],
+        projectId: project.id,
+        author: result.signed.pubkey,
+        candidateEventId: result.signed.id,
+        candidateCreatedAt: result.signed.created_at,
+        blocking: true,
+      }).catch((e) => {
+        console.warn("[labs] post-publish server refresh failed", e);
+      });
       setTimeout(() => setPublishProgress(null), 3500);
       return result;
     } catch (e) {
