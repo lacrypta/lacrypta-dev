@@ -16,6 +16,10 @@ export const LACRYPTA_DEFAULT_RELAYS = [
 ] as const;
 
 export const LACRYPTA_FAST_USER_RELAYS = [
+  // La Crypta's own relay must always hold community events — the server-side
+  // snapshot/registry reads include it, and a publish that lands only on the
+  // third-party relays leaves the event thinly propagated.
+  "wss://relay.lacrypta.ar",
   "wss://relay.masize.com",
   "wss://relay.damus.io",
   "wss://relay.primal.net",

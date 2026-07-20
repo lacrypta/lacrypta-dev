@@ -490,7 +490,7 @@ function FeedbackCard({
  * narrows relay lookups when the caller knows it (registry-backed URLs).
  */
 export default function NostrProjectPage({
-  projectId,
+  projectId: projectIdProp,
   author,
   canonicalSlug,
   initialProject,
@@ -500,6 +500,27 @@ export default function NostrProjectPage({
   canonicalSlug?: string;
   initialProject?: CommunityProject;
 }) {
+  // The build-time fallback shell of `/projects/[slug]` is prerendered with the
+  // literal route placeholder as the param, so a stale cached shell arrives
+  // here with projectId === "[slug]". The URL is the only trustworthy source in
+  // that case — and it must be window.location, not useParams(), because the
+  // client router hydrates from the same placeholder RSC tree. Start from the
+  // server-passed prop (keeps hydration consistent) and swap in the real path
+  // segment after mount.
+  const [projectId, setProjectId] = useState(projectIdProp);
+  useEffect(() => {
+    if (projectIdProp !== "[slug]") {
+      setProjectId(projectIdProp);
+      return;
+    }
+    const last = window.location.pathname.split("/").filter(Boolean).pop();
+    if (!last) return;
+    try {
+      setProjectId(decodeURIComponent(last));
+    } catch {
+      /* malformed escape — keep the placeholder */
+    }
+  }, [projectIdProp]);
   const [project, setProject] = useState<CommunityProject | null | undefined>(
     initialProject ?? undefined,
   );
@@ -527,6 +548,11 @@ export default function NostrProjectPage({
   }, [auth]);
 
   useEffect(() => {
+    // Placeholder param from a stale fallback shell — the rescue effect above
+    // swaps in the real URL segment on the next render; scanning for the
+    // literal "[slug]" would only ever end in "Proyecto no encontrado".
+    if (projectId === "[slug]") return;
+
     let cancelled = false;
     const snapshotAbort = new AbortController();
 

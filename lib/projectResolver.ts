@@ -25,8 +25,10 @@ import {
   getNostrSubmissionsSnapshot,
   getProjectWithDurableFallback,
   type CachedNostrProject,
+  type CachedNostrSubmissionsSnapshot,
 } from "./nostrCache";
 import {
+  buildRegistryState,
   getProjectRegistryState,
   registryEntryForProject,
   type ProjectRegistryState,
@@ -39,6 +41,25 @@ export { safeDecodeURIComponent };
 const HEX64_RE = /^[0-9a-f]{64}$/;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Resolve to `fallback` if `promise` hasn't settled within `ms`. */
+async function withResolverDeadline<T>(
+  promise: Promise<T>,
+  ms: number,
+  fallback: T,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise.catch(() => fallback),
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export type ResolvedProject = {
   kind: "project";
@@ -211,10 +232,19 @@ export async function resolveProjectParam(
     if (pubkey) return { kind: "pubkey", pubkey };
   }
 
-  const [registry, snapshot] = await Promise.all([
-    getProjectRegistryState(),
-    getNostrSubmissionsSnapshot(),
-  ]);
+  // The cached round-trips are internally time-capped, but this render path
+  // must NEVER hang: a page stream that stalls here is what pins Vercel's
+  // prerender cache on a stale fallback shell (revalidation only replaces an
+  // entry after a *successful* render). Degrade to empty state — the page then
+  // falls through to the client-scan shell instead of hanging.
+  const [registry, snapshot] = await withResolverDeadline(
+    Promise.all([getProjectRegistryState(), getNostrSubmissionsSnapshot()]),
+    10_000,
+    [
+      buildRegistryState([]),
+      { projects: [], generatedAt: "", relays: [] },
+    ] as [ProjectRegistryState, CachedNostrSubmissionsSnapshot],
+  );
 
   // 1. Registry slug (the canonical namespace). The matched slug may be an
   // alias (a project's earlier slug, kept as a redirect after the owner changed

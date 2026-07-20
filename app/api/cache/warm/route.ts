@@ -10,6 +10,7 @@ import {
   getProjectRegistryState,
   refreshProjectRedirectMap,
   registryEntryForProject,
+  syncProjectRegistry,
 } from "@/lib/projectRegistry";
 
 /**
@@ -21,6 +22,14 @@ import {
  * stale-while-revalidate cycle, and when one does regenerate it reads a warm
  * Upstash key. Expiring tags here would force a re-render every five minutes
  * for no freshness gain.
+ *
+ * It DOES run the registry sync: `/api/nostr/refresh`'s `after()` hook is the
+ * only other trigger, and clients call that route only when they spot an event
+ * NEWER than the server snapshot — which this cron keeps fresh, starving that
+ * trigger. Without the sync here, new projects never get slugs (the registry
+ * once sat unpublished for days). `syncProjectRegistry` is fully self-guarded
+ * (env gates, 5-min throttle, write lock, append-only fresh-read checks) and
+ * no-ops when there is nothing to register.
  *
  * Scheduled from `vercel.json`. Vercel Cron sends `Authorization: Bearer
  * $CRON_SECRET` automatically once CRON_SECRET is set on the project. Hobby
@@ -78,11 +87,16 @@ export async function GET(req: NextRequest) {
   // middleware 308s legacy `/projects/<id>` URLs even without a registration.
   await refreshProjectRedirectMap();
 
+  // Register any new projects (assign slugs + republish the registry event).
+  // Self-guarded and swallow-on-error — a failed attempt retries next tick.
+  await syncProjectRegistry();
+
   return NextResponse.json({
     ok: true,
     warmed: snapshot.projects.length > 0,
     projects: snapshot.projects.length,
     durableWrites,
+    registrySyncAttempted: true,
     generatedAt: snapshot.generatedAt,
     elapsedMs: Date.now() - startedAt,
   });
