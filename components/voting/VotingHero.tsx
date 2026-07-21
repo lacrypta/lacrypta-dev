@@ -32,11 +32,19 @@ import LiveTally from "@/components/voting/LiveTally";
 import FinalResultsTable from "@/components/voting/FinalResultsTable";
 import PrizeZapButton from "@/components/voting/PrizeZapButton";
 
+/** How long the closed/results hero stays on the home page after a round
+ *  closes. Past this window the home section disappears entirely. */
+const HOME_RESULTS_VISIBLE_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
  * Gamified, live "community voting" hero. Reused on the home page and the
  * hackathon page. While open it shows the viewer's vote wallet + the live
  * participation progress and pushes them to the ballot (`#votar`). Once closed
  * it celebrates the published winners. Renders nothing before the first open.
+ *
+ * On the home page the closed/results state is a temporary announcement: it
+ * shows for one week after the round closes and then disappears. The hackathon
+ * page keeps its results permanently.
  */
 export default function VotingHero({
   hackathonId,
@@ -91,6 +99,16 @@ export default function VotingHero({
       return <PageVotingActionsShell actions={actions} />;
     }
     return null;
+  }
+
+  // Home-only: the results announcement expires. `closedAt` is unix seconds;
+  // hide once the round has been closed for over a week (or if the close
+  // timestamp is missing — nothing to anchor the window to).
+  if (variant === "home" && period.status === "closed") {
+    const closedAtMs = (period.closedAt ?? 0) * 1000;
+    if (!closedAtMs || Date.now() - closedAtMs > HOME_RESULTS_VISIBLE_MS) {
+      return null;
+    }
   }
 
   // On the home page, default to a generic "voting in progress" hero (linking to
