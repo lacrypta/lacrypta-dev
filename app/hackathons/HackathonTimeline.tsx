@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Clock,
   Flame,
+  FolderGit2,
   Gauge,
   Layers,
   Radio,
@@ -40,7 +41,31 @@ export type TimelineHackathon = {
   inscriptionOpen: boolean;
   countdown: string | null;
   sponsors: { name: string; logo: string }[];
+  /** Projects registered for this hackathon — curated + community submissions,
+   *  deduped the same way the detail page's list is. `null` when the relay
+   *  snapshot came back empty, i.e. the count is unknown rather than zero. */
+  projectCount: number | null;
 };
+
+/** "Sin proyectos" / "1 proyecto" / "N proyectos", or `null` when unknown —
+ *  callers render nothing in that case rather than claiming a number. */
+function projectCountLabel(count: number | null): string | null {
+  if (count === null) return null;
+  if (count === 0) return "Sin proyectos";
+  return `${count} ${count === 1 ? "proyecto" : "proyectos"}`;
+}
+
+/** Tooltip body for the project-count chip. Spanish agreement follows the
+ *  count, so the singular case reads "1 proyecto anotado … para verlo". */
+function projectCountTooltip(h: TimelineHackathon): string {
+  const n = h.projectCount ?? 0;
+  if (n > 0) {
+    return `${projectCountLabel(n)} ${n === 1 ? "anotado" : "anotados"} en este hackatón — abrí el detalle para ${n === 1 ? "verlo" : "verlos"}.`;
+  }
+  return h.status === "closed"
+    ? "No se anotó ningún proyecto en esta edición."
+    : "Todavía no se anotó ningún proyecto. Podés ser el primero.";
+}
 
 const STATUS_META: Record<
   TimelineHackathon["status"],
@@ -162,13 +187,18 @@ export default function HackathonTimeline({
               {items.map((h, i) => {
                 const meta = STATUS_META[h.status];
                 const selected = i === index;
+                const countLabel = projectCountLabel(h.projectCount);
                 return (
                   <button
                     key={h.id}
                     type="button"
                     onClick={() => goTo(i)}
                     aria-current={selected ? "true" : undefined}
-                    aria-label={`${h.name} — ${meta.label}`}
+                    aria-label={
+                      countLabel
+                        ? `${h.name} — ${meta.label} — ${countLabel}`
+                        : `${h.name} — ${meta.label}`
+                    }
                     className="group relative flex flex-1 flex-col items-center gap-2 rounded-lg pt-[6px] outline-none focus-visible:ring-2 focus-visible:ring-cyan/60"
                   >
                     {/* Dot — nudged up to sit centered on the rail line above. */}
@@ -367,6 +397,7 @@ function PeekCard({
   onClick: () => void;
 }) {
   const meta = STATUS_META[h.status];
+  const countLabel = projectCountLabel(h.projectCount);
   return (
     <motion.button
       type="button"
@@ -407,6 +438,20 @@ function PeekCard({
         <div className="truncate text-[11px] font-mono uppercase tracking-wide text-foreground-muted">
           {h.focus}
         </div>
+        {countLabel && (
+          <div
+            className={cn(
+              // Deliberately not `text-foreground-subtle` even at zero: the peek
+              // card is already held at 0.78 opacity, which drags the subtle
+              // token under the AA contrast floor.
+              "mt-1.5 inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-foreground-muted",
+              side === "right" && "flex-row-reverse",
+            )}
+          >
+            <FolderGit2 className="h-3 w-3 shrink-0" />
+            <span className="tabular-nums">{countLabel}</span>
+          </div>
+        )}
       </div>
       <span
         className={cn(
@@ -434,10 +479,14 @@ function InfoChip({
   icon,
   label,
   tooltip,
+  strong = false,
 }: {
   icon: React.ReactNode;
   label: string;
   tooltip: React.ReactNode;
+  /** Pulls the chip forward (brighter text + border) — used for the project
+   *  count, the one figure on the card that changes as people submit. */
+  strong?: boolean;
 }) {
   return (
     <div className="group/chip relative">
@@ -445,7 +494,12 @@ function InfoChip({
        *  only by hover. The tooltip reveals on hover OR focus-within. */}
       <button
         type="button"
-        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white/[0.03] px-2.5 py-1.5 text-[11px] font-mono font-semibold uppercase tracking-wider text-foreground-muted outline-none transition-colors hover:border-border-strong hover:text-foreground focus-visible:border-border-strong focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-cyan/60"
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-lg border bg-white/[0.03] px-2.5 py-1.5 text-[11px] font-mono font-semibold uppercase tracking-wider outline-none transition-colors hover:border-border-strong hover:text-foreground focus-visible:border-border-strong focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-cyan/60",
+          strong
+            ? "border-border-strong text-foreground"
+            : "border-border text-foreground-muted",
+        )}
       >
         <span className="text-foreground-subtle">{icon}</span>
         {label}
@@ -460,6 +514,7 @@ function InfoChip({
 function StageCard({ h }: { h: TimelineHackathon }) {
   const isActive = h.status === "active";
   const isClosed = h.status === "closed";
+  const countLabel = projectCountLabel(h.projectCount);
 
   const accent = isActive
     ? {
@@ -567,6 +622,14 @@ function StageCard({ h }: { h: TimelineHackathon }) {
               {!isActive && !isClosed && <Clock className="h-3.5 w-3.5" />}
               {accent.badgeLabel}
             </span>
+            {countLabel && (
+              <InfoChip
+                icon={<FolderGit2 className="h-3.5 w-3.5" />}
+                label={countLabel}
+                strong={(h.projectCount ?? 0) > 0}
+                tooltip={projectCountTooltip(h)}
+              />
+            )}
             <InfoChip
               icon={<Calendar className="h-3.5 w-3.5" />}
               label={

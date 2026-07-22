@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cacheTag } from "next/cache";
 import {
   Calendar,
   Zap,
@@ -14,7 +15,15 @@ import {
   hackathonSlug,
   hackathonStatus,
   isHackathonInscriptionOpen,
+  mergeWithSubmissions,
+  toHackathonSubmission,
+  type HackathonSubmission,
 } from "@/lib/hackathons";
+import {
+  getNostrSubmissionsSnapshot,
+  NOSTR_PROJECTS_TAG,
+  NOSTR_SUBMISSIONS_TAG,
+} from "@/lib/nostrCache";
 import { cn } from "@/lib/cn";
 import HackathonTimeline, {
   type TimelineHackathon,
@@ -75,7 +84,11 @@ function startsInLabel(startISO: string, now: Date): string | null {
  *  hackathon (active, else soonest upcoming, else the last one) and the
  *  fraction of the program that has already elapsed (0–100), so the rail can
  *  draw a "today" marker even between two hackathons. */
-function buildTimeline(now: Date): {
+function buildTimeline(
+  now: Date,
+  submissions: HackathonSubmission[],
+  submissionsKnown: boolean,
+): {
   items: TimelineHackathon[];
   initialIndex: number;
   todayPct: number;
@@ -86,6 +99,9 @@ function buildTimeline(now: Date): {
 
   const items: TimelineHackathon[] = ordered.map((h) => {
     const status = hackathonStatus(h, now);
+    // Same merge the detail page renders (curated + community, deduped by
+    // id/repo/name), so the number here matches the list one click away.
+    const merged = mergeWithSubmissions(h.id, submissions).length;
     // Sort dates to match hackathonStatus()/isHackathonInscriptionOpen(), which
     // normalize ordering — keeps every timeline calc on the same boundaries.
     const sortedDates = [...h.dates].sort((a, b) => a.date.localeCompare(b.date));
@@ -112,6 +128,11 @@ function buildTimeline(now: Date): {
       inscriptionOpen: isHackathonInscriptionOpen(h, now),
       countdown: status === "upcoming" && firstISO ? startsInLabel(firstISO, now) : null,
       sponsors: (h.sponsors ?? []).map((s) => ({ name: s.name, logo: s.logo })),
+      // A count of zero derived from an empty snapshot is not a fact — see
+      // `submissionsKnown` below. Report it as unknown so the UI stays silent
+      // instead of asserting nobody entered. A curated hackathon still has a
+      // real number to show, so only the all-zero case goes null.
+      projectCount: merged > 0 || submissionsKnown ? merged : null,
     };
   });
 
@@ -147,8 +168,25 @@ function buildTimeline(now: Date): {
 
 export default async function HackathonsPage() {
   "use cache";
+  // The per-hackathon counts below read the shared relay snapshot, so this
+  // page's entry has to expire with it. The snapshot's own "use cache" tags do
+  // propagate up into this one, but declaring them here keeps the page's
+  // invalidation contract visible and survives that helper being refactored.
+  cacheTag(NOSTR_PROJECTS_TAG);
+  cacheTag(NOSTR_SUBMISSIONS_TAG);
   const now = new Date();
-  const { items, initialIndex, todayPct } = buildTimeline(now);
+  const snapshot = await getNostrSubmissionsSnapshot();
+  const submissions = snapshot.projects.map(toHackathonSubmission);
+  // `buildSubmissionsSnapshot` swallows relay errors and returns an empty list,
+  // so "no projects" and "every relay timed out" look identical here. Unlike the
+  // detail page, this one has no client-side rescan to correct a bad read — so
+  // treat an empty snapshot as "unknown" rather than rendering "Sin proyectos".
+  const submissionsKnown = snapshot.projects.length > 0;
+  const { items, initialIndex, todayPct } = buildTimeline(
+    now,
+    submissions,
+    submissionsKnown,
+  );
 
   return (
     <>

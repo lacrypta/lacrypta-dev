@@ -40,8 +40,16 @@
   --font-mono: var(--font-jetbrains-mono);
 }
 
-* {
-  border-color: var(--border);
+/* Default border color for every element. MUST stay inside `@layer base`:
+   Tailwind 4 emits border-color utilities into `@layer utilities`, and
+   unlayered CSS outranks every layer — so an unlayered `*` rule here silently
+   overrode `border-bitcoin/30`, `border-success/40`, `border-border-strong`
+   and every other accent border in the app. Inside `base` it only supersedes
+   preflight's `border: 0 solid` (currentColor) default, and any utility wins. */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 html {

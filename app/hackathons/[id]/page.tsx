@@ -30,10 +30,11 @@ import {
   getHackathon,
   hackathonSlug,
   hackathonStatus,
+  mergeWithSubmissions,
   primaryProjectPubkey,
   prizedProjects,
   programRules,
-  rankedProjects,
+  toHackathonSubmission,
   type HackathonSubmission,
   type Sponsor,
 } from "@/lib/hackathons";
@@ -257,21 +258,6 @@ function soldierRecipientLookup(
   return lookup;
 }
 
-type CachedHackathonSubmission = Awaited<
-  ReturnType<typeof getNostrHackathonSubmissions>
->[number];
-
-function fromCachedNostrSubmission(
-  project: CachedHackathonSubmission,
-): HackathonSubmission {
-  return {
-    ...project,
-    nostrAuthor: project.author,
-    nostrEventId: project.eventId,
-    nostrCreatedAt: project.eventCreatedAt,
-  };
-}
-
 function SponsorStrip({ sponsors }: { sponsors: Sponsor[] }) {
   if (sponsors.length === 0) return null;
   if (sponsors.length === 1) return <SponsorHero sponsor={sponsors[0]} />;
@@ -475,9 +461,6 @@ export default async function HackathonPage({
     votingPeriod?.status === "closed" && !!votingPeriod.results;
   const status = hackathonStatus(hackathon);
   const statusMeta = STATUS_META[status];
-  const projects = rankedProjects(id);
-  const total = projects.length;
-  const hasReports = projects.some((p) => p.report);
   const awards = prizedProjects(id);
   const prizePubkeys = [
     ...new Set(awards.map((a) => primaryProjectPubkey(a.project)).filter((pubkey): pubkey is string => !!pubkey)),
@@ -501,7 +484,11 @@ export default async function HackathonPage({
   const nostrSubmissions = attachProjectSlugs(
     cachedSubmissions,
     projectRegistry,
-  ).map(fromCachedNostrSubmission);
+  ).map(toHackathonSubmission);
+  // Count what the list below actually renders (curated + community, deduped),
+  // not just the curated slice — /hackathons advertises this same merged number,
+  // so a curated-only tab badge would contradict the card the user clicked.
+  const total = mergeWithSubmissions(id, nostrSubmissions).length;
   const prizeBadgeIssuerPubkey =
     status === "closed"
       ? await getCachedHackathonBadgePublisherPubkey().catch(() => "")
