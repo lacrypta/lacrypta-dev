@@ -249,6 +249,32 @@ export type HackathonSubmission = HackathonProject & {
   nostrCreatedAt?: number;
 };
 
+/** Event provenance carried by any project parsed out of a Nostr event.
+ *  Both producers use these names — `lib/nostrCache.ts` (server, cached relay
+ *  snapshot) and `lib/userProjects.ts` (client scan). */
+export type NostrProjectProvenance = {
+  author: string;
+  eventId: string;
+  eventCreatedAt: number;
+};
+
+/**
+ * Re-labels a Nostr-sourced project's event provenance onto the
+ * `HackathonSubmission` fields `mergeWithSubmissions()` reads (it sorts
+ * community entries by `nostrCreatedAt`). Generic so extra fields the caller
+ * attached — e.g. the registry `slug` from `attachProjectSlugs` — survive.
+ */
+export function toHackathonSubmission<
+  T extends HackathonProject & NostrProjectProvenance,
+>(project: T): T & HackathonSubmission {
+  return {
+    ...project,
+    nostrAuthor: project.author,
+    nostrEventId: project.eventId,
+    nostrCreatedAt: project.eventCreatedAt,
+  };
+}
+
 export function comparableProjectName(name: string): string {
   return name
     .trim()
