@@ -45,6 +45,8 @@ export type TimelineHackathon = {
    *  deduped the same way the detail page's list is. `null` when the relay
    *  snapshot came back empty, i.e. the count is unknown rather than zero. */
   projectCount: number | null;
+  /** A calendar month retained in the rail without a scheduled hackathon. */
+  placeholder?: boolean;
 };
 
 /** "Sin proyectos" / "1 proyecto" / "N proyectos", or `null` when unknown —
@@ -188,6 +190,22 @@ export default function HackathonTimeline({
                 const meta = STATUS_META[h.status];
                 const selected = i === index;
                 const countLabel = projectCountLabel(h.projectCount);
+                if (h.placeholder) {
+                  return (
+                    <div
+                      key={h.id}
+                      aria-label={`${h.month} — sin hackatón programado`}
+                      className="relative flex flex-1 flex-col items-center gap-2 pt-[6px]"
+                    >
+                      <span className="relative -mt-[7px] flex h-6 w-6 items-center justify-center">
+                        <span className="h-2.5 w-2.5 rounded-full bg-background ring-2 ring-border" />
+                      </span>
+                      <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-foreground-subtle">
+                        {h.monthShort}
+                      </span>
+                    </div>
+                  );
+                }
                 return (
                   <button
                     key={h.id}
@@ -396,6 +414,9 @@ function PeekCard({
   side: "left" | "right";
   onClick: () => void;
 }) {
+  if (h.placeholder) {
+    return <RailEnd label={`${h.month} · sin hackatón programado`} />;
+  }
   const meta = STATUS_META[h.status];
   const countLabel = projectCountLabel(h.projectCount);
   return (
@@ -512,6 +533,17 @@ function InfoChip({
 }
 
 function StageCard({ h }: { h: TimelineHackathon }) {
+  if (h.placeholder) {
+    return (
+      <div className="flex min-h-[320px] flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-background-card px-6 text-center">
+        <Calendar className="h-8 w-8 text-foreground-subtle" />
+        <p className="mt-4 font-mono text-xs font-semibold uppercase tracking-widest text-foreground-muted">
+          {h.month} {h.year}
+        </p>
+        <h2 className="mt-2 font-display text-2xl font-bold">Sin hackatón programado</h2>
+      </div>
+    );
+  }
   const isActive = h.status === "active";
   const isClosed = h.status === "closed";
   const countLabel = projectCountLabel(h.projectCount);

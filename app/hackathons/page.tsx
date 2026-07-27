@@ -32,7 +32,7 @@ import PilaresDisclosure from "@/app/hackathons/PilaresDisclosure";
 import PrizeRulesNote from "@/app/hackathons/PrizeRulesNote";
 
 const DESCRIPTION =
-  "Lightning Hackathons 2026 — 8 hackatones mensuales, 8M sats en premios. Bitcoin, Lightning, Nostr.";
+  "Lightning Hackathons 2026 — 6 hackatones y 6M sats en premios. Bitcoin, Lightning, Nostr.";
 
 export const metadata: Metadata = {
   title: "Hackatones",
@@ -93,11 +93,14 @@ function buildTimeline(
   initialIndex: number;
   todayPct: number;
 } {
-  const ordered = [...HACKATHONS].sort((a, b) => a.number - b.number);
-  const n = ordered.length;
+  const ordered = [...HACKATHONS].sort((a, b) => {
+    const aFirst = [...a.dates].sort((x, y) => x.date.localeCompare(y.date))[0]?.date ?? "";
+    const bFirst = [...b.dates].sort((x, y) => x.date.localeCompare(y.date))[0]?.date ?? "";
+    return aFirst.localeCompare(bFirst);
+  });
   const today = now.toISOString().slice(0, 10);
 
-  const items: TimelineHackathon[] = ordered.map((h) => {
+  const hackathonItems: TimelineHackathon[] = ordered.map((h) => {
     const status = hackathonStatus(h, now);
     // Same merge the detail page renders (curated + community, deduped by
     // id/repo/name), so the number here matches the list one click away.
@@ -136,6 +139,36 @@ function buildTimeline(
     };
   });
 
+  // Agosto y septiembre permanecen en el calendario como meses sin una
+  // hackatón programada, pero no existen como hackatones ni tienen una página.
+  const items: TimelineHackathon[] = [...hackathonItems];
+  const julyIndex = items.findIndex((item) => item.monthShort === "JUL");
+  items.splice(julyIndex + 1, 0, ...[
+    { id: "month-august", month: "Agosto", monthShort: "AGO" },
+    { id: "month-september", month: "Septiembre", monthShort: "SEP" },
+  ].map((month) => ({
+    ...month,
+    slug: "",
+    number: 0,
+    name: "",
+    focus: "",
+    description: "",
+    difficulty: "",
+    stars: 0,
+    year: 2026,
+    icon: "",
+    tags: [],
+    topics: [],
+    firstDay: null,
+    lastDay: null,
+    status: "upcoming" as const,
+    inscriptionOpen: false,
+    countdown: null,
+    sponsors: [],
+    projectCount: null,
+    placeholder: true as const,
+  })));
+  const n = items.length;
   const activeIdx = items.findIndex((x) => x.status === "active");
   const firstUpcomingIdx = items.findIndex((x) => x.status === "upcoming");
   const initialIndex =
@@ -150,7 +183,8 @@ function buildTimeline(
   // which `closedCount/n` already yields (a cell boundary == a dot midpoint).
   let todayPct: number;
   if (activeIdx >= 0) {
-    const h = ordered[activeIdx];
+    const h = ordered.find((hackathon) => hackathon.id === items[activeIdx].id);
+    if (!h) return { items, initialIndex, todayPct: 0 };
     const sorted = [...h.dates].sort((a, b) => a.date.localeCompare(b.date));
     const first = sorted[0]?.date ?? today;
     const last = sorted[sorted.length - 1]?.date ?? today;
@@ -193,7 +227,7 @@ export default async function HackathonsPage() {
       <PageHero
         title={
           <>
-            <span className="whitespace-nowrap">8 hackatones ·</span>
+            <span className="whitespace-nowrap">{HACKATHONS.length} hackatones ·</span>
             <br />
             <span className="whitespace-nowrap">
               <span className="text-gradient-bitcoin">
