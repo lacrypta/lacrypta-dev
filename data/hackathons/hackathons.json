@@ -3,7 +3,7 @@
     "name": "Lightning Hackathons 2026",
     "organization": "La Crypta",
     "youtube": "https://www.youtube.com/@LaCryptaOk",
-    "totalPrize": 8000000,
+    "totalPrize": 6000000,
     "prizePerHackathon": 1000000,
     "prizeDistribution": [
       { "position": 1, "sats": 400000 },
@@ -121,28 +121,6 @@
       ]
     },
     {
-      "id": "media",
-      "slug": "gaming-2",
-      "number": 6,
-      "name": "GAMING 2",
-      "focus": "Game Dev · Temporada 2",
-      "description": "Segunda temporada de GAMING: más juegos, mecánicas interactivas, leaderboards y multiplayer sobre Bitcoin, Lightning y Nostr.",
-      "difficulty": "Intermediate",
-      "stars": 2,
-      "month": "Agosto",
-      "monthShort": "AGO",
-      "year": 2026,
-      "icon": "🎮",
-      "tags": ["Gaming", "Lightning", "Nostr"],
-      "topics": ["Game Development", "Game Loops", "Nostr Login", "Lightning Rewards", "Leaderboards", "Multiplayer"],
-      "dates": [
-        { "date": "2026-08-04", "day": 4, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
-        { "date": "2026-08-11", "day": 11, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
-        { "date": "2026-08-18", "day": 18, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
-        { "date": "2026-08-25", "day": 25, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
-      ]
-    },
-    {
       "id": "ai-agents",
       "number": 5,
       "name": "AI AGENTS",
@@ -164,46 +142,21 @@
       ]
     },
     {
-      "id": "infrastructure",
-      "number": 7,
-      "name": "INFRASTRUCTURE",
-      "focus": "Nodes, Routing, Liquidity",
-      "description": "Nodos, channels, liquidity management.",
-      "difficulty": "Expert",
-      "stars": 4,
-      "month": "Septiembre",
-      "monthShort": "SEP",
-      "year": 2026,
-      "icon": "🏗️",
-      "tags": ["Nodes", "Routing", "Infrastructure"],
-      "topics": ["LND / CLN", "Channel Management", "Liquidity", "Routing Fees"],
-      "dates": [
-        { "date": "2026-09-01", "day": 1, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
-        { "date": "2026-09-08", "day": 8, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
-        { "date": "2026-09-15", "day": 15, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
-        { "date": "2026-09-22", "day": 22, "type": "pitch-final", "title": "Community Call — Pitch Final", "description": "Últimos pitches antes de la entrega. Feedback final de mentores." },
-        { "date": "2026-09-29", "day": 29, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
-      ]
-    },
-    {
-      "id": "integration",
-      "number": 8,
-      "name": "INTEGRATION",
-      "focus": "Full-Stack Production Apps",
-      "description": "Proyecto final. Todo integrado. Ready to launch.",
-      "difficulty": "Expert",
-      "stars": 4,
+      "id": "labitconf",
+      "number": 6,
+      "name": "LABITCONF",
+      "focus": "Bitcoin, Lightning & Nostr",
+      "description": "La próxima hackatón de La Crypta, en el marco de LABITCONF.",
+      "difficulty": "Intermediate",
+      "stars": 2,
       "month": "Octubre",
       "monthShort": "OCT",
       "year": 2026,
-      "icon": "🌐",
-      "tags": ["Full-Stack", "Production", "Final"],
-      "topics": ["Integración Completa", "Deploy Production", "Testing E2E", "Launch"],
+      "icon": "⚡",
+      "tags": ["Bitcoin", "Lightning", "Nostr"],
+      "topics": ["Bitcoin", "Lightning Network", "Nostr", "Open Source"],
       "dates": [
-        { "date": "2026-10-06", "day": 6, "type": "apertura", "title": "Community Call — Apertura", "description": "Se abre el formulario de inscripción. Podés anotarte solo o en grupo (máx 4 personas)." },
-        { "date": "2026-10-13", "day": 13, "type": "pitch", "title": "Community Call — Pitches", "description": "Presentá tu proyecto en 3 minutos. Recibí feedback de la comunidad y los mentores." },
-        { "date": "2026-10-20", "day": 20, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
-        { "date": "2026-10-27", "day": 27, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo. Cierre del programa 2026." }
+        { "date": "2026-10-30", "day": 30, "type": "apertura", "title": "LABITCONF", "description": "La hackatón de La Crypta en LABITCONF." }
       ]
     }
   ]
