@@ -1,12 +1,18 @@
-# Local Nostr relay for La Crypta Labs dev.
+# Local Nostr relay for La Crypta Labs dev — OPTIONAL Docker engine.
 #
-# Fully isolated: nothing published here ever reaches a public relay, so you can
-# exercise voting / projects / badges without permanently polluting production
-# (Nostr events can't be deleted once they hit a real relay).
+# The default relay is dev/relay/server.mjs (Node, host arch, no image pull).
+# This compose file is the alternative for running the real nostr-rs-relay:
 #
-#   pnpm relay:up     # start  (ws://localhost:7777)
-#   pnpm relay:logs   # tail
-#   pnpm relay:down   # stop
+#   RELAY_ENGINE=docker pnpm relay:up     # start  (ws://localhost:7777)
+#   RELAY_ENGINE=docker pnpm relay:logs   # tail
+#   RELAY_ENGINE=docker pnpm relay:down   # stop
+#
+# `pnpm relay:up` health-checks whichever engine it started, so a container that
+# comes up and immediately dies fails the command instead of passing silently.
+#
+# Fully isolated either way: nothing published here ever reaches a public relay,
+# so you can exercise voting / projects / badges without permanently polluting
+# production (Nostr events can't be deleted once they hit a real relay).
 #
 # Point the app at it with NEXT_PUBLIC_NOSTR_RELAYS=ws://localhost:7777
 services:
@@ -14,6 +20,16 @@ services:
     image: scsibug/nostr-rs-relay:latest
     container_name: labs-nostr-relay
     restart: unless-stopped
+    # scsibug/nostr-rs-relay publishes an amd64-only image. Declaring the
+    # platform is what routes it through Rosetta/QEMU on an arm64 host —
+    # necessary there, but NOT sufficient: the host also needs amd64 emulation
+    # installed (Docker Desktop → General → "Use Rosetta for x86_64/amd64
+    # emulation", or `docker run --privileged tonistiigi/binfmt --install amd64`).
+    # Check with `docker run --rm --privileged tonistiigi/binfmt`: if the
+    # supported platforms list has no linux/amd64, this container will start and
+    # crash-loop on `exec /bin/sh: exec format error` no matter what — use the
+    # default Node relay (`pnpm relay:up`) instead.
+    platform: linux/amd64
     # Host 7777 -> container 8080 (nostr-rs-relay's default listen port).
     ports:
       - "7777:8080"

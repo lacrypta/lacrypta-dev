@@ -34,7 +34,8 @@ yarn-error.log*
 .env*
 !.env.example
 
-# local dev nostr relay data (sqlite db + wal/shm)
+# local dev nostr relay runtime state — events.jsonl + relay.log + relay.pid
+# (node engine), sqlite db + wal/shm (docker engine)
 /dev/relay/data/
 
 # vercel
