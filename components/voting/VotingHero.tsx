@@ -51,12 +51,17 @@ export default function VotingHero({
   hackathonName,
   initialPeriod,
   variant,
+  inline = false,
   actions,
 }: {
   hackathonId: string;
   hackathonName: string;
   initialPeriod: VotingPeriod | null;
   variant: "home" | "page";
+  /** `variant="home"` only: the hero sits below other content (the logged-in
+   *  dashboard's greeting band) instead of being the first thing under the fixed
+   *  header, so it drops the header-clearing top padding. */
+  inline?: boolean;
   /** Page-only action bar (Ver padrón + admin controls), folded into the hero.
    *  Must be rendered inside the VotingProvider — only passed on the hackathon
    *  page (`variant="page"`). */
@@ -73,6 +78,9 @@ export default function VotingHero({
   const slug = hackathonSlugForId(hackathonId);
   // On the hackathon page the CTA scrolls to the ballot; on home it links there.
   const ballotHref = variant === "home" ? `/hackathons/${slug}#votar` : "#votar";
+  // Home spacing: the hero normally leads the page and clears the fixed header;
+  // inline (dashboard) it follows a band that already carries that padding.
+  const homeTopClass = inline ? "pt-8 sm:pt-10" : "pt-24 sm:pt-28";
 
   const scrollToBallot = useCallback(
     (e: React.MouseEvent) => {
@@ -126,6 +134,7 @@ export default function VotingHero({
           hackathonName={hackathonName}
           ballotHref={ballotHref}
           live={live}
+          sectionClass={homeTopClass}
         />
       );
     }
@@ -136,6 +145,7 @@ export default function VotingHero({
         <HomeVotingInProgress
           hackathonName={hackathonName}
           ballotHref={ballotHref}
+          sectionClass={homeTopClass}
         />
       );
     }
@@ -144,7 +154,9 @@ export default function VotingHero({
   return (
     <section
       className={cn(
-        variant === "page" ? "scroll-mt-24" : "pt-24 pb-16 sm:pt-28 sm:pb-20",
+        variant === "page"
+          ? "scroll-mt-24"
+          : cn(homeTopClass, inline ? "pb-2" : "pb-16 sm:pb-20"),
       )}
     >
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
@@ -243,12 +255,14 @@ function PageVotingActionsShell({ actions }: { actions: React.ReactNode }) {
 function HomeVotingInProgress({
   hackathonName,
   ballotHref,
+  sectionClass,
 }: {
   hackathonName: string;
   ballotHref: string;
+  sectionClass: string;
 }) {
   return (
-    <section className="pt-24 sm:pt-28">
+    <section className={sectionClass}>
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -313,17 +327,19 @@ function HomeVotingAdmin({
   hackathonName,
   ballotHref,
   live,
+  sectionClass,
 }: {
   hackathonId: string;
   hackathonName: string;
   ballotHref: string;
   live: ReturnType<typeof useVotingLive>;
+  sectionClass: string;
 }) {
   const tally = useAdminLiveTally(hackathonId);
   const { votedCount, eligibleCount, progressPct } = live;
 
   return (
-    <section className="pt-24 sm:pt-28">
+    <section className={sectionClass}>
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
