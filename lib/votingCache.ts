@@ -9,6 +9,7 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { DEFAULT_RELAYS } from "./nostrRelayConfig";
 import { nostrVotingTag } from "./nostrCacheTags";
+import { HACKATHONS, hackathonStatus, type Hackathon } from "./hackathons";
 import {
   JUDGES_KIND,
   VOTING_KIND,
@@ -158,4 +159,63 @@ export async function getCachedVotingPeriod(
   } catch {
     return null;
   }
+}
+
+/** How many of the most recent hackathons `getFeaturedVotingRound()` scans.
+ *  A round only ever belongs to the hackathon in play (or the one that just
+ *  ended), so this bounds the relay work as the back catalogue grows. */
+const FEATURED_VOTING_LOOKBACK = 3;
+
+/**
+ * Hackathons that could plausibly have a voting round right now: the most
+ * recent ones that already opened (a round is published after the apertura),
+ * newest first. Reading the clock here is intentional — the caller is a
+ * `"use cache"` scope, so the list is frozen with the cache entry and only
+ * matters on the day a hackathon starts.
+ */
+function featuredVotingCandidates(now: Date = new Date()): Hackathon[] {
+  return HACKATHONS.filter((h) => hackathonStatus(h, now) !== "upcoming")
+    .sort((a, b) => b.number - a.number)
+    .slice(0, FEATURED_VOTING_LOOKBACK);
+}
+
+export type FeaturedVotingRound = {
+  hackathon: Hackathon;
+  period: VotingPeriod;
+};
+
+/**
+ * Resolves the community voting round the home page should feature: the open
+ * one (freshest `openedAt` if several somehow overlap), else the most recently
+ * closed one. Returns null when no hackathon has a published round.
+ *
+ * MUST be called from inside a `"use cache"` scope: it registers the voting
+ * cache tag of EVERY hackathon on the caller — inner `"use cache"` tags don't
+ * bubble in Next 16, and tagging only the scanned candidates would let a round
+ * that opens for a brand-new hackathon miss the home revalidation.
+ */
+export async function getFeaturedVotingRound(): Promise<FeaturedVotingRound | null> {
+  for (const h of HACKATHONS) cacheTag(nostrVotingTag(h.id));
+
+  const rounds = await Promise.all(
+    featuredVotingCandidates().map(async (hackathon) => ({
+      hackathon,
+      period: await getCachedVotingPeriod(hackathon.id),
+    })),
+  );
+  const found = rounds.filter(
+    (r): r is FeaturedVotingRound => r.period !== null,
+  );
+  if (found.length === 0) return null;
+
+  const open = found
+    .filter((r) => r.period.status === "open")
+    .sort((a, b) => b.period.openedAt - a.period.openedAt);
+  if (open.length > 0) return open[0];
+
+  return found.sort(
+    (a, b) =>
+      (b.period.closedAt ?? b.period.openedAt) -
+      (a.period.closedAt ?? a.period.openedAt),
+  )[0];
 }

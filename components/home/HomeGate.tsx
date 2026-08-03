@@ -13,9 +13,19 @@ import HomeDashboard from "@/components/home/HomeDashboard";
  * point we swap to the personalized dashboard entirely on the client. Because
  * the server and first client render both show `children`, there's no
  * hydration mismatch.
+ *
+ * `votingHero` is the server-rendered live-voting hero for the dashboard branch
+ * (the marketing branch carries its own copy inside `children`, SSR'd for
+ * crawlers). Both branches show it — voters are logged in.
  */
-export default function HomeGate({ children }: { children: React.ReactNode }) {
+export default function HomeGate({
+  votingHero,
+  children,
+}: {
+  votingHero?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   const { auth, ready } = useAuth();
-  if (ready && auth) return <HomeDashboard />;
+  if (ready && auth) return <HomeDashboard votingHero={votingHero} />;
   return <>{children}</>;
 }
