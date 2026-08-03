@@ -60,17 +60,35 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ─── node engine ────────────────────────────────────────────────────────────
 
+/**
+ * `process.kill(pid, 0)` only proves *something* holds that pid. The pidfile
+ * lives on disk and survives a reboot or a `kill -9`, so once the OS recycles
+ * the number it can name an unrelated process — which `nodeDown` would then
+ * SIGTERM. Confirm the pid is actually our relay before trusting it.
+ */
+function isOurRelay(pid) {
+  const ps = run("ps", ["-p", String(pid), "-o", "command="]);
+  // If `ps` itself is unavailable we cannot prove identity — treat the pid as
+  // stale rather than risk signalling someone else's process.
+  if (ps.error || ps.status !== 0) return false;
+  return ps.stdout.includes(join(HERE, "server.mjs"));
+}
+
 function readPid() {
   if (!existsSync(PID_FILE)) return null;
   const pid = Number(readFileSync(PID_FILE, "utf8").trim());
   if (!Number.isInteger(pid) || pid <= 0) return null;
   try {
     process.kill(pid, 0); // signal 0 = liveness probe, kills nothing
-    return pid;
   } catch {
     rmSync(PID_FILE, { force: true }); // stale pidfile from a crash/reboot
     return null;
   }
+  if (!isOurRelay(pid)) {
+    rmSync(PID_FILE, { force: true }); // recycled pid — not our process
+    return null;
+  }
+  return pid;
 }
 
 /** Byte offset of the log at the moment we spawned, so a crash report shows
@@ -110,7 +128,7 @@ function assertNodeAlive() {
   );
 }
 
-function nodeDown() {
+async function nodeDown() {
   const pid = readPid();
   if (!pid) {
     console.log("• no dev relay running");
@@ -121,8 +139,27 @@ function nodeDown() {
   } catch (err) {
     fail(`could not stop the relay (pid ${pid}): ${err.message}`);
   }
+
+  // Wait for the process to actually go. Its SIGTERM handler compacts the log
+  // and can hold the listening socket for up to a second — returning early
+  // would make the documented `relay:down && relay:up` restart race itself and
+  // fail on EADDRINUSE.
+  let exited = false;
+  for (let i = 0; i < 60; i++) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      exited = true;
+      break;
+    }
+    await sleep(50);
+  }
   rmSync(PID_FILE, { force: true });
-  console.log(`• stopped dev relay (pid ${pid})`);
+  console.log(
+    exited
+      ? `• stopped dev relay (pid ${pid})`
+      : `• sent SIGTERM to pid ${pid}, but it is still running after 3s — check \`pnpm relay:logs\``,
+  );
 }
 
 /** Everything the relay wrote after byte `offset`, capped so a noisy crash stays
@@ -219,8 +256,9 @@ async function verify({ attempts, delayMs, justStarted }) {
     } catch (err) {
       last = err;
       // A protocol-level failure (rejected / not stored / not replacing) is a
-      // real verdict, not a warm-up hiccup — no point retrying it.
-      if (!/connect|no response|timed out/i.test(err.message)) break;
+      // real verdict, not a warm-up hiccup — no point retrying it. The flag is
+      // set at the throw site; see HealthcheckError in healthcheck.mjs.
+      if (!err.retryable) break;
       if (i < attempts - 1) await sleep(delayMs);
     }
   }
@@ -272,7 +310,7 @@ switch (command) {
     break;
   case "down":
     if (ENGINE === "docker") dockerDown();
-    else nodeDown();
+    else await nodeDown();
     break;
   case "logs":
     if (ENGINE === "docker") dockerLogs();

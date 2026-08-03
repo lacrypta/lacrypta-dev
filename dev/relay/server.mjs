@@ -49,7 +49,7 @@ const RELAY_INFO = {
   description: "Local development relay. Ephemeral, isolated from production.",
   software: "https://github.com/lacrypta/lacrypta.dev/tree/main/dev/relay",
   version: "1.0.0",
-  supported_nips: [1, 9, 11, 33],
+  supported_nips: [1, 9, 11, 33, 45],
   limitation: { auth_required: false, payment_required: false },
 };
 
@@ -117,16 +117,35 @@ function store(event, { persist = true } = {}) {
   return null;
 }
 
-/** NIP-09: a kind-5 event deletes the author's own events named by `e` tags. */
+/** Drop one event and any coordinate still pointing at it. */
+function forget(target) {
+  events.delete(target.id);
+  const coordinate = coordinateOf(target);
+  if (coordinate && coordinates.get(coordinate) === target.id) coordinates.delete(coordinate);
+  staleLines++;
+}
+
+/**
+ * NIP-09: a kind-5 event deletes the author's own events, named either by `e`
+ * (event id) or by `a` (a `<kind>:<pubkey>:<d>` coordinate — the only way to
+ * delete a replaceable event such as a ballot, since its id changes on every
+ * replacement). Requests to delete someone else's event are ignored.
+ */
 function applyDeletion(event) {
   for (const tag of event.tags) {
+    if (tag[0] === "a" && tag[1]) {
+      // Index 1 is the pubkey in `<kind>:<pubkey>:<d>`; a `d` containing
+      // colons is harmless here because only that field is read.
+      if (tag[1].split(":")[1] !== event.pubkey) continue;
+      const holderId = coordinates.get(tag[1]);
+      const holder = holderId ? events.get(holderId) : undefined;
+      if (holder) forget(holder);
+      continue;
+    }
     if (tag[0] !== "e" || !tag[1]) continue;
     const target = events.get(tag[1]);
     if (!target || target.pubkey !== event.pubkey) continue;
-    events.delete(target.id);
-    const coordinate = coordinateOf(target);
-    if (coordinate && coordinates.get(coordinate) === target.id) coordinates.delete(coordinate);
-    staleLines++;
+    forget(target);
   }
 }
 
@@ -211,14 +230,30 @@ function matchesFilter(event, filter) {
 const matchesAny = (event, filters) => filters.some((f) => matchesFilter(event, f));
 
 /** Newest-first, id-ascending on ties — the order clients expect from a REQ. */
-function query(filters) {
-  const out = [];
-  for (const event of events.values()) if (matchesAny(event, filters)) out.push(event);
-  out.sort((a, b) => b.created_at - a.created_at || (a.id < b.id ? -1 : 1));
+const newestFirst = (a, b) => b.created_at - a.created_at || (a.id < b.id ? -1 : 1);
 
-  const limits = filters.map((f) => f.limit).filter((n) => typeof n === "number" && n >= 0);
-  const limit = limits.length ? Math.max(...limits) : MAX_LIMIT;
-  return out.slice(0, Math.min(limit, MAX_LIMIT));
+/**
+ * NIP-01 scopes `limit` to the individual filter it appears on, so each filter
+ * is evaluated and capped on its own before the results merge.
+ *
+ * Applying one max across the union instead would let a filter starve: in a
+ * multi-filter REQ where the newest N events all match filter B, filter A comes
+ * back empty even though it matched older events. That reads to the caller as
+ * "no data" — precisely the silent-empty-read this relay exists to eliminate.
+ */
+function query(filters) {
+  const selected = new Map();
+  for (const filter of filters) {
+    const matched = [];
+    for (const event of events.values()) if (matchesFilter(event, filter)) matched.push(event);
+    matched.sort(newestFirst);
+    const limit =
+      typeof filter.limit === "number" && filter.limit >= 0
+        ? Math.min(filter.limit, MAX_LIMIT)
+        : MAX_LIMIT;
+    for (const event of matched.slice(0, limit)) selected.set(event.id, event);
+  }
+  return [...selected.values()].sort(newestFirst).slice(0, MAX_LIMIT);
 }
 
 // ─── validation ─────────────────────────────────────────────────────────────
@@ -330,7 +365,13 @@ function handleMessage(ws, raw) {
     case "COUNT":
       if (typeof message[1] === "string") {
         const filters = message.slice(2).filter((f) => f && typeof f === "object");
-        send(ws, ["COUNT", message[1], { count: filters.length ? query(filters).length : 0 }]);
+        // Counted directly rather than via query(), whose per-filter paging
+        // would cap the answer at MAX_LIMIT and under-report large sets.
+        let count = 0;
+        if (filters.length) {
+          for (const event of events.values()) if (matchesAny(event, filters)) count++;
+        }
+        send(ws, ["COUNT", message[1], { count }]);
       }
       return;
     case "AUTH":
@@ -347,6 +388,21 @@ function handleMessage(ws, raw) {
 load();
 
 const http = createServer((req, res) => {
+  // `Accept: application/nostr+json` is not a CORS-safelisted value, so a
+  // browser fetching the NIP-11 document preflights first. Without this branch
+  // the preflight would get the plain-text body and no allow-headers, and the
+  // browser would block the real request.
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET, OPTIONS",
+      "access-control-allow-headers": "accept, content-type",
+      "access-control-max-age": "86400",
+    });
+    res.end();
+    return;
+  }
+
   // NIP-11 relay information document.
   if (req.headers.accept?.includes("application/nostr+json")) {
     res.writeHead(200, {

@@ -21,10 +21,25 @@
  * Run standalone: pnpm relay:check   (also runs automatically after relay:up)
  */
 import { createHash, randomUUID } from "node:crypto";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import { finalizeEvent, getPublicKey } from "nostr-tools/pure";
 
-export const RELAY_URL = process.env.RELAY_URL ?? "ws://localhost:7777";
+/**
+ * Derived from the same variables server.mjs binds, so `RELAY_PORT=7778` moves
+ * both ends together — otherwise the relay would bind 7778, the probe would
+ * knock on 7777, and `relay:up` would fail against a perfectly healthy relay.
+ * Wildcard binds are probed on the loopback address you can actually dial.
+ */
+function defaultRelayUrl() {
+  const host = process.env.RELAY_HOST ?? "127.0.0.1";
+  const port = process.env.RELAY_PORT ?? "7777";
+  const dialable = host === "0.0.0.0" || host === "::" || !host ? "127.0.0.1" : host;
+  return `ws://${dialable.includes(":") ? `[${dialable}]` : dialable}:${port}`;
+}
+
+export const RELAY_URL = process.env.RELAY_URL ?? defaultRelayUrl();
 
 /** Deterministic throwaway key + d-tag: the probe replaces its own previous
  *  event every run, so repeated checks never accumulate junk on the relay. */
@@ -36,9 +51,15 @@ const PROBE_D_TAG = "lacrypta.dev:healthcheck";
 const PROBE_KIND = 30078;
 
 class HealthcheckError extends Error {
-  constructor(message, hint) {
+  /** `retryable` marks warm-up noise (not listening *yet*, slow first connect)
+   *  as distinct from a protocol verdict, which is final. The caller in
+   *  relay.mjs reads this flag — matching on message text would silently break
+   *  the retry loop the next time one of these strings is reworded. */
+  constructor(message, hint, { retryable = false } = {}) {
     super(message);
+    this.name = "HealthcheckError";
     this.hint = hint;
+    this.retryable = retryable;
   }
 }
 
@@ -47,7 +68,11 @@ function connect(url, timeoutMs) {
     const ws = new WebSocket(url, { handshakeTimeout: timeoutMs });
     const timer = setTimeout(() => {
       ws.terminate();
-      reject(new HealthcheckError(`no response from ${url} within ${timeoutMs}ms`));
+      reject(
+        new HealthcheckError(`no response from ${url} within ${timeoutMs}ms`, undefined, {
+          retryable: true,
+        }),
+      );
     }, timeoutMs);
     ws.once("open", () => {
       clearTimeout(timer);
@@ -61,6 +86,7 @@ function connect(url, timeoutMs) {
           err.code === "ECONNREFUSED"
             ? "nothing is listening on that port — the relay is not running"
             : undefined,
+          { retryable: true },
         ),
       );
     });
@@ -72,7 +98,11 @@ function awaitMessage(ws, predicate, { timeoutMs, describe }) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       cleanup();
-      reject(new HealthcheckError(`timed out after ${timeoutMs}ms waiting for ${describe}`));
+      reject(
+        new HealthcheckError(`timed out after ${timeoutMs}ms waiting for ${describe}`, undefined, {
+          retryable: true,
+        }),
+      );
     }, timeoutMs);
     const onMessage = (raw) => {
       let message;
@@ -81,7 +111,19 @@ function awaitMessage(ws, predicate, { timeoutMs, describe }) {
       } catch {
         return;
       }
-      if (!Array.isArray(message) || !predicate(message)) return;
+      if (!Array.isArray(message)) return;
+      // The predicate throws to report a verdict (a CLOSED answer). Unhandled,
+      // that escapes the ws 'message' emit as an uncaught exception: this
+      // promise never settles, the timer stays armed, and the diagnosis is lost.
+      let accepted;
+      try {
+        accepted = predicate(message);
+      } catch (err) {
+        cleanup();
+        reject(err);
+        return;
+      }
+      if (!accepted) return;
       cleanup();
       resolve(message);
     };
@@ -222,7 +264,9 @@ export async function checkRelay({ url = RELAY_URL, timeoutMs = 8000 } = {}) {
 
 // ─── CLI ────────────────────────────────────────────────────────────────────
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Path-safe entry check: string-comparing the URL breaks on paths containing
+// spaces, `#`, `%` or non-ASCII, which percent-encode in import.meta.url.
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   try {
     const { url, ms } = await checkRelay();
     console.log(`✔ relay healthy at ${url} — publish, read-back and NIP-33 replacement all OK (${ms}ms)`);

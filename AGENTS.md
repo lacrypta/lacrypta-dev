@@ -74,6 +74,6 @@ We never hold real users' secret keys, so impersonating a user logs in with a **
 | `NEXT_PUBLIC_DEV_ADMIN_NSEC` | Browser-side dev admin secret for the one-click admin login. Must match `NEXT_PUBLIC_LACRYPTA_ADMIN_NPUB`. |
 | `LACRYPTA_NSEC` / `NEXT_PUBLIC_LACRYPTA_ADMIN_NPUB` | In dev, set both to the throwaway keypair from `gen:dev-keys`. |
 | `RELAY_ENGINE` | `node` (default) → in-tree `dev/relay/server.mjs`. `docker` → `nostr-rs-relay` via `docker-compose.yml`. Read by `pnpm relay:*` only — not by the app. |
-| `RELAY_PORT` / `RELAY_HOST` | Node relay bind overrides (default `7777` / `127.0.0.1`). Change both here and in `NEXT_PUBLIC_NOSTR_RELAYS`. |
+| `RELAY_PORT` / `RELAY_HOST` | Node relay bind overrides (default `7777` / `127.0.0.1`). Honored by **both** the server and the health check, so moving the port moves both ends — no separate `RELAY_URL` needed. Still update `NEXT_PUBLIC_NOSTR_RELAYS` to match. |
 
 > ⚠️ **Never set `NEXT_PUBLIC_DEV_MODE`, `NEXT_PUBLIC_DEV_ADMIN_NSEC`, or `NEXT_PUBLIC_NOSTR_RELAYS` in a production deploy.** They expose impersonation UI and a signing secret to the browser. Production leaves all three unset — the app falls back to the real relays and the bar never renders.
