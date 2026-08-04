@@ -230,8 +230,13 @@ function buildTimeline(
   // new hackathon reshapes the rail without touching this code.
   const items: TimelineHackathon[] = [];
   const itemMonths: number[] = [];
-  const firstMonth = hackathonSlots[0]?.key ?? todayMonth;
-  const lastMonth = hackathonSlots[hackathonSlots.length - 1]?.key ?? todayMonth;
+  // Bounds come from the keys, not the array ends: `ordered` sorts by first
+  // date, so a hackathon announced before its dates exist sorts to the front
+  // (empty sort key) while its rail key is whatever month the JSON declares.
+  // Reading the endpoints would then invert the bounds and emit an empty rail.
+  const slotKeys = hackathonSlots.map((slot) => slot.key);
+  const firstMonth = slotKeys.length > 0 ? Math.min(...slotKeys) : todayMonth;
+  const lastMonth = slotKeys.length > 0 ? Math.max(...slotKeys) : todayMonth;
   for (let key = firstMonth; key <= lastMonth; key++) {
     const scheduled = hackathonSlots.filter((slot) => slot.key === key);
     if (scheduled.length === 0) {
