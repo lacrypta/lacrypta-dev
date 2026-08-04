@@ -53,9 +53,75 @@ export const metadata: Metadata = {
   },
 };
 
+/** Spanish labels for rail slots no hackathon occupies. Hackathon nodes keep
+ *  the labels authored in `hackathons.json`. */
+const MONTHS_ES = [
+  ["Enero", "ENE"],
+  ["Febrero", "FEB"],
+  ["Marzo", "MAR"],
+  ["Abril", "ABR"],
+  ["Mayo", "MAY"],
+  ["Junio", "JUN"],
+  ["Julio", "JUL"],
+  ["Agosto", "AGO"],
+  ["Septiembre", "SEP"],
+  ["Octubre", "OCT"],
+  ["Noviembre", "NOV"],
+  ["Diciembre", "DIC"],
+] as const;
+
+/** Months elapsed since year 0 — one comparable ordinal per calendar month, so
+ *  rail slots and "today" live in the same coordinate space. */
+function monthKey(year: number, month0: number): number {
+  return year * 12 + month0;
+}
+
+/** Month key of a "YYYY-MM-DD" string. Parsed off the string rather than
+ *  through `new Date(iso)`, which reads as UTC midnight and slips to the
+ *  previous month west of Greenwich. */
+function monthKeyOfISO(iso: string): number {
+  return monthKey(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1);
+}
+
 function daysBetween(a: Date, b: Date): number {
   const ms = b.getTime() - a.getTime();
   return Math.ceil(ms / (1000 * 60 * 60 * 24));
+}
+
+/** An empty rail slot for a month between two hackathons — a node on the rail,
+ *  never a card in the carousel. Nothing reads its `status` today (only the
+ *  rail renders placeholders, and it renders them without one), but it's
+ *  derived from the calendar rather than pinned to "upcoming" so a future
+ *  reader can't pick up a gap month that's already over. */
+function placeholderMonth(key: number, todayMonth: number): TimelineHackathon {
+  const year = Math.floor(key / 12);
+  const month0 = key % 12;
+  const [month, monthShort] = MONTHS_ES[month0];
+  return {
+    id: `month-${year}-${String(month0 + 1).padStart(2, "0")}`,
+    slug: "",
+    number: 0,
+    name: "",
+    focus: "",
+    description: "",
+    difficulty: "",
+    stars: 0,
+    month,
+    monthShort,
+    year,
+    icon: "",
+    tags: [],
+    topics: [],
+    firstDay: null,
+    lastDay: null,
+    status:
+      key < todayMonth ? "closed" : key > todayMonth ? "upcoming" : "active",
+    inscriptionOpen: false,
+    countdown: null,
+    sponsors: [],
+    projectCount: null,
+    placeholder: true,
+  };
 }
 
 /** Spanish copy that describes when a future hackathon kicks off. Returns
@@ -81,9 +147,9 @@ function startsInLabel(startISO: string, now: Date): string | null {
 }
 
 /** Builds the serializable timeline payload + the index of the "current"
- *  hackathon (active, else soonest upcoming, else the last one) and the
- *  fraction of the program that has already elapsed (0–100), so the rail can
- *  draw a "today" marker even between two hackathons. */
+ *  hackathon (active, else soonest upcoming, else the last one), the fraction
+ *  of the program that has already elapsed (0–100) so the rail can draw a
+ *  "today" marker even between two hackathons, and the rail's date range. */
 function buildTimeline(
   now: Date,
   submissions: HackathonSubmission[],
@@ -92,6 +158,7 @@ function buildTimeline(
   items: TimelineHackathon[];
   initialIndex: number;
   todayPct: number;
+  rangeLabel: string;
 } {
   const ordered = [...HACKATHONS].sort((a, b) => {
     const aFirst = [...a.dates].sort((x, y) => x.date.localeCompare(y.date))[0]?.date ?? "";
@@ -100,7 +167,7 @@ function buildTimeline(
   });
   const today = now.toISOString().slice(0, 10);
 
-  const hackathonItems: TimelineHackathon[] = ordered.map((h) => {
+  const hackathonSlots = ordered.map((h) => {
     const status = hackathonStatus(h, now);
     // Same merge the detail page renders (curated + community, deduped by
     // id/repo/name), so the number here matches the list one click away.
@@ -110,7 +177,13 @@ function buildTimeline(
     const sortedDates = [...h.dates].sort((a, b) => a.date.localeCompare(b.date));
     const firstISO = sortedDates[0]?.date ?? null;
     const lastISO = sortedDates[sortedDates.length - 1]?.date ?? null;
-    return {
+    // Where this hackathon sits on the calendar rail. The dates are the source
+    // of truth; the JSON's own month label only covers a hackathon announced
+    // before its dates exist.
+    const key = firstISO
+      ? monthKeyOfISO(firstISO)
+      : monthKey(h.year, Math.max(0, MONTHS_ES.findIndex(([long]) => long === h.month)));
+    const item: TimelineHackathon = {
       id: h.id,
       slug: hackathonSlug(h),
       number: h.number,
@@ -137,67 +210,88 @@ function buildTimeline(
       // real number to show, so only the all-zero case goes null.
       projectCount: merged > 0 || submissionsKnown ? merged : null,
     };
+    return { key, item };
   });
 
-  // Agosto y septiembre permanecen en el calendario como meses sin una
-  // hackatón programada, pero no existen como hackatones ni tienen una página.
-  const items: TimelineHackathon[] = [...hackathonItems];
-  const julyIndex = items.findIndex((item) => item.monthShort === "JUL");
-  items.splice(julyIndex + 1, 0, ...[
-    { id: "month-august", month: "Agosto", monthShort: "AGO" },
-    { id: "month-september", month: "Septiembre", monthShort: "SEP" },
-  ].map((month) => ({
-    ...month,
-    slug: "",
-    number: 0,
-    name: "",
-    focus: "",
-    description: "",
-    difficulty: "",
-    stars: 0,
-    year: 2026,
-    icon: "",
-    tags: [],
-    topics: [],
-    firstDay: null,
-    lastDay: null,
-    status: "upcoming" as const,
-    inscriptionOpen: false,
-    countdown: null,
-    sponsors: [],
-    projectCount: null,
-    placeholder: true as const,
-  })));
-  const n = items.length;
-  const activeIdx = items.findIndex((x) => x.status === "active");
-  const firstUpcomingIdx = items.findIndex((x) => x.status === "upcoming");
-  const initialIndex =
-    activeIdx >= 0 ? activeIdx : firstUpcomingIdx >= 0 ? firstUpcomingIdx : n - 1;
+  // "Today" in the same coordinates the rail uses. Derived from the same
+  // `toISOString()` day `hackathonStatus()` compares against, so the marker and
+  // the status dots can never disagree about what day it is.
+  const todayMonth = monthKeyOfISO(today);
+  const todayDay = Number(today.slice(8, 10));
+  const daysInMonth = new Date(
+    Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0),
+  ).getUTCDate();
+  const dayFraction = (todayDay - 1) / daysInMonth;
 
-  // Elapsed fraction: node dots sit at the CENTER of each 1/n slice
-  // (`(i + 0.5)/n`), so the marker must too. While a hackathon is active the
-  // marker travels from its own dot toward the next one as its date span
-  // elapses (f: 0→1 maps activeIdx's center → the next node's center), keeping
-  // the "today" pip on the live hackathon instead of lagging a half-slice
-  // behind it. Between hackathons it rests at the midpoint of the two dots,
-  // which `closedCount/n` already yields (a cell boundary == a dot midpoint).
-  let todayPct: number;
-  if (activeIdx >= 0) {
-    const h = ordered.find((hackathon) => hackathon.id === items[activeIdx].id);
-    if (!h) return { items, initialIndex, todayPct: 0 };
-    const sorted = [...h.dates].sort((a, b) => a.date.localeCompare(b.date));
-    const first = sorted[0]?.date ?? today;
-    const last = sorted[sorted.length - 1]?.date ?? today;
-    const span = new Date(last).getTime() - new Date(first).getTime();
-    const into = new Date(today).getTime() - new Date(first).getTime();
-    const f = span > 0 ? Math.min(1, Math.max(0, into / span)) : 0.5;
-    todayPct = ((activeIdx + 0.5 + f) / n) * 100;
-  } else {
-    const closedCount = items.filter((x) => x.status === "closed").length;
-    todayPct = (closedCount / n) * 100;
+  // The rail is a calendar: one slot per month from the first hackathon to the
+  // last. Months nobody scheduled (agosto, septiembre) stay on it as
+  // placeholders — they aren't hackatones and have no page, but dropping them
+  // would compress the gap and misplace "today". Derived from the dates, so a
+  // new hackathon reshapes the rail without touching this code.
+  const items: TimelineHackathon[] = [];
+  const itemMonths: number[] = [];
+  const firstMonth = hackathonSlots[0]?.key ?? todayMonth;
+  const lastMonth = hackathonSlots[hackathonSlots.length - 1]?.key ?? todayMonth;
+  for (let key = firstMonth; key <= lastMonth; key++) {
+    const scheduled = hackathonSlots.filter((slot) => slot.key === key);
+    if (scheduled.length === 0) {
+      items.push(placeholderMonth(key, todayMonth));
+      itemMonths.push(key);
+      continue;
+    }
+    for (const slot of scheduled) {
+      items.push(slot.item);
+      itemMonths.push(key);
+    }
   }
 
-  return { items, initialIndex, todayPct: Math.min(100, Math.max(0, todayPct)) };
+  const n = items.length;
+  // Indexes the carousel, not the rail: empty months are rail nodes only, never
+  // slides, so `HackathonTimeline` navigates the filtered list this matches.
+  const slides = items.filter((x) => !x.placeholder);
+  const activeIdx = slides.findIndex((x) => x.status === "active");
+  const firstUpcomingIdx = slides.findIndex((x) => x.status === "upcoming");
+  const initialIndex =
+    activeIdx >= 0
+      ? activeIdx
+      : firstUpcomingIdx >= 0
+        ? firstUpcomingIdx
+        : slides.length - 1;
+
+  // Node dots sit at the CENTER of each 1/n slice (`(i + 0.5)/n`), so the
+  // marker is placed in that same index space: `railIndex` is today's position
+  // expressed as a fractional node index, and the `+ 0.5` re-centers it. Today
+  // starts on its own month's dot and travels toward the next one as the month
+  // elapses, so the pip always reads as "we are in <month>" and only ever moves
+  // forward — the old closed-count fallback snapped it back to a dot midpoint
+  // the moment a hackathon ended, which is what parked August on July.
+  let railIndex: number;
+  if (todayMonth < itemMonths[0]) {
+    railIndex = -0.5; // program hasn't started — pin to the rail's left edge
+  } else if (todayMonth > itemMonths[n - 1]) {
+    railIndex = n - 0.5; // program is over — pin to the right edge
+  } else {
+    const first = itemMonths.indexOf(todayMonth);
+    // A month holding two hackathons splits into two slices; advance across
+    // all of them over the course of the month.
+    const inMonth = itemMonths.filter((key) => key === todayMonth).length;
+    railIndex = first + dayFraction * inMonth;
+  }
+  const todayPct = ((railIndex + 0.5) / n) * 100;
+
+  const firstItem = items[0];
+  const lastItem = items[n - 1];
+  const rangeLabel =
+    firstItem.year === lastItem.year
+      ? `${firstItem.month} → ${lastItem.month} ${lastItem.year}`
+      : `${firstItem.month} ${firstItem.year} → ${lastItem.month} ${lastItem.year}`;
+
+  return {
+    items,
+    initialIndex,
+    todayPct: Math.min(100, Math.max(0, todayPct)),
+    rangeLabel,
+  };
 }
 
 export default async function HackathonsPage() {
@@ -216,7 +310,7 @@ export default async function HackathonsPage() {
   // detail page, this one has no client-side rescan to correct a bad read — so
   // treat an empty snapshot as "unknown" rather than rendering "Sin proyectos".
   const submissionsKnown = snapshot.projects.length > 0;
-  const { items, initialIndex, todayPct } = buildTimeline(
+  const { items, initialIndex, todayPct, rangeLabel } = buildTimeline(
     now,
     submissions,
     submissionsKnown,
@@ -276,7 +370,7 @@ export default async function HackathonsPage() {
             </span>
             <span className="h-px flex-1 bg-gradient-to-r from-border via-border/50 to-transparent" />
             <h3 className="text-sm font-mono text-foreground-muted">
-              Marzo → Octubre 2026
+              {rangeLabel}
             </h3>
           </div>
           <HackathonTimeline

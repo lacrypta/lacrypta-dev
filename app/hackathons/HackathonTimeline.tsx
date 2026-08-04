@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import {
@@ -45,7 +45,9 @@ export type TimelineHackathon = {
    *  deduped the same way the detail page's list is. `null` when the relay
    *  snapshot came back empty, i.e. the count is unknown rather than zero. */
   projectCount: number | null;
-  /** A calendar month retained in the rail without a scheduled hackathon. */
+  /** A calendar month retained in the rail without a scheduled hackathon.
+   *  Rail node only — placeholders are filtered out of the carousel, so they
+   *  have no card and the arrows step straight over them. */
   placeholder?: boolean;
 };
 
@@ -112,15 +114,26 @@ export default function HackathonTimeline({
   initialIndex,
   todayPct,
 }: {
+  /** Every rail node, empty months included — the rail is a calendar. */
   items: TimelineHackathon[];
+  /** Index into the hackathon-only carousel, not into `items`. */
   initialIndex: number;
   todayPct: number;
 }) {
+  // The rail keeps the empty months (dropping them would compress the gap and
+  // misplace the "today" marker), but they are not destinations: the carousel
+  // holds only real hackatones, so the arrows, swipes and keyboard jump
+  // straight from one to the next instead of landing on a blank card.
+  const slides = useMemo(() => items.filter((h) => !h.placeholder), [items]);
+  const slideIndexById = useMemo(
+    () => new Map(slides.map((h, i) => [h.id, i])),
+    [slides],
+  );
   const [[index, direction], setState] = useState<[number, number]>([
     initialIndex,
     0,
   ]);
-  const n = items.length;
+  const n = slides.length;
 
   const goTo = useCallback(
     (next: number) => {
@@ -152,9 +165,10 @@ export default function HackathonTimeline({
     return () => window.removeEventListener("keydown", onKey);
   }, [index, goTo]);
 
-  const active = items[index];
-  const prev = index > 0 ? items[index - 1] : null;
-  const next = index < n - 1 ? items[index + 1] : null;
+  const active = slides[index];
+  if (!active) return null;
+  const prev = index > 0 ? slides[index - 1] : null;
+  const next = index < n - 1 ? slides[index + 1] : null;
 
   return (
     <div className="relative">
@@ -186,9 +200,12 @@ export default function HackathonTimeline({
 
             {/* Nodes */}
             <div className="relative flex">
-              {items.map((h, i) => {
+              {items.map((h) => {
                 const meta = STATUS_META[h.status];
-                const selected = i === index;
+                // Rail position ≠ carousel position once empty months sit
+                // between hackatones, so selection is resolved by id.
+                const slideIdx = slideIndexById.get(h.id) ?? -1;
+                const selected = slideIdx === index;
                 const countLabel = projectCountLabel(h.projectCount);
                 if (h.placeholder) {
                   return (
@@ -210,7 +227,7 @@ export default function HackathonTimeline({
                   <button
                     key={h.id}
                     type="button"
-                    onClick={() => goTo(i)}
+                    onClick={() => goTo(slideIdx)}
                     aria-current={selected ? "true" : undefined}
                     aria-label={
                       countLabel
@@ -414,9 +431,6 @@ function PeekCard({
   side: "left" | "right";
   onClick: () => void;
 }) {
-  if (h.placeholder) {
-    return <RailEnd label={`${h.month} · sin hackatón programado`} />;
-  }
   const meta = STATUS_META[h.status];
   const countLabel = projectCountLabel(h.projectCount);
   return (
@@ -533,17 +547,6 @@ function InfoChip({
 }
 
 function StageCard({ h }: { h: TimelineHackathon }) {
-  if (h.placeholder) {
-    return (
-      <div className="flex min-h-[320px] flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-background-card px-6 text-center">
-        <Calendar className="h-8 w-8 text-foreground-subtle" />
-        <p className="mt-4 font-mono text-xs font-semibold uppercase tracking-widest text-foreground-muted">
-          {h.month} {h.year}
-        </p>
-        <h2 className="mt-2 font-display text-2xl font-bold">Sin hackatón programado</h2>
-      </div>
-    );
-  }
   const isActive = h.status === "active";
   const isClosed = h.status === "closed";
   const countLabel = projectCountLabel(h.projectCount);
