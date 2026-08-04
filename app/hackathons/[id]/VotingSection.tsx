@@ -136,6 +136,10 @@ type VotingContextValue = {
   publishing: boolean;
   celebrate: boolean;
   hasPrev: boolean;
+  /** An existing ballot could not be decrypted with the current signer yet. */
+  ballotReadOnly: boolean;
+  /** The ballot read failed rather than still being in progress. */
+  ballotReadError: boolean;
   /** On-screen allocation differs from the published ballot — there are unsaved
    *  changes worth publishing. False right after load / publish. */
   isDirty: boolean;
@@ -332,16 +336,26 @@ export function VotingProvider({
     string,
     number
   > | null>(null);
+  const [ownBallotStatus, setOwnBallotStatus] = useState<
+    "none" | "loading" | "loaded" | "unreadable"
+  >("none");
   const ownBallotId = auth?.pubkey
     ? (ballots.get(auth.pubkey.toLowerCase())?.id ?? null)
     : null;
   useEffect(() => {
     let cancelled = false;
     const ev = auth?.pubkey ? ballots.get(auth.pubkey.toLowerCase()) : null;
-    if (!ev || !auth || !pubkeys.publisherPubkey) {
+    if (!ev) {
       setOwnAllocations(null);
+      setOwnBallotStatus("none");
       return;
     }
+    if (!auth || !pubkeys.publisherPubkey) {
+      setOwnAllocations(null);
+      setOwnBallotStatus("loading");
+      return;
+    }
+    setOwnBallotStatus("loading");
     void (async () => {
       try {
         const signer = await getSigner(auth);
@@ -350,9 +364,15 @@ export function VotingProvider({
           pubkeys.publisherPubkey!,
           ev,
         );
-        if (!cancelled) setOwnAllocations(alloc);
+        if (!cancelled) {
+          setOwnAllocations(alloc);
+          setOwnBallotStatus(alloc ? "loaded" : "unreadable");
+        }
       } catch {
-        if (!cancelled) setOwnAllocations(null);
+        if (!cancelled) {
+          setOwnAllocations(null);
+          setOwnBallotStatus("unreadable");
+        }
       }
     })();
     return () => {
@@ -395,7 +415,19 @@ export function VotingProvider({
   const dirty = useRef(false);
   const maxVotes = voter?.maxVotes ?? 0;
   const blocked = useMemo(() => voter?.blocked ?? [], [voter]);
-  const used = Object.values(allocations).reduce((sum, n) => sum + n, 0);
+  const editorUsed = Object.values(allocations).reduce(
+    (sum, n) => sum + n,
+    0,
+  );
+  // The encrypted allocation map is only usable after the active signer has
+  // opened it. Until then, retain the ballot's declared count so a failed
+  // decrypt never makes previously cast votes look available again.
+  const ballotReadOnly =
+    !!ownBallotEvent && ownBallotStatus !== "loaded";
+  const ballotReadError = ownBallotStatus === "unreadable";
+  const used = ballotReadOnly
+    ? claimedVotes(ownBallotEvent!)
+    : editorUsed;
   const remaining = Math.max(0, maxVotes - used);
   const hasPrev = (ownBallotEvent?.created_at ?? 0) > 0 || !!ownAllocations;
   const isDirty = !allocationsEqual(allocations, ownAllocations ?? {});
@@ -426,7 +458,14 @@ export function VotingProvider({
 
   const adjustProjectVote = useCallback(
     (projectId: string, delta: number) => {
-      if (!voter || publishing || blocked.includes(projectId)) return;
+      if (
+        !voter ||
+        publishing ||
+        ballotReadOnly ||
+        blocked.includes(projectId)
+      ) {
+        return;
+      }
       dirty.current = true;
       setAllocations((prev) => {
         const current = prev[projectId] ?? 0;
@@ -440,15 +479,16 @@ export function VotingProvider({
         return out;
       });
     },
-    [blocked, maxVotes, publishing, voter],
+    [ballotReadOnly, blocked, maxVotes, publishing, voter],
   );
 
   const publishVotes = useCallback(async () => {
     if (
       !auth ||
       publishing ||
-      used === 0 ||
-      used > maxVotes ||
+      ballotReadOnly ||
+      editorUsed === 0 ||
+      editorUsed > maxVotes ||
       !pubkeys.publisherPubkey
     ) {
       return;
@@ -469,12 +509,16 @@ export function VotingProvider({
         next.set(ev.pubkey.toLowerCase(), ev);
         return next;
       });
+      // We just encrypted this exact allocation map, so preserve it while the
+      // relay echo arrives and the signer performs its verification read.
+      setOwnAllocations(allocations);
+      setOwnBallotStatus("loaded");
       setCelebrate(true);
       window.setTimeout(() => setCelebrate(false), 2400);
       push({
         kind: "success",
         title: hasPrev ? "Votos actualizados" : "Votos publicados",
-        description: `Repartiste ${used} ${used === 1 ? "voto" : "votos"} firmados con tu clave Nostr.`,
+        description: `Repartiste ${editorUsed} ${editorUsed === 1 ? "voto" : "votos"} firmados con tu clave Nostr.`,
       });
     } catch (error) {
       push({
@@ -489,6 +533,8 @@ export function VotingProvider({
   }, [
     allocations,
     auth,
+    ballotReadOnly,
+    editorUsed,
     hackathonId,
     hasPrev,
     maxVotes,
@@ -496,7 +542,6 @@ export function VotingProvider({
     pubkeys.publisherPubkey,
     publishing,
     push,
-    used,
   ]);
 
   return (
@@ -524,6 +569,8 @@ export function VotingProvider({
         publishing,
         celebrate,
         hasPrev,
+        ballotReadOnly,
+        ballotReadError,
         isDirty,
         adjustProjectVote,
         publishVotes,
@@ -1797,6 +1844,21 @@ export function ProjectVotingToolbar() {
             Ya votaste
           </span>
         )}
+        {voting.ballotReadOnly && (
+          <span
+            className="inline-flex items-center gap-1 text-[10px] font-mono text-foreground-subtle"
+            role="status"
+          >
+            {voting.ballotReadError ? (
+              <Lock className="h-3 w-3 text-bitcoin" />
+            ) : (
+              <Loader2 className="h-3 w-3 animate-spin text-lightning" />
+            )}
+            {voting.ballotReadError
+              ? "No pudimos abrir tu voto para editarlo; tus votos siguen registrados."
+              : "Cargando tu boleta…"}
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-3">
@@ -1878,7 +1940,7 @@ export function ProjectVotingControls({
       <button
         type="button"
         onClick={() => voting.adjustProjectVote(projectId, -1)}
-        disabled={voting.publishing || count === 0}
+        disabled={voting.publishing || voting.ballotReadOnly || count === 0}
         aria-label={`Quitar voto a ${projectName}`}
         className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
@@ -1899,7 +1961,9 @@ export function ProjectVotingControls({
       <button
         type="button"
         onClick={() => voting.adjustProjectVote(projectId, 1)}
-        disabled={voting.publishing || voting.remaining <= 0}
+        disabled={
+          voting.publishing || voting.ballotReadOnly || voting.remaining <= 0
+        }
         aria-label={`Sumar voto a ${projectName}`}
         className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
