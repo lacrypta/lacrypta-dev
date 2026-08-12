@@ -114,8 +114,16 @@ export default async function Footer() {
 
         <div className="mt-12 pt-6 border-t border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <p className="text-xs text-foreground-subtle font-mono">
-            © {year} La Crypta Dev · Buenos Aires, Argentina · Hecho con
-            software libre
+            © {year} La Crypta Dev · Buenos Aires, Argentina · Desarrollado
+            por{" "}
+            <a
+              href="https://github.com/agustinkassis"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-foreground transition-colors"
+            >
+              agustinkassis
+            </a>
           </p>
           <div className="flex items-center gap-3 text-xs text-foreground-subtle">
             <span className="inline-flex items-center gap-1.5">
