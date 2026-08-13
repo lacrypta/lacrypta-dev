@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import EmailLoginClient from "./EmailLoginClient";
+
+export const metadata: Metadata = {
+  title: "Ingresar",
+  robots: { index: false, follow: false },
+};
 
 export default function EmailLoginPage() {
   return (

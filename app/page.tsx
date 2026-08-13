@@ -5,30 +5,70 @@ import NewsletterCTA from "@/components/sections/NewsletterCTA";
 import GamingHackathonBanner from "@/components/sections/GamingHackathonBanner";
 import HomeGate from "@/components/home/HomeGate";
 import VotingHero from "@/components/voting/VotingHero";
-import { getFeaturedVotingRound } from "@/lib/votingCache";
-import { cacheLife } from "next/cache";
+import { HACKATHONS } from "@/lib/hackathons";
+import { getCachedVotingPeriod } from "@/lib/votingCache";
+import { nostrVotingTag } from "@/lib/nostrCacheTags";
+import { cacheLife, cacheTag } from "next/cache";
 
-// The home page surfaces the community voting round that's live right now —
-// resolved from the relays (never pinned to a hackathon id, which goes stale the
-// moment the next round opens). Server-fetched and cached; `getFeaturedVotingRound`
-// registers the voting tags so open/close revalidations refresh this. The hero
-// then live-subscribes on the client.
-async function HomeVotingHero({ inline = false }: { inline?: boolean }) {
+/**
+ * Keep one VotingHero per hackathon that actually has a period to show.
+ * Empty heroes still opened relay sockets (and logged Damus 503s) on every
+ * visit; mounting them "just in case voting opens" is not worth the LCP/TBT.
+ */
+async function HomeVotingHeroes({
+  placement = "page-top",
+}: {
+  placement?: "page-top" | "inline";
+}) {
   "use cache";
   cacheLife("nostr");
-  const featured = await getFeaturedVotingRound();
-  if (!featured) return null;
+
+  for (const hackathon of HACKATHONS) {
+    cacheTag(nostrVotingTag(hackathon.id));
+  }
+
+  const entries = await Promise.all(
+    HACKATHONS.map(async (hackathon) => ({
+      hackathon,
+      period: await getCachedVotingPeriod(hackathon.id),
+    })),
+  );
+  const hasOpenVoting = entries.some(
+    ({ period }) => period?.status === "open",
+  );
+  const latestClosedHackathonId = entries
+    .filter(({ period }) => period?.status === "closed")
+    .sort(
+      (a, b) =>
+        (b.period?.closedAt ?? b.period?.openedAt ?? 0) -
+        (a.period?.closedAt ?? a.period?.openedAt ?? 0),
+    )[0]?.hackathon.id;
+
   return (
-    <VotingHero
-      hackathonId={featured.hackathon.id}
-      hackathonName={featured.hackathon.name}
-      // The dashboard copy only ever renders on the client (HomeGate swaps it in
-      // once auth resolves) and `useVotingLive` re-reads the period on mount —
-      // shipping the SSR snapshot twice would be dead payload.
-      initialPeriod={inline ? null : featured.period}
-      variant="home"
-      inline={inline}
-    />
+    <>
+      {entries
+        .filter(({ period, hackathon }) => {
+          if (!period) return false;
+          if (period.status === "open") return true;
+          return (
+            !hasOpenVoting && hackathon.id === latestClosedHackathonId
+          );
+        })
+        .map(({ hackathon, period }) => (
+          <VotingHero
+            key={hackathon.id}
+            hackathonId={hackathon.id}
+            hackathonName={hackathon.name}
+            initialPeriod={period}
+            variant="home"
+            homePlacement={placement}
+            showClosedResults={
+              period?.status === "open" ||
+              (!hasOpenVoting && hackathon.id === latestClosedHackathonId)
+            }
+          />
+        ))}
+    </>
   );
 }
 
@@ -39,9 +79,9 @@ export default function Home() {
   // hero belongs on both: the people with votes to spend are logged in.
   return (
     <HomeGate
-      votingHero={
+      dashboardVoting={
         <Suspense fallback={null}>
-          <HomeVotingHero inline />
+          <HomeVotingHeroes placement="inline" />
         </Suspense>
       }
     >
@@ -49,7 +89,7 @@ export default function Home() {
         La Crypta Dev — Bitcoin, Lightning y Nostr en Argentina
       </h1>
       <Suspense fallback={null}>
-        <HomeVotingHero />
+        <HomeVotingHeroes />
       </Suspense>
       <GamingHackathonBanner />
       <HomeBenefits />

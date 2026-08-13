@@ -5,12 +5,6 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
-  AnimatePresence,
-  motion,
-  useScroll,
-  useMotionValueEvent,
-} from "framer-motion";
-import {
   Menu,
   X,
   LogIn,
@@ -73,11 +67,12 @@ export default function Navbar() {
   const { push: pushToast } = useToast();
   const isAdmin = !!auth?.pubkey && !!adminPubkey && auth.pubkey === adminPubkey;
 
-  const { scrollY } = useScroll();
-
-  useMotionValueEvent(scrollY, "change", (v) => {
-    setScrolled(v > 8);
-  });
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   function handleLogout() {
     clearAuth("user");
@@ -146,10 +141,7 @@ export default function Navbar() {
 
   return (
     <>
-      <motion.header
-        initial={false}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
+      <header
         className={cn(
           // Dev mode adds a 32px strip above the header; shift it down to clear it.
           isDevMode() ? "fixed top-8 inset-x-0 z-50 h-16" : "fixed top-0 inset-x-0 z-50 h-16",
@@ -171,26 +163,17 @@ export default function Navbar() {
               const className = cn(
                 "relative px-4 py-2 text-sm font-medium rounded-lg transition-colors",
                 active
-                  ? "text-foreground"
+                  ? "text-foreground bg-white/5 border border-border"
                   : "text-foreground-muted hover:text-foreground",
               );
               const content = (
-                <>
-                  {active && (
-                    <motion.div
-                      layoutId="nav-pill"
-                      className="absolute inset-0 bg-white/5 border border-border rounded-lg"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
-                    />
+                <span className="relative inline-flex items-center gap-2">
+                  {link.label}
+                  {link.badge && <NavBadge label={link.badge} />}
+                  {link.external && (
+                    <ExternalLink className="h-3 w-3 opacity-60" />
                   )}
-                  <span className="relative inline-flex items-center gap-2">
-                    {link.label}
-                    {link.badge && <NavBadge label={link.badge} />}
-                    {link.external && (
-                      <ExternalLink className="h-3 w-3 opacity-60" />
-                    )}
-                  </span>
-                </>
+                </span>
               );
               return link.external ? (
                 <a
@@ -264,13 +247,8 @@ export default function Navbar() {
                   </span>
                 </button>
 
-                <AnimatePresence>
-                  {userMenuOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -6, scale: 0.97 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -6, scale: 0.97 }}
-                      transition={{ duration: 0.15, ease: "easeOut" }}
+                {userMenuOpen && (
+                    <div
                       className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-border bg-background-elevated shadow-xl overflow-hidden z-50"
                     >
                       <Link
@@ -295,9 +273,8 @@ export default function Navbar() {
                         <LogOut className="h-4 w-4 shrink-0" />
                         Cerrar sesión
                       </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                    </div>
+                )}
               </div>
             ) : (
               <button
@@ -311,9 +288,10 @@ export default function Navbar() {
 
             <button
               onClick={() => setMobileOpen((v) => !v)}
-              className="lg:hidden p-2 rounded-lg text-foreground hover:bg-white/5 transition-colors"
-              aria-label="Toggle menu"
+              className="lg:hidden inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg text-foreground hover:bg-white/5 transition-colors"
+              aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
               aria-expanded={mobileOpen}
+              aria-controls="menu-movil"
             >
               {mobileOpen ? (
                 <X className="h-5 w-5" />
@@ -323,29 +301,19 @@ export default function Navbar() {
             </button>
           </div>
         </nav>
-      </motion.header>
+      </header>
 
       {/* Mobile drawer */}
-      <AnimatePresence>
-        {mobileOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+      {mobileOpen && (
+          <div
+            id="menu-movil"
             className="fixed inset-0 z-40 lg:hidden"
           >
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+            <div
               onClick={() => setMobileOpen(false)}
               className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             />
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            <div
               className={cn(
                 "absolute top-0 right-0 bottom-0 w-[85%] max-w-sm glass-strong border-l border-border pb-8 px-6 flex flex-col",
                 // Clear the header; in dev also clear the 32px DEV MODE strip.
@@ -353,7 +321,7 @@ export default function Navbar() {
               )}
             >
               <div className="flex flex-col gap-1 mb-8">
-                {NAV_LINKS.map((link, i) => {
+                {NAV_LINKS.map((link) => {
                   const active = isActiveNavLink(link, pathname);
                   const itemClass = cn(
                     "flex items-center justify-between gap-2 px-4 py-3 rounded-lg text-base font-medium transition-colors",
@@ -373,12 +341,7 @@ export default function Navbar() {
                     </>
                   );
                   return (
-                    <motion.div
-                      key={link.href}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.05 * i + 0.1 }}
-                    >
+                    <div key={link.href}>
                       {link.external ? (
                         <a
                           href={link.href}
@@ -398,7 +361,7 @@ export default function Navbar() {
                           {inner}
                         </Link>
                       )}
-                    </motion.div>
+                    </div>
                   );
                 })}
               </div>
@@ -438,7 +401,7 @@ export default function Navbar() {
                       </div>
                       <button
                         onClick={handleLogout}
-                        className="shrink-0 p-2 rounded-md text-foreground-subtle hover:text-danger hover:bg-danger/10 transition-colors"
+                        className="shrink-0 inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-foreground-subtle hover:text-danger hover:bg-danger/10 transition-colors"
                         aria-label="Cerrar sesión"
                       >
                         <LogOut className="h-4 w-4" />
@@ -491,10 +454,9 @@ export default function Navbar() {
                   GitHub
                 </a>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </div>
+          </div>
+      )}
 
       {hasOpenedLogin && (
         <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />

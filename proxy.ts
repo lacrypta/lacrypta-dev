@@ -16,10 +16,18 @@ import { resolveProjectRedirect } from "@/lib/projectRedirectMap";
  * unconfigured) fall through to the page unchanged.
  */
 export const config = {
-  matcher: ["/projects/:param"],
+  matcher: ["/projects/:param", "/hackathons/:id/badges"],
 };
 
 export async function proxy(req: NextRequest): Promise<NextResponse> {
+  // `permanentRedirect` under cacheComponents can pin a 200; emit a real 308
+  // ahead of the full-route cache, same reason as the project slug map below.
+  if (/^\/hackathons\/[^/]+\/badges\/?$/.test(req.nextUrl.pathname)) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/badges";
+    return NextResponse.redirect(url, 308);
+  }
+
   // Single segment only: `/projects/<x>` — never `/projects/<x>/<y>` (legacy
   // two-segment redirects are their own route handlers) nor `/projects`.
   const match = req.nextUrl.pathname.match(/^\/projects\/([^/]+)$/);

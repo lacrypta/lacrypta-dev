@@ -8,6 +8,20 @@ export const metadata: Metadata = {
   title: "Infraestructura",
   description:
     "Infraestructura pública operada por La Crypta Dev — nodo Lightning, relay Nostr, servidor Blossom y LaWallet Stack.",
+  alternates: { canonical: "/infra" },
+  openGraph: {
+    title: "Infraestructura · La Crypta Dev",
+    description:
+      "Infraestructura pública operada por La Crypta Dev — nodo Lightning, relay Nostr, servidor Blossom y LaWallet Stack.",
+    url: "/infra",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Infraestructura · La Crypta Dev",
+    description:
+      "Infraestructura pública operada por La Crypta Dev — nodo Lightning, relay Nostr, servidor Blossom y LaWallet Stack.",
+  },
 };
 
 export default async function InfrastructurePage() {

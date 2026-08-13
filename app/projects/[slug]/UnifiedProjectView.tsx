@@ -90,39 +90,16 @@ export default function UnifiedProjectView({
 function NostrProject({ resolved }: { resolved: ResolvedProject }) {
   const project = resolved.nostr!;
   const hackathon = resolved.hackathon;
-  const url = `${SITE_URL}${projectSlugHref(resolved.canonicalSlug)}`;
+  const canonicalPath = projectSlugHref(resolved.canonicalSlug);
+  const url = `${SITE_URL}${canonicalPath}`;
   const team = dedupeSoldierProfileMembers(project.team);
-
-  const projectLd = {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    name: project.name,
-    description: project.description,
-    url,
-    image: project.cover ?? project.logo ?? `${url}/opengraph-image`,
-    applicationCategory: "DeveloperApplication",
-    operatingSystem: "Web",
-    codeRepository: project.repo,
-    inLanguage: "es",
-    isPartOf: hackathon
-      ? {
-          "@type": "Event",
-          name: `${hackathon.name} — Hackatón #${hackathon.number}`,
-          url: `${SITE_URL}/hackathons/${hackathonSlug(hackathon)}`,
-        }
-      : undefined,
-    author: team.map((m) => ({
-      "@type": "Person",
-      name: m.name || m.nip05 || "Anonymous",
-      url: m.github ? `https://github.com/${m.github}` : undefined,
-    })),
-    publisher: { "@id": `${SITE_URL}/#organization` },
-    keywords: project.tech?.join(", "),
-  };
 
   return (
     <>
-      {jsonLdScript(projectLd, "ld-project")}
+      {jsonLdScript(
+        creativeWorkLd(project, hackathon, canonicalPath),
+        "ld-project",
+      )}
       {jsonLdScript(
         breadcrumbLd([
           { name: "Inicio", url: SITE_URL },

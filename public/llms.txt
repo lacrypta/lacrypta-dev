@@ -1,0 +1,23 @@
+# La Crypta Dev
+
+> Laboratorio de I+D de La Crypta: investigación open source, prototipos y productos reales sobre Bitcoin, Lightning y Nostr. Hackatones, infraestructura pública y la comunidad de builders en Argentina.
+
+## Páginas
+
+- [Inicio](https://lacrypta.dev/): Hub de La Crypta Dev — Bitcoin, Lightning y Nostr.
+- [Hackatones](https://lacrypta.dev/hackathons): Lightning Hackathons 2026, calendario, premios y reglas.
+- [Proyectos](https://lacrypta.dev/projects): Laboratorio de proyectos open source de la comunidad.
+- [Soldados](https://lacrypta.dev/soldados): Builders que participaron y ganaron en los hackatones.
+- [Infraestructura](https://lacrypta.dev/infra): Nodo Lightning, relay Nostr, Blossom y LaWallet Stack.
+- [Skills](https://lacrypta.dev/skills): Skills para instalar flujos Nostr y automatizaciones.
+- [Badges](https://lacrypta.dev/badges): Badges NIP-58 de las hackatones.
+
+## Comunidad
+
+- [La Crypta](https://lacrypta.ar/): Sitio de la comunidad bitcoiner.
+- [GitHub](https://github.com/lacrypta/lacrypta-dev): Código fuente de este sitio.
+- [YouTube](https://www.youtube.com/@LaCryptaOk): Streams y aperturas de hackatones.
+
+## Optional
+
+- [Dashboard](https://lacrypta.dev/dashboard): Área privada (noindex).

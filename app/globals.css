@@ -6,13 +6,13 @@
   --background-card: #0f1322;
   --foreground: #f4f4f5;
   --foreground-muted: #a1a1aa;
-  --foreground-subtle: #71717a;
+  --foreground-subtle: #8d8d96;
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.16);
 
   --bitcoin: #f7931a;
   --lightning: #ffd700;
-  --nostr: #a855f7;
+  --nostr: #c084fc;
   --cyan: #22d3ee;
   --success: #22c55e;
   --danger: #ef4444;
@@ -77,6 +77,24 @@ html[data-scroll-lock="true"] body {
 }
 html[data-scroll-lock="true"] header.fixed {
   padding-right: var(--sbw, 0px);
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -3rem;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--bitcoin);
+  color: #05070e;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+.skip-link:focus {
+  top: 1rem;
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
 }
 
 body {
@@ -316,6 +334,27 @@ body {
 
 .animate-marquee {
   animation: marquee 30s linear infinite;
+}
+
+@keyframes ticker {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+
+.animate-ticker {
+  animation: ticker 26s linear infinite;
+}
+
+.animate-ticker-slow {
+  animation: ticker 32s linear infinite reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-ticker,
+  .animate-ticker-slow {
+    animation: none;
+  }
 }
 
 .noise {

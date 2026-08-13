@@ -55,13 +55,7 @@ function pickFeatured(now: Date): Hackathon | null {
   return [...HACKATHONS].sort((a, b) => b.number - a.number)[0] ?? null;
 }
 
-export default function HomeDashboard({
-  votingHero,
-}: {
-  /** Server-rendered live community-voting hero, slotted under the greeting
-   *  band. Null/absent when no round is worth showing. */
-  votingHero?: React.ReactNode;
-}) {
+export default function HomeDashboard({ voting }: { voting: React.ReactNode }) {
   const { auth } = useAuth();
 
   // In dev, an impersonated session reads the impersonated user's data.
@@ -135,9 +129,7 @@ export default function HomeDashboard({
         </div>
       </section>
 
-      {/* Live community voting — its own full-width band so the hero card keeps
-          the same width it has on the marketing home. */}
-      {votingHero}
+      {voting}
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-10">
         {/* Primary engagement CTA */}

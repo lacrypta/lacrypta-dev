@@ -8,7 +8,6 @@
 export const LACRYPTA_DEFAULT_RELAYS = [
   "wss://relay.lacrypta.ar",
   "wss://relay.masize.com",
-  "wss://relay.damus.io",
   "wss://relay.primal.net",
   "wss://nos.lol",
   "wss://nostr-pub.wellorder.net",
@@ -21,7 +20,6 @@ export const LACRYPTA_FAST_USER_RELAYS = [
   // third-party relays leaves the event thinly propagated.
   "wss://relay.lacrypta.ar",
   "wss://relay.masize.com",
-  "wss://relay.damus.io",
   "wss://relay.primal.net",
   "wss://nos.lol",
 ] as const;

@@ -374,9 +374,9 @@ export default async function HackathonsPage() {
               Línea de tiempo
             </span>
             <span className="h-px flex-1 bg-gradient-to-r from-border via-border/50 to-transparent" />
-            <h3 className="text-sm font-mono text-foreground-muted">
+            <p className="text-sm font-mono text-foreground-muted">
               {rangeLabel}
-            </h3>
+            </p>
           </div>
           <HackathonTimeline
             items={items}
@@ -388,13 +388,13 @@ export default async function HackathonsPage() {
           <div className="mt-14 rounded-2xl border border-border bg-background-card p-6 sm:p-8">
             <div className="flex flex-col sm:flex-row gap-6">
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-mono tracking-widest text-foreground-subtle mb-2">
+                <div className="text-[10px] font-mono tracking-widest text-foreground-muted mb-2">
                   ESTRUCTURA DE PREMIOS · POR HACKATÓN
                 </div>
-                <h3 className="font-display text-xl font-bold mb-1">
+                <h2 className="font-display text-xl font-bold mb-1">
                   {formatSats(PROGRAM.prizePerHackathon)} sats repartidos entre
                   los mejores 6 proyectos
-                </h3>
+                </h2>
                 <p className="text-sm text-foreground-muted">
                   Evaluación por jurado AI. Ties se parten según criterio del
                   comité.
@@ -406,13 +406,13 @@ export default async function HackathonsPage() {
                     key={slot.position}
                     className="rounded-xl border border-border bg-background-elevated/50 p-3 flex flex-col items-center justify-center text-center"
                   >
-                    <div className="text-xs font-mono text-foreground-subtle">
+                    <div className="text-xs font-mono text-foreground-muted">
                       {slot.position}°
                     </div>
                     <div className="text-sm font-display font-bold tabular-nums mt-1">
                       {formatSats(slot.sats)}
                     </div>
-                    <div className="text-[9px] font-mono text-foreground-subtle">
+                    <div className="text-[9px] font-mono text-foreground-muted">
                       sats
                     </div>
                   </div>

@@ -48,6 +48,7 @@ export default async function ProjectsPage() {
           </span>
         }
       />
+      <h2 className="sr-only">Listado de proyectos</h2>
       <ProjectsGrid initialNostrProjects={initialNostrProjects} />
     </>
   );

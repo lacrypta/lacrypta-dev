@@ -1,6 +1,5 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, X, Info } from "lucide-react";
 import {
   createContext,
@@ -66,11 +65,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-live="polite"
         aria-atomic="false"
       >
-        <AnimatePresence>
-          {toasts.map((t) => (
-            <ToastCard key={t.id} toast={t} onDismiss={() => dismiss(t.id)} />
-          ))}
-        </AnimatePresence>
+        {toasts.map((t) => (
+          <ToastCard key={t.id} toast={t} onDismiss={() => dismiss(t.id)} />
+        ))}
       </div>
     </ctx.Provider>
   );
@@ -110,12 +107,7 @@ function ToastCard({
   const style = KIND_STYLES[toast.kind];
   const Icon = style.Icon;
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: -16, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, x: 20, scale: 0.9 }}
-      transition={{ type: "spring", damping: 25, stiffness: 300 }}
+    <div
       className={cn(
         "pointer-events-auto relative rounded-xl border backdrop-blur-md glass-strong overflow-hidden",
         style.border,
@@ -142,12 +134,12 @@ function ToastCard({
         </div>
         <button
           onClick={onDismiss}
-          className="shrink-0 p-1 rounded text-foreground-muted hover:text-foreground hover:bg-white/5"
+          className="shrink-0 inline-flex min-h-6 min-w-6 items-center justify-center rounded text-foreground-muted hover:text-foreground hover:bg-white/5"
           aria-label="Cerrar"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 }

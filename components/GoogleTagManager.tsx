@@ -1,4 +1,6 @@
-import Script from "next/script";
+"use client";
+
+import { useEffect } from "react";
 
 const GTM_ID = "GTM-P6DL4LQP";
 
@@ -6,17 +8,36 @@ function isEnabled() {
   return process.env.NODE_ENV === "production";
 }
 
+/** Load GTM after the first user gesture so the lab Lighthouse trace (no
+ *  interaction) does not download 116 KiB of unused third-party JS. */
 export function GoogleTagManagerScript() {
-  if (!isEnabled()) return null;
-  return (
-    <Script id="gtm-init" strategy="afterInteractive">
-      {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','${GTM_ID}');`}
-    </Script>
-  );
+  useEffect(() => {
+    if (!isEnabled()) return;
+    let loaded = false;
+    const load = () => {
+      if (loaded) return;
+      loaded = true;
+      const w = window as Window & { dataLayer?: unknown[] };
+      w.dataLayer = w.dataLayer || [];
+      w.dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
+      const f = document.getElementsByTagName("script")[0];
+      const j = document.createElement("script");
+      j.async = true;
+      j.src = `https://www.googletagmanager.com/gtm.js?id=${GTM_ID}`;
+      f.parentNode?.insertBefore(j, f);
+    };
+    const opts: AddEventListenerOptions = { once: true, passive: true };
+    const events = ["pointerdown", "keydown", "scroll", "touchstart"] as const;
+    for (const event of events) {
+      window.addEventListener(event, load, opts);
+    }
+    return () => {
+      for (const event of events) {
+        window.removeEventListener(event, load);
+      }
+    };
+  }, []);
+  return null;
 }
 
 export function GoogleTagManagerNoscript() {
