@@ -44,6 +44,41 @@ import { cn } from "@/lib/cn";
 import { dedupeSoldierProfileMembers } from "@/lib/soldierProfileLinks";
 import { projectHref } from "@/lib/projectLinks";
 import { seedProjectEntities } from "@/lib/entityStore";
+import Image from "next/image";
+
+const AR_TZ = "America/Argentina/Buenos_Aires";
+
+function formatProjectDate(unix: number): string {
+  return new Date(unix * 1000).toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "short",
+    timeZone: AR_TZ,
+  });
+}
+
+function canOptimizeAvatar(src: string): boolean {
+  try {
+    const { hostname } = new URL(src);
+    return (
+      hostname.endsWith(".primal.net") ||
+      hostname === "primal.b-cdn.net" ||
+      hostname === "nostr.build" ||
+      hostname.endsWith(".nostr.build") ||
+      hostname.endsWith(".nostur.com") ||
+      hostname.endsWith(".nostr.band") ||
+      hostname === "void.cat" ||
+      hostname === "pbs.twimg.com" ||
+      hostname.endsWith(".iris.to") ||
+      hostname.endsWith(".nostr.wine") ||
+      hostname.endsWith(".sovbit.host") ||
+      hostname.endsWith(".satellite.earth") ||
+      hostname.endsWith(".nostrcheck.me") ||
+      hostname.endsWith(".blossom.band")
+    );
+  } catch {
+    return false;
+  }
+}
 
 type ProjectSource = "builtin" | "nostr";
 
@@ -130,7 +165,7 @@ function getBadge(project: DisplayProject): BadgeStyle {
 const TAG_STYLES: Record<string, string> = {
   bitcoin: "bg-bitcoin/10 text-bitcoin border-bitcoin/30",
   lightning: "bg-lightning/10 text-lightning border-lightning/30",
-  nostr: "bg-nostr/10 text-nostr border-nostr/30",
+  nostr: "bg-nostr/20 text-[#e9d5ff] border-nostr/40",
   infra: "bg-cyan/10 text-cyan border-cyan/30",
   ai: "bg-success/10 text-success border-success/30",
   wallet: "bg-white/5 text-foreground-muted border-border",
@@ -656,7 +691,7 @@ function NostrScanPanel({
       </div>
 
       <AnimatePresence>
-        {(expanded || scanning) && progress && (
+        {expanded && progress && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -718,6 +753,39 @@ function RelayRow({ status }: { status: RelayScanStatus }) {
 }
 
 /* ─────────────────────────── card ──────────────────────────────────────── */
+
+function AuthorAvatar({ src }: { src: string }) {
+  const className =
+    "h-12 w-12 rounded-full object-cover ring-2 ring-nostr/50 shrink-0";
+  const hide = (e: { currentTarget: HTMLImageElement }) => {
+    e.currentTarget.style.display = "none";
+  };
+  if (canOptimizeAvatar(src)) {
+    return (
+      <Image
+        src={src}
+        alt=""
+        width={48}
+        height={48}
+        sizes="48px"
+        className={className}
+        onError={hide}
+      />
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      width={48}
+      height={48}
+      loading="lazy"
+      decoding="async"
+      className={className}
+      onError={hide}
+    />
+  );
+}
 
 function ProjectCard({
   project,
@@ -788,23 +856,11 @@ function ProjectCard({
               {project.source === "nostr" && project.nostrCreatedAt && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-mono text-foreground-subtle">
                   <Calendar className="h-3 w-3" />
-                  {new Date(project.nostrCreatedAt * 1000).toLocaleDateString(
-                    "es-AR",
-                    { day: "2-digit", month: "short" },
-                  )}
+                  {formatProjectDate(project.nostrCreatedAt)}
                 </span>
               )}
             </div>
-            {authorPicture && (
-              <img
-                src={authorPicture}
-                alt=""
-                className="h-12 w-12 rounded-full object-cover ring-2 ring-nostr/50 shrink-0"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                }}
-              />
-            )}
+            {authorPicture && <AuthorAvatar src={authorPicture} />}
           </div>
 
           <h3 className="font-display text-xl font-bold mb-2 tracking-tight group-hover:text-bitcoin transition-colors break-words">

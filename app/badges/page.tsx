@@ -11,11 +11,24 @@ import {
 } from "@/lib/hackathonBadgeCache";
 import BadgesClient from "./BadgesClient";
 
+const DESCRIPTION =
+  "Badges NIP-58 de la hackatón activa de La Crypta Dev.";
+
 export const metadata: Metadata = {
   title: "Badges",
-  description:
-    "Badges NIP-58 de la hackatón activa de La Crypta Dev.",
+  description: DESCRIPTION,
   alternates: { canonical: "/badges" },
+  openGraph: {
+    title: "Badges · La Crypta Dev",
+    description: DESCRIPTION,
+    url: "/badges",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Badges · La Crypta Dev",
+    description: DESCRIPTION,
+  },
 };
 
 function firstDate(hackathon: Hackathon) {

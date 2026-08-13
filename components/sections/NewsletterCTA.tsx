@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { motion } from "framer-motion";
 import {
   AlertCircle,
   ArrowRight,
@@ -336,52 +335,34 @@ export default function NewsletterCTA() {
       className="relative overflow-hidden border-t border-border bg-[linear-gradient(180deg,#0a0d1a_0%,#05070e_100%)]"
     >
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <motion.div
+        <div
           className="absolute -top-32 left-1/2 h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-bitcoin/[0.08] blur-3xl"
-          animate={{ x: [-30, 30, -30], y: [0, -16, 0] }}
-          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
         />
         <div className="absolute left-1/2 top-0 h-px w-full max-w-2xl -translate-x-1/2 bg-gradient-to-r from-transparent via-bitcoin/50 to-transparent" />
       </div>
 
       <div className="relative mx-auto max-w-3xl px-6 py-20 text-center sm:px-8 sm:py-24">
-        <motion.span
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
+        <span
           className="inline-flex items-center gap-2 rounded-full border border-bitcoin/30 bg-bitcoin/[0.06] px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-[0.25em] text-bitcoin"
         >
           <Sparkles className="h-3 w-3" />
           Oportunidades
-        </motion.span>
+        </span>
 
-        <motion.h2
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.5, ease: "easeOut", delay: 0.05 }}
+        <h2
           className="mt-5 font-display text-3xl font-black leading-[1.05] tracking-tight sm:text-4xl md:text-5xl"
         >
           La data que importa{" "}
           <span className="text-gradient-hero">en tu inbox</span>
-        </motion.h2>
+        </h2>
 
-        <motion.p
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
+        <p
           className="mt-4 text-sm leading-relaxed text-foreground-muted sm:text-base"
         >
           Cero spam. Nuevas hackatons y oportunidades de trabajo por email o Nostr.
-        </motion.p>
+        </p>
 
-        <motion.form
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.5, ease: "easeOut", delay: 0.15 }}
+        <form
           onSubmit={(e) => e.preventDefault()}
           className="mx-auto mt-8 max-w-2xl"
           noValidate
@@ -495,7 +476,7 @@ export default function NewsletterCTA() {
               </button>
             )}
           </div>
-        </motion.form>
+        </form>
 
         <div id="newsletter-status" className="mt-4" aria-live="polite">
           {subscribePhase === "sent" && publishPhase === "done" ? (
@@ -529,10 +510,8 @@ export default function NewsletterCTA() {
         )}
 
         {progress.length > 0 && (
-          <motion.div
+          <div
             ref={relaysRef}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
             className="mx-auto mt-4 w-full max-w-2xl rounded-2xl border border-border bg-background-card/70 p-4 text-left shadow-2xl shadow-black/25"
           >
             <div className="flex items-center justify-between gap-3">
@@ -590,17 +569,16 @@ export default function NewsletterCTA() {
                     </span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                    <motion.div
+                    <div
                       className={cn(
-                        "h-full rounded-full",
+                        "h-full rounded-full transition-[width] duration-500",
                         item.state === "ok"
                           ? "bg-success"
                           : item.state === "error"
                             ? "bg-danger"
                             : "bg-bitcoin",
                       )}
-                      initial={{ width: "8%" }}
-                      animate={{
+                      style={{
                         width:
                           item.state === "pending"
                             ? "8%"
@@ -625,7 +603,7 @@ export default function NewsletterCTA() {
                 {publishError}
               </p>
             )}
-          </motion.div>
+          </div>
         )}
       </div>
     </section>
@@ -670,9 +648,7 @@ function ProfilePreview({
   const subtitle = user.profile.nip05 || user.handle || shortPubkey(user.pubkey);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
+    <div
       className="mx-auto mt-6 w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-background-card/70 text-left shadow-2xl shadow-black/25"
     >
       <div className="relative h-28 bg-gradient-to-br from-bitcoin/20 via-cyan/10 to-nostr/30">
@@ -720,6 +696,6 @@ function ProfilePreview({
           </p>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }

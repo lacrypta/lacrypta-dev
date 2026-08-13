@@ -23,6 +23,19 @@ export const metadata: Metadata = {
   description:
     "Skills de La Crypta Dev para instalar flujos Nostr, herramientas open source y automatizaciones en proyectos de la comunidad.",
   alternates: { canonical: "/skills" },
+  openGraph: {
+    title: "Skills · La Crypta Dev",
+    description:
+      "Skills de La Crypta Dev para instalar flujos Nostr, herramientas open source y automatizaciones en proyectos de la comunidad.",
+    url: "/skills",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Skills · La Crypta Dev",
+    description:
+      "Skills de La Crypta Dev para instalar flujos Nostr, herramientas open source y automatizaciones en proyectos de la comunidad.",
+  },
 };
 
 const installCommand = "npx skills add lacrypta/lacrypta-dev";

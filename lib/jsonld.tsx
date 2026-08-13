@@ -1,5 +1,5 @@
 import type { Hackathon, HackathonProject } from "./hackathons";
-import { hackathonSlug } from "./hackathons";
+import { hackathonSlug, hackathonStatus } from "./hackathons";
 import { dedupeSoldierProfileMembers } from "./soldierProfileLinks";
 import { SITE_URL } from "./siteUrl";
 
@@ -22,13 +22,41 @@ export function organizationLd(): JsonLdValue {
     name: "La Crypta Dev",
     alternateName: "La Crypta",
     url: BASE_URL,
-    logo: `${BASE_URL}/lacrypta-logo.svg`,
+    logo: {
+      "@type": "ImageObject",
+      url: `${BASE_URL}/icon.png`,
+      width: 112,
+      height: 112,
+    },
     description:
       "Investigación, prototipos y productos open source de la comunidad La Crypta sobre Bitcoin, Lightning y Nostr.",
+    parentOrganization: {
+      "@type": "Organization",
+      name: "La Crypta",
+      url: "https://lacrypta.ar",
+    },
     sameAs: [
       "https://www.youtube.com/@LaCryptaOk",
       "https://github.com/lacrypta",
+      "https://github.com/lacrypta/lacrypta-dev",
+      "https://x.com/LaCryptaOk",
+      "https://lacrypta.ar",
     ],
+  };
+}
+
+export function websiteLd(): JsonLdValue {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": `${BASE_URL}/#website`,
+    url: BASE_URL,
+    name: "La Crypta Dev",
+    alternateName: "La Crypta",
+    inLanguage: "es-AR",
+    description:
+      "Investigación, prototipos y productos open source de la comunidad La Crypta sobre Bitcoin, Lightning y Nostr.",
+    publisher: { "@id": ORG_ID },
   };
 }
 
@@ -44,6 +72,11 @@ export function eventLd(h: Hackathon): JsonLdValue {
   const url = `${BASE_URL}/hackathons/${hackathonSlug(h)}`;
   const start = eventStartDate(h);
   const end = eventEndDate(h);
+  const status = hackathonStatus(h);
+  const eventStatus =
+    status === "closed"
+      ? "https://schema.org/EventCompleted"
+      : "https://schema.org/EventScheduled";
 
   return {
     "@context": "https://schema.org",
@@ -53,23 +86,26 @@ export function eventLd(h: Hackathon): JsonLdValue {
     startDate: start,
     endDate: end,
     eventAttendanceMode: "https://schema.org/OnlineEventAttendanceMode",
-    eventStatus: "https://schema.org/EventScheduled",
+    eventStatus,
     url,
     image: `${url}/opengraph-image`,
     location: {
       "@type": "VirtualLocation",
       url,
     },
-    organizer: { "@id": ORG_ID },
+    organizer: { "@id": ORG_ID, name: "La Crypta Dev" },
     offers: {
       "@type": "Offer",
       price: 0,
       priceCurrency: "USD",
       url,
-      availability: "https://schema.org/InStock",
+      availability:
+        status === "closed"
+          ? "https://schema.org/SoldOut"
+          : "https://schema.org/InStock",
       validFrom: start,
     },
-    inLanguage: "es",
+    inLanguage: "es-AR",
     keywords: [...h.tags, ...h.topics, "Hackatón", "La Crypta", "Bitcoin"].join(
       ", ",
     ),
@@ -95,7 +131,7 @@ export function creativeWorkLd(
   }`;
   return {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
+    "@type": ["SoftwareApplication", "SoftwareSourceCode"],
     name: project.name,
     description: project.description,
     url,
@@ -103,8 +139,8 @@ export function creativeWorkLd(
     applicationCategory: "DeveloperApplication",
     operatingSystem: "Web",
     codeRepository: project.repo,
-    inLanguage: "es",
-    isPartOf: hackathon
+    inLanguage: "es-AR",
+    isRelatedTo: hackathon
       ? {
           "@type": "Event",
           name: `${hackathon.name} — Hackatón #${hackathon.number}`,
@@ -165,6 +201,9 @@ export function personLd(
       ? {
           hasPart: projectUrls.map((projectUrl) => ({
             "@type": "SoftwareApplication",
+            name: decodeURIComponent(
+              projectUrl.split("/").filter(Boolean).pop() ?? "Proyecto",
+            ),
             url: projectUrl,
           })),
         }

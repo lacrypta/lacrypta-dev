@@ -1,7 +1,9 @@
 "use client";
 
 import { useAuth } from "@/lib/auth";
-import HomeDashboard from "@/components/home/HomeDashboard";
+import dynamic from "next/dynamic";
+
+const HomeDashboard = dynamic(() => import("@/components/home/HomeDashboard"));
 
 /**
  * Home page auth gate.
@@ -14,18 +16,20 @@ import HomeDashboard from "@/components/home/HomeDashboard";
  * the server and first client render both show `children`, there's no
  * hydration mismatch.
  *
- * `votingHero` is the server-rendered live-voting hero for the dashboard branch
- * (the marketing branch carries its own copy inside `children`, SSR'd for
- * crawlers). Both branches show it — voters are logged in.
+ * `dashboardVoting` is the server-rendered live-voting hero for the dashboard
+ * branch (the marketing branch carries its own copy inside `children`, SSR'd
+ * for crawlers). Both branches show it — voters are logged in.
  */
 export default function HomeGate({
-  votingHero,
   children,
+  dashboardVoting,
 }: {
-  votingHero?: React.ReactNode;
   children: React.ReactNode;
+  dashboardVoting: React.ReactNode;
 }) {
   const { auth, ready } = useAuth();
-  if (ready && auth) return <HomeDashboard votingHero={votingHero} />;
+  if (ready && auth) {
+    return <HomeDashboard voting={dashboardVoting} />;
+  }
   return <>{children}</>;
 }

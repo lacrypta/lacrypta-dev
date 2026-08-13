@@ -12,13 +12,14 @@ import {
   GoogleTagManagerNoscript,
   GoogleTagManagerScript,
 } from "@/components/GoogleTagManager";
-import { jsonLdScript, organizationLd } from "@/lib/jsonld";
+import { jsonLdScript, organizationLd, websiteLd } from "@/lib/jsonld";
 import { SITE_URL } from "@/lib/siteUrl";
 
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
   display: "swap",
+  preload: false,
 });
 
 const spaceGrotesk = Space_Grotesk({
@@ -31,6 +32,7 @@ const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   subsets: ["latin"],
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -96,22 +98,29 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="es"
+      lang="es-AR"
       className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} h-full antialiased scroll-smooth`}
     >
       <head>
         {jsonLdScript(organizationLd(), "ld-organization")}
+        {jsonLdScript(websiteLd(), "ld-website")}
         <GoogleTagManagerScript />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground overflow-x-hidden">
         <GoogleTagManagerNoscript />
+        <a href="#contenido" className="skip-link">
+          Saltar al contenido
+        </a>
         <Suspense>
           <ToastProvider>
             {isDevMode() && <DevModeBar />}
             <Suspense>
               <Navbar />
             </Suspense>
-            <main className={cn("flex-1", isDevMode() && "pt-8")}>
+            <main
+              id="contenido"
+              className={cn("flex-1", isDevMode() && "pt-8")}
+            >
               {children}
             </main>
             <Footer />

@@ -476,8 +476,8 @@ export default function LoginModal({
 
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 p-2 rounded-lg text-foreground-muted hover:text-foreground hover:bg-white/5 transition-colors z-10"
-              aria-label="Close"
+              className="absolute top-4 right-4 inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg text-foreground-muted hover:text-foreground hover:bg-white/5 transition-colors z-10"
+              aria-label="Cerrar"
             >
               <X className="h-5 w-5" />
             </button>

@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { HACKATHONS, hackathonSlug, hackathonStatus } from "@/lib/hackathons";
 import { getCanonicalProjectRefs } from "@/lib/projectResolver";
 import { projectSlugHref } from "@/lib/projectLinks";
+import { getSoldiers } from "@/lib/soldiers";
 import { SITE_URL } from "@/lib/siteUrl";
 
 const BASE_URL = SITE_URL;
@@ -25,48 +26,51 @@ async function staticSitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [
     {
       url: `${BASE_URL}/`,
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 1.0,
     },
     {
       url: `${BASE_URL}/hackathons`,
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 0.9,
     },
     {
       url: `${BASE_URL}/projects`,
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 0.9,
     },
     {
       url: `${BASE_URL}/skills`,
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 0.8,
     },
     {
       url: `${BASE_URL}/soldados`,
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 0.8,
     },
     {
       url: `${BASE_URL}/infra`,
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 0.9,
+    },
+    {
+      url: `${BASE_URL}/badges`,
+      changeFrequency: "weekly",
+      priority: 0.6,
     },
   ];
 
   for (const h of HACKATHONS) {
     const lastDate = h.dates[h.dates.length - 1]?.date;
     const status = hackathonStatus(h, now);
+    const lastModified = lastDate ? new Date(lastDate) : undefined;
     entries.push({
       url: `${BASE_URL}/hackathons/${hackathonSlug(h)}`,
-      lastModified: lastDate ? new Date(lastDate) : now,
+      lastModified:
+        lastModified && lastModified.getTime() <= now.getTime()
+          ? lastModified
+          : undefined,
       changeFrequency: status === "closed" ? "yearly" : "weekly",
       priority: 0.8,
     });
@@ -86,6 +90,18 @@ async function staticSitemap(): Promise<MetadataRoute.Sitemap> {
     }
   } catch {
     /* curated data is in-tree; refs only fail if the registry read throws */
+  }
+
+  try {
+    for (const soldier of await getSoldiers()) {
+      entries.push({
+        url: `${BASE_URL}/soldados/${encodeURIComponent(soldier.slug)}`,
+        changeFrequency: "weekly",
+        priority: 0.5,
+      });
+    }
+  } catch {
+    /* roster depends on the same Nostr snapshot as project pages */
   }
 
   return entries;

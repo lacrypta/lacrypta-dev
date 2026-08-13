@@ -231,8 +231,8 @@ export default function HackathonTimeline({
                     aria-current={selected ? "true" : undefined}
                     aria-label={
                       countLabel
-                        ? `${h.name} — ${meta.label} — ${countLabel}`
-                        : `${h.name} — ${meta.label}`
+                        ? `${h.monthShort} ${h.name} — ${meta.label} — ${countLabel}`
+                        : `${h.monthShort} ${h.name} — ${meta.label}`
                     }
                     className="group relative flex flex-1 flex-col items-center gap-2 rounded-lg pt-[6px] outline-none focus-visible:ring-2 focus-visible:ring-cyan/60"
                   >
@@ -724,7 +724,7 @@ function StageCard({ h }: { h: TimelineHackathon }) {
             )}
             <Link
               href={`/hackathons/${h.slug}`}
-              className="inline-flex items-center gap-1 text-sm font-semibold text-foreground-muted transition-colors hover:text-foreground"
+              className="inline-flex min-h-6 items-center gap-1 text-sm font-semibold text-foreground-muted transition-colors hover:text-foreground"
             >
               Ver detalle
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
