@@ -5,6 +5,7 @@ import {
   EmailLoginDestinationError,
 } from "@/lib/emailLoginDestinations";
 import { consumeEmailLoginToken, getLacryptaSecret } from "@/lib/emailLogin";
+import { SITE_URL } from "@/lib/siteUrl";
 
 type ConsumeBody = {
   token?: string;
@@ -14,7 +15,7 @@ function jsonError(message: string, status = 400, origin?: string | null) {
   return NextResponse.json(
     { error: message },
     {
-      headers: emailLoginCorsHeaders(origin ?? null, process.env.NEXT_PUBLIC_SITE_URL),
+      headers: emailLoginCorsHeaders(origin ?? null, SITE_URL),
       status,
     },
   );
@@ -22,7 +23,7 @@ function jsonError(message: string, status = 400, origin?: string | null) {
 
 export async function OPTIONS(req: Request) {
   return new NextResponse(null, {
-    headers: emailLoginCorsHeaders(req.headers.get("origin"), process.env.NEXT_PUBLIC_SITE_URL),
+    headers: emailLoginCorsHeaders(req.headers.get("origin"), SITE_URL),
     status: 204,
   });
 }
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { nsec, pubkey, redirectTo },
       {
-        headers: emailLoginCorsHeaders(origin, process.env.NEXT_PUBLIC_SITE_URL),
+        headers: emailLoginCorsHeaders(origin, SITE_URL),
       },
     );
   } catch (error) {

@@ -3,6 +3,7 @@ import {
   type EmailLoginDestination,
   validateEmailLoginTokenDestination,
 } from "./emailLoginDestinations";
+import { SITE_URL } from "./siteUrl";
 
 const DERIVATION_CONTEXT = "lacrypta.dev:email-login:derive:v1";
 const ENCRYPTION_CONTEXT = "lacrypta.dev:email-login:encrypt:v1";
@@ -214,7 +215,7 @@ export async function consumeEmailLoginToken(
     audOrigin: payload.audOrigin,
     callbackUrl: payload.callbackUrl,
     redirectTo: payload.redirectTo,
-    siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+    siteUrl: SITE_URL,
   });
 
   const decoded = decode(payload.nsec);

@@ -126,14 +126,52 @@ function normalizeSiteOrigin(siteUrl?: string): string | null {
   }
 }
 
+/**
+ * Origins this deployment is really served from. Vercel injects these
+ * server-side, never from the request Host header, so they are safe to trust
+ * as first-party even while NEXT_PUBLIC_SITE_URL points at production.
+ */
+function deploymentOrigins(): string[] {
+  return [
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    process.env.VERCEL_BRANCH_URL,
+    process.env.VERCEL_URL,
+  ]
+    .map((host) => host?.trim())
+    .filter((host): host is string => !!host)
+    .map((host) => `https://${host.replace(/^https?:\/\//u, "")}`);
+}
+
+function isOwnOrigin(origin: string, hostname: string, siteUrl?: string): boolean {
+  if (process.env.NODE_ENV !== "production" && isLocalhost(hostname)) return true;
+  if (deploymentOrigins().includes(origin)) return true;
+  const siteOrigin = normalizeSiteOrigin(siteUrl);
+  return !!siteOrigin && origin === siteOrigin;
+}
+
 function isFirstPartyLoginCallback(url: URL, siteUrl?: string): boolean {
   const path = normalizePath(url.pathname);
   if (path !== EMAIL_LOGIN_CALLBACK_PATH) return false;
   if (url.protocol === "https:" && url.hostname === LACRYPTA_EMAIL_LOGIN_DOMAIN) {
     return true;
   }
-  const siteOrigin = normalizeSiteOrigin(siteUrl);
-  return !!siteOrigin && url.origin === siteOrigin;
+  return isOwnOrigin(url.origin, url.hostname, siteUrl);
+}
+
+/**
+ * The origin the browser is actually on, when that origin is first-party for
+ * this deployment. Lets the token audience follow the tab that asked for it
+ * (preview deploys, alternate localhost ports) instead of being pinned to
+ * NEXT_PUBLIC_SITE_URL.
+ */
+function firstPartyOwnOrigin(
+  rawOrigin: string | null | undefined,
+  siteUrl?: string,
+): string | null {
+  const origin = normalizeEmailLoginOrigin(rawOrigin ?? null);
+  if (!origin) return null;
+  const candidate = new URL(EMAIL_LOGIN_CALLBACK_PATH, origin);
+  return isFirstPartyLoginCallback(candidate, siteUrl) ? origin : null;
 }
 
 function allowedExternalCallbackUrls(): Set<string> {
@@ -174,8 +212,7 @@ export function isAllowedEmailLoginOrigin(
     return true;
   }
 
-  const siteOrigin = normalizeSiteOrigin(siteUrl);
-  if (siteOrigin && origin === siteOrigin) return true;
+  if (isOwnOrigin(origin, url.hostname, siteUrl)) return true;
 
   for (const callbackUrl of allowedExternalCallbackUrls()) {
     if (new URL(callbackUrl).origin === origin) return true;
@@ -185,17 +222,20 @@ export function isAllowedEmailLoginOrigin(
 
 export function resolveEmailLoginDestination({
   callbackUrl,
+  origin,
   redirectTo,
   siteUrl,
 }: {
   callbackUrl?: string;
+  origin?: string | null;
   redirectTo?: string;
   siteUrl: string;
 }): EmailLoginDestination {
   const safeRedirectTo = safeLoginRedirect(redirectTo, DEFAULT_LOGIN_REDIRECT);
 
   if (!callbackUrl?.trim()) {
-    const siteOrigin = normalizeSiteOrigin(siteUrl);
+    const siteOrigin =
+      firstPartyOwnOrigin(origin, siteUrl) ?? normalizeSiteOrigin(siteUrl);
     if (!siteOrigin) destinationError("NEXT_PUBLIC_SITE_URL invalida.");
     const ownCallbackUrl = normalizeEmailLoginCallbackUrl(
       new URL(EMAIL_LOGIN_CALLBACK_PATH, siteOrigin).toString(),

@@ -12,6 +12,7 @@ import {
   normalizeEmail,
 } from "@/lib/emailLogin";
 import { DEFAULT_LOGIN_REDIRECT, safeLoginRedirect } from "@/lib/loginRedirect";
+import { SITE_URL } from "@/lib/siteUrl";
 
 type RequestBody = {
   callbackUrl?: string;
@@ -23,7 +24,7 @@ function jsonError(message: string, status = 400, origin?: string | null) {
   return NextResponse.json(
     { error: message },
     {
-      headers: emailLoginCorsHeaders(origin ?? null, process.env.NEXT_PUBLIC_SITE_URL),
+      headers: emailLoginCorsHeaders(origin ?? null, SITE_URL),
       status,
     },
   );
@@ -108,7 +109,7 @@ function emailHtml(link: string, email: string, appOrigin: string): string {
 
 export async function OPTIONS(req: Request) {
   return new NextResponse(null, {
-    headers: emailLoginCorsHeaders(req.headers.get("origin"), process.env.NEXT_PUBLIC_SITE_URL),
+    headers: emailLoginCorsHeaders(req.headers.get("origin"), SITE_URL),
     status: 204,
   });
 }
@@ -126,9 +127,10 @@ export async function POST(req: Request) {
   if (!isValidEmail(email)) return jsonError("Correo electronico invalido.", 400, origin);
 
   try {
-    const siteUrl = requiredEnv("NEXT_PUBLIC_SITE_URL").replace(/\/+$/u, "");
+    const siteUrl = SITE_URL;
     const destination = resolveEmailLoginDestination({
       callbackUrl: body.callbackUrl,
+      origin,
       redirectTo: body.redirectTo,
       siteUrl,
     });

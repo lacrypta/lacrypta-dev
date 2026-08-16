@@ -202,3 +202,43 @@ test("sets exact CORS headers only for allowed origins", () => {
   );
   assert.equal(rejected.get("access-control-allow-origin"), null);
 });
+
+test("binds the token to the preview deployment the browser is actually on", async () => {
+  process.env.VERCEL_BRANCH_URL = "lacrypta-dev-git-x.vercel.app";
+  const previewOrigin = "https://lacrypta-dev-git-x.vercel.app";
+  try {
+    const destination = resolveEmailLoginDestination({
+      origin: previewOrigin,
+      redirectTo: "/dashboard",
+      siteUrl,
+    });
+    assert.equal(destination.audOrigin, previewOrigin);
+    assert.equal(destination.callbackUrl, `${previewOrigin}/login/email`);
+    assert.doesNotThrow(() =>
+      assertEmailLoginOriginMatchesAudience(previewOrigin, destination.audOrigin),
+    );
+
+    // The magic link must still validate when consumed from that same origin.
+    const { token } = await createEmailLoginToken(
+      rootSecret,
+      "user@example.com",
+      destination,
+      now,
+    );
+    const consumed = await consumeEmailLoginToken(rootSecret, token, now + 1);
+    assert.equal(consumed.audOrigin, previewOrigin);
+  } finally {
+    delete process.env.VERCEL_BRANCH_URL;
+  }
+});
+
+test("ignores an untrusted origin and falls back to the site URL", async () => {
+  const destination = resolveEmailLoginDestination({
+    origin: "https://evil.example",
+    siteUrl,
+  });
+  assert.equal(destination.audOrigin, siteUrl);
+  assert.throws(() =>
+    assertEmailLoginOriginMatchesAudience("https://evil.example", destination.audOrigin),
+  );
+});
