@@ -20,8 +20,10 @@ export default function robots(): MetadataRoute.Robots {
         ],
       },
     ],
+    // The two split sitemaps are listed directly: `app/sitemap.ts` already
+    // owns /sitemap.xml via the metadata convention, so a hand-rolled index
+    // route there is a build-time conflict (and robots.txt takes a list).
     sitemap: [
-      `${BASE_URL}/sitemap.xml`,
       `${BASE_URL}/sitemap/static.xml`,
       `${BASE_URL}/sitemap/nostr.xml`,
     ],

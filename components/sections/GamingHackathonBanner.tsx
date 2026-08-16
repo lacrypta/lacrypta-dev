@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cacheLife } from "next/cache";
 import {
   ArrowRight,
   Gamepad2,
@@ -54,8 +55,18 @@ function pickFeatured(now: Date): { hackathon: Hackathon; upcoming: boolean } {
   return { hackathon: latest, upcoming: false };
 }
 
-export default function GamingHackathonBanner() {
-  const { hackathon, upcoming } = pickFeatured(new Date());
+/** Reading the clock in a Server Component needs a cache scope under
+ *  `cacheComponents` (same pattern as `app/hackathons/page.tsx`). Which
+ *  hackathon is featured only turns over on day boundaries, so an hourly
+ *  entry keeps the banner static and still current. */
+async function featured() {
+  "use cache";
+  cacheLife("hours");
+  return pickFeatured(new Date());
+}
+
+export default async function GamingHackathonBanner() {
+  const { hackathon, upcoming } = await featured();
   const date = aperturaDate(hackathon);
   const kickoffIso = date ? `${date}${KICKOFF_HOUR_TZ}` : null;
   const slug = hackathonSlug(hackathon);
