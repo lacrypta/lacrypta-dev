@@ -176,8 +176,8 @@ export default function LoginModal({
 
   function finishLogin() {
     setNcState("connected");
-    navigateAfterLogin();
     onClose();
+    navigateAfterLogin();
   }
 
   function persistAuth(
@@ -206,14 +206,22 @@ export default function LoginModal({
     setNip07Loading(true);
     try {
       const pubkey = await window.nostr?.getPublicKey();
-      if (!pubkey) {
-        setNip07Loading(false);
-        return;
-      }
+      if (!pubkey) return;
       setAuth({ method: "nip07", pubkey });
-      navigateAfterLogin();
+      // Close before navigating: `router.push` can suspend on the destination
+      // RSC payload, and anything that throws in between used to leave the
+      // modal mounted on top of a logged-in app with the spinner still going.
       onClose();
-    } catch {
+      navigateAfterLogin();
+    } catch (e) {
+      pushToast({
+        kind: "error",
+        title: "No se pudo conectar la extensión",
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      // Never leave "FIRMANDO…" pinned: the close effect resets this too,
+      // but only if the parent actually flips `open`.
       setNip07Loading(false);
     }
   }
@@ -271,8 +279,8 @@ export default function LoginModal({
         description: `${npub.slice(0, 14)}…${npub.slice(-6)} · la clave queda en localStorage (sólo dev).`,
         duration: 8000,
       });
-      navigateAfterLogin();
       onClose();
+      navigateAfterLogin();
     } catch (e) {
       pushToast({
         kind: "error",
