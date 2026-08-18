@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import { isValidEmail, normalizeEmail } from "@/lib/emailLogin";
 
-const DEFAULT_ENDPOINT = "https://events.lacrypta.ar/api/subscribe";
+/**
+ * Public subscription endpoint of the La Crypta CRM (no auth, org in the path).
+ * The old https://events.lacrypta.ar/api/subscribe now 307s to an org-scoped
+ * route and answers `{"error":"Organization context required"}` — see
+ * https://crm.lacrypta.ar/docs/workflows/subscription-email-lists.
+ */
+const DEFAULT_ENDPOINT =
+  "https://crm.lacrypta.ar/api/public/organizations/la-crypta/subscriptions";
 
-/** Default CRM contact list to subscribe contacts into (see API_SUBSCRIBE docs). */
+/** Default CRM contact list to subscribe contacts into ("La Crypta Dev"). */
 const DEFAULT_LIST_IDS = "0135a251-8a46-4f88-b5bc-315d982eb7fa";
 
 /** Parse the comma-separated list-id env var into a clean UUID array. */
@@ -19,42 +26,16 @@ type SubscribeBody = {
   email?: string;
   npub?: string;
   name?: string;
-  phone?: string;
 };
 
 type CrmResponse = {
-  ok?: boolean;
-  exists?: boolean;
+  status?: string;
   message?: string;
   error?: string;
 };
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
-}
-
-function isHexPubkey(value: string): boolean {
-  return /^[0-9a-f]{64}$/iu.test(value);
-}
-
-/**
- * The events CRM expects a bech32 `npub1…` string (it decodes it to hex on
- * its side). Accept either an `npub1…` or a raw 64-char hex pubkey and always
- * forward the bech32 form. Returns "" when nothing usable was provided.
- */
-async function normalizeNpub(raw: string): Promise<string> {
-  const value = raw.trim().toLowerCase();
-  if (!value) return "";
-  const { decode, npubEncode } = await import("nostr-tools/nip19");
-  if (isHexPubkey(value)) return npubEncode(value);
-  if (!value.startsWith("npub1")) throw new Error("npub invalida.");
-  try {
-    const decoded = decode(value);
-    if (decoded.type !== "npub") throw new Error("npub invalida.");
-    return npubEncode(decoded.data as string);
-  } catch {
-    throw new Error("npub invalida.");
-  }
 }
 
 export async function POST(req: Request) {
@@ -70,76 +51,51 @@ export async function POST(req: Request) {
     return jsonError("Correo electronico invalido.");
   }
 
-  let npub = "";
-  try {
-    npub = await normalizeNpub(body.npub ?? "");
-  } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "npub invalida.");
-  }
-
+  const npub = body.npub?.trim() ?? "";
   if (!email && !npub) {
     return jsonError("Envia email, npub o ambos.");
   }
 
+  // The public CRM API is email-only, so a Nostr-only subscriber has nothing
+  // to register (see the TODO below). The signed notification event is still
+  // published by the frontend, so the flow works — it just leaves no contact.
+  if (!email) {
+    return NextResponse.json({ ok: true, exists: false, message: "Skipped" });
+  }
+
   const endpoint = process.env.EVENTS_SUBSCRIBE_URL?.trim() || DEFAULT_ENDPOINT;
   const name = body.name?.trim();
-  const phone = body.phone?.trim();
   const lists = getListIds();
 
-  // Fields shared across every attempt; only the identity (email/npub) varies.
-  const baseFields = {
-    ...(name ? { name } : {}),
-    ...(phone ? { phone } : {}),
-    ...(lists.length ? { lists } : {}),
-  };
-
-  async function subscribe(identity: { email?: string; npub?: string }) {
+  try {
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...identity, ...baseFields }),
+      body: JSON.stringify({
+        email,
+        ...(name ? { name } : {}),
+        ...(lists.length ? { list_ids: lists } : {}),
+        // TODO: register the npub too. Blocked on the CRM: a top-level `npub`
+        // is silently dropped, and `fields` keys are validated against the
+        // list's declared fields — list 0135a251… declares none, so this 400s
+        // with `unknown_subscription_field`. Uncomment once an `npub` custom
+        // field is added to the list in the CRM dashboard. npub-only contacts
+        // stay impossible either way: the public endpoint requires an email.
+        // ...(npub ? { fields: { npub } } : {}),
+      }),
     });
     const data = (await res.json().catch(() => ({}))) as CrmResponse;
-    return { res, data };
-  }
-
-  try {
-    let { res, data } = await subscribe({
-      ...(email ? { email } : {}),
-      ...(npub ? { npub } : {}),
-    });
-
-    // The CRM returns `identity_conflict` when email + npub are sent together
-    // but already belong to existing/different contacts (it never links them).
-    // Fall back to subscribing each identifier on its own — preferring the
-    // email — so the contact still gets added to the list.
-    if (
-      res.status === 409 &&
-      data.error === "identity_conflict" &&
-      email &&
-      npub
-    ) {
-      for (const identity of [{ email }, { npub }]) {
-        const retry = await subscribe(identity);
-        if (retry.res.ok) {
-          res = retry.res;
-          data = retry.data;
-          break;
-        }
-      }
-    }
 
     if (!res.ok) {
       const message =
         data.error || data.message || "No se pudo crear la suscripcion.";
-      // Surface the upstream status (e.g. 409 identity_conflict) to the client.
       return jsonError(message, res.status >= 400 ? res.status : 502);
     }
 
     return NextResponse.json({
       ok: true,
-      exists: Boolean(data.exists),
-      message: data.message ?? (data.exists ? "Already subscribed" : "Subscribed"),
+      exists: false,
+      message: data.status ?? "subscribed",
     });
   } catch (error) {
     return jsonError(
