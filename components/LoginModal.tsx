@@ -126,11 +126,19 @@ export default function LoginModal({
     if (!open) return;
     setNip07("checking");
     let cancelled = false;
+    let defaulted = false;
     // Extensions inject `window.nostr` asynchronously, so we check on open and
     // again after a short delay. Detection only — connecting is the user's call.
     const check = () => {
       if (cancelled) return;
-      setNip07(typeof window !== "undefined" && window.nostr ? "available" : "missing");
+      const available = typeof window !== "undefined" && !!window.nostr;
+      setNip07(available ? "available" : "missing");
+      // A detected extension makes Nostr the opening tab. Applied once, so the
+      // late re-check can't yank back a user who already picked Correo.
+      if (available && !defaulted) {
+        defaulted = true;
+        setMethod("nostr");
+      }
     };
     check();
     const t = window.setTimeout(check, 400);

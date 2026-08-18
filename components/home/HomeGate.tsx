@@ -3,7 +3,18 @@
 import { useAuth } from "@/lib/auth";
 import dynamic from "next/dynamic";
 
-const HomeDashboard = dynamic(() => import("@/components/home/HomeDashboard"));
+// `ssr: false` is what gives this its own Suspense boundary — `next/dynamic`
+// only wraps the lazy component when `ssr` is false or a `loading` is passed
+// (see next/dist/shared/lib/lazy-dynamic/loadable.js). Without it the lazy
+// suspends with no boundary, and because `setAuth` dispatches its change event
+// synchronously, that suspension lands in the same batch as the login modal's
+// own `onClose()` — which then never commits, leaving the modal stuck over an
+// already-logged-in app. Rendering it client-only is honest anyway: the branch
+// below is unreachable on the server, where `auth` is always null.
+const HomeDashboard = dynamic(
+  () => import("@/components/home/HomeDashboard"),
+  { ssr: false },
+);
 
 /**
  * Home page auth gate.
