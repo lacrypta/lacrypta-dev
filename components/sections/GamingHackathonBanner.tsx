@@ -67,6 +67,8 @@ async function featured() {
 
 export default async function GamingHackathonBanner() {
   const { hackathon, upcoming } = await featured();
+  // Keep LABITCONF off the home promo until we're ready to feature it.
+  if (hackathon.id === "labitconf") return null;
   const date = aperturaDate(hackathon);
   const kickoffIso = date ? `${date}${KICKOFF_HOUR_TZ}` : null;
   const slug = hackathonSlug(hackathon);

@@ -66,7 +66,11 @@ export default function HomeDashboard({ voting }: { voting: React.ReactNode }) {
   const { projects, groups, loading } = useUserHackathons(readPubkey);
 
   const now = useMemo(() => new Date(), []);
-  const featured = useMemo(() => pickFeatured(now), [now]);
+  const featured = useMemo(() => {
+    const picked = pickFeatured(now);
+    // Keep LABITCONF off the home promo until we're ready to feature it.
+    return picked?.id === "labitconf" ? null : picked;
+  }, [now]);
 
   const displayName =
     profile?.display_name ||
