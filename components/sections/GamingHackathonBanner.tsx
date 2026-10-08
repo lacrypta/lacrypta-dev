@@ -41,8 +41,10 @@ function aperturaDate(h: Hackathon): string | null {
 }
 
 /** The hackathon to feature: the one currently running, else the next one that
- *  hasn't started yet (earliest apertura), else the most recent by number. */
-function pickFeatured(now: Date): { hackathon: Hackathon; upcoming: boolean } {
+ *  hasn't started yet (earliest apertura). A finished program features nothing. */
+function pickFeatured(
+  now: Date,
+): { hackathon: Hackathon; upcoming: boolean } | null {
   const active = HACKATHONS.find((h) => hackathonStatus(h, now) === "active");
   if (active) return { hackathon: active, upcoming: false };
 
@@ -51,8 +53,7 @@ function pickFeatured(now: Date): { hackathon: Hackathon; upcoming: boolean } {
     .sort((a, b) => a.date.localeCompare(b.date))[0];
   if (next) return { hackathon: next.h, upcoming: true };
 
-  const latest = [...HACKATHONS].sort((a, b) => b.number - a.number)[0];
-  return { hackathon: latest, upcoming: false };
+  return null;
 }
 
 /** Reading the clock in a Server Component needs a cache scope under
@@ -62,13 +63,15 @@ function pickFeatured(now: Date): { hackathon: Hackathon; upcoming: boolean } {
 async function featured() {
   "use cache";
   cacheLife("hours");
-  return pickFeatured(new Date());
+  const picked = pickFeatured(new Date());
+  if (!picked || hackathonStatus(picked.hackathon) === "closed") return null;
+  return picked;
 }
 
 export default async function GamingHackathonBanner() {
-  const { hackathon, upcoming } = await featured();
-  // Keep LABITCONF off the home promo until we're ready to feature it.
-  if (hackathon.id === "labitconf") return null;
+  const picked = await featured();
+  if (!picked) return null;
+  const { hackathon, upcoming } = picked;
   const date = aperturaDate(hackathon);
   const kickoffIso = date ? `${date}${KICKOFF_HOUR_TZ}` : null;
   const slug = hackathonSlug(hackathon);

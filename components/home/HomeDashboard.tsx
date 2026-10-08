@@ -39,7 +39,7 @@ function shorten(pubkey: string) {
 }
 
 /** The hackathon to nudge the user toward: the one running now, else the next
- *  one that hasn't started (earliest date), else the most recent by number. */
+ *  one that hasn't started (earliest date). Nothing, once every one has closed. */
 function pickFeatured(now: Date): Hackathon | null {
   const active = HACKATHONS.find((h) => hackathonStatus(h, now) === "active");
   if (active) return active;
@@ -52,7 +52,7 @@ function pickFeatured(now: Date): Hackathon | null {
     }))
     .sort((a, b) => a.first.localeCompare(b.first));
   if (upcoming.length > 0) return upcoming[0].h;
-  return [...HACKATHONS].sort((a, b) => b.number - a.number)[0] ?? null;
+  return null;
 }
 
 export default function HomeDashboard({ voting }: { voting: React.ReactNode }) {
@@ -66,11 +66,7 @@ export default function HomeDashboard({ voting }: { voting: React.ReactNode }) {
   const { projects, groups, loading } = useUserHackathons(readPubkey);
 
   const now = useMemo(() => new Date(), []);
-  const featured = useMemo(() => {
-    const picked = pickFeatured(now);
-    // Keep LABITCONF off the home promo until we're ready to feature it.
-    return picked?.id === "labitconf" ? null : picked;
-  }, [now]);
+  const featured = useMemo(() => pickFeatured(now), [now]);
 
   const displayName =
     profile?.display_name ||

@@ -32,7 +32,7 @@ import PilaresDisclosure from "@/app/hackathons/PilaresDisclosure";
 import PrizeRulesNote from "@/app/hackathons/PrizeRulesNote";
 
 const DESCRIPTION =
-  "Lightning Hackathons 2026 — 6 hackatones y 6M sats en premios. Bitcoin, Lightning, Nostr.";
+  "Lightning Hackathons 2026 — 5 hackatones y 6M sats en premios. Bitcoin, Lightning, Nostr.";
 
 export const metadata: Metadata = {
   title: "Hackatones",
