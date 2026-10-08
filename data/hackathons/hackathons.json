@@ -140,24 +140,6 @@
         { "date": "2026-07-21", "day": 21, "type": "cierre", "title": "Community Call — Cierre inscripciones", "description": "Último día para inscribirte con un proyecto completo." },
         { "date": "2026-07-28", "day": 28, "type": "premios", "title": "Community Call — Entrega de premios", "description": "El jurado AI evalúa los proyectos. Anuncio de ganadores en vivo." }
       ]
-    },
-    {
-      "id": "labitconf",
-      "number": 6,
-      "name": "LABITCONF",
-      "focus": "Bitcoin, Lightning & Nostr",
-      "description": "La próxima hackatón de La Crypta, en el marco de LABITCONF.",
-      "difficulty": "Intermediate",
-      "stars": 2,
-      "month": "Octubre",
-      "monthShort": "OCT",
-      "year": 2026,
-      "icon": "⚡",
-      "tags": ["Bitcoin", "Lightning", "Nostr"],
-      "topics": ["Bitcoin", "Lightning Network", "Nostr", "Open Source"],
-      "dates": [
-        { "date": "2026-10-30", "day": 30, "type": "apertura", "title": "LABITCONF", "description": "La hackatón de La Crypta en LABITCONF." }
-      ]
     }
   ]
 }
